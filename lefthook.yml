@@ -1,0 +1,49 @@
+# `bun install` installs the hooks; run one by hand with `lefthook run <hook>`.
+assert_lefthook_installed: true
+glob_matcher: doublestar
+min_version: 2.1.10
+skip_lfs: true
+
+output:
+  - failure
+  - summary
+  - skips
+
+pre-commit:
+  piped: true
+  jobs:
+    - name: gates
+      env:
+        PATH: "node_modules/.bin:$PATH"
+      group:
+        parallel: true
+        jobs:
+          - name: secretlint
+            run: secretlint --maskSecrets --no-glob {staged_files}
+
+          # Check-only, never `--write`: lefthook hides the unstaged hunks of
+          # partially staged files while the hook runs, and a job that rewrites
+          # those files can discard the hidden work (evilmartians/lefthook#1480).
+          - name: biome
+            glob: "**/*.{js,ts,mts,vue,json,jsonc}"
+            exclude:
+              - "**/*.d.ts"
+            run: biome check --no-errors-on-unmatched {staged_files}
+            fail_text: "rerun: 'bun run format:fix' on the staged files"
+
+    - name: lint
+      env:
+        PATH: "node_modules/.bin:$PATH"
+      run: oxlint -c oxlint.config.mts --deny-warnings
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: bunx --no -- commitlint --edit {1}
+
+pre-push:
+  jobs:
+    - name: typecheck
+      run: bun run typecheck
+    - name: test
+      run: bun run test
