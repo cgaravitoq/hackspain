@@ -18,14 +18,14 @@ On `staging` or `main`, stop and run the `take-task` skill first.
 
 ## Step 2 - Commit
 
-Header only, at most 72 characters, Conventional Commit with a scope:
+Header only, at most 72 characters, Conventional Commit, scope optional:
 
 ```
 <type>(<scope>): <imperative summary>
 ```
 
 - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `infra`, `perf`, `style`, `build`, `revert`.
-- Scopes: `agent`, `web`, `shared`, `ci`, `repo`.
+- Scopes, when one applies: `agent`, `web`, `shared`, `ci`, `repo`. Repo-wide changes (`ci:`, `docs:`, `chore:`) may omit it.
 - Imperative mood, English, no trailing period, no body. Context goes in the PR.
 - One commit per logical step in dependency order: `refactor` prep, then `feat`/`fix`, then `test`, then `docs`/`chore`.
 - Stage an explicit file list: `git add <paths>`. Never `git add -A` or `git add .`.

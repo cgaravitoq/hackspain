@@ -14,7 +14,7 @@ Resolves HSP-
 
 ## Checklist
 
-- [ ] Title is a Conventional Commit with scope (`feat(agent): ...`)
+- [ ] Title is a Conventional Commit (`feat(agent): ...`, `ci: ...`)
 - [ ] `bun run verify` passes locally
 - [ ] No secrets, no `.dev.vars` content, no Spanish in code or docs
 - [ ] `worker-configuration.d.ts` regenerated if `wrangler.jsonc` changed

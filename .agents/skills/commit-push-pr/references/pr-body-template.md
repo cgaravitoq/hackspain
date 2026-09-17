@@ -19,7 +19,7 @@ Resolves HSP-<number>
 
 ## Checklist
 
-- [ ] Title is a Conventional Commit with scope
+- [ ] Title is a Conventional Commit
 - [ ] `bun run verify` passes locally
 - [ ] No secrets, no `.dev.vars` content, no Spanish in code or docs
 - [ ] `worker-configuration.d.ts` regenerated if `wrangler.jsonc` changed

@@ -33,7 +33,7 @@ Walk `AGENTS.md` Invariants and Conventions and check each against the diff:
 - Tests that reach the network or mock the module under test.
 - CORS headers on the agent, or the web calling the agent by URL instead of `/api`.
 - Comments explaining what instead of why; speculative abstraction; `any`.
-- Commit headers over 72 characters or missing scope; PR title not a Conventional Commit.
+- Commit headers over 72 characters or with a scope outside the list; PR title not a Conventional Commit.
 
 ## Step 4 - Correctness
 

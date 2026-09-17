@@ -57,7 +57,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - Branches: `main` is production (protected), `staging` is the default branch and the dev environment (protected). No direct pushes to either.
 - Work starts in Linear: move your issue to In Progress. A webhook creates the branch `hsp-<n>-<slug>` from `staging` and links it to the issue. Then `git fetch origin && git checkout hsp-<n>-<slug>`. Never create branches by hand.
 - One issue in progress per person. An assigned issue in In Progress belongs to its assignee; pick another or ask.
-- Commits: Conventional Commits, header only, at most 72 characters, with a scope from `agent`, `web`, `shared`, `ci`, `repo`. Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `infra`, `perf`, `style`, `build`, `revert`. The body goes in the PR, not the commit.
+- Commits: Conventional Commits, header only, at most 72 characters. A scope is optional; when present it is one of `agent`, `web`, `shared`, `ci`, `repo`. Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `infra`, `perf`, `style`, `build`, `revert`. The body goes in the PR, not the commit.
 - One commit per logical step, made as you work, and every commit leaves `bun run verify` green.
 - Pull requests always target `staging`, one PR per Linear issue, title in Conventional Commit format (it becomes the squash commit on `staging`). Fill in `.github/pull_request_template.md`. Requires green CI and one approval; auto-merge is enabled, so request review and move on.
 - `staging` to `main` promotion is a PR opened by the repository owner once staging has been validated by hand.
