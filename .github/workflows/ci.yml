@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [staging, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      agent: ${{ steps.filter.outputs.agent }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            root: &root
+              - package.json
+              - bun.lock
+              - bunfig.toml
+              - tsconfig.json
+              - .github/actions/**
+              - .github/workflows/ci.yml
+            shared: &shared
+              - packages/shared/**
+            agent:
+              - *root
+              - *shared
+              - apps/agent/**
+            web:
+              - *root
+              - *shared
+              - apps/web/**
+
+  repo:
+    name: Repo gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Lint pull request title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" | bunx commitlint
+      - run: bun run format
+      - run: bun run lint
+      - run: bunx secretlint --maskSecrets "**/*"
+      - run: bun --filter @hackspain/shared typecheck
+      - run: bun --filter @hackspain/shared test
+
+  agent:
+    name: Agent
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: bun --filter @hackspain/agent typecheck
+      - run: bun --filter @hackspain/agent test
+      - run: bun --filter @hackspain/agent deploy:dry
+
+  web:
+    name: Web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: bun --filter @hackspain/web typecheck
+      - run: bun --filter @hackspain/web test
+      - run: bun --filter @hackspain/web deploy:dry
+
+  # The only required status check. Skipped workspace jobs count as success,
+  # so a docs-only PR is not stuck waiting for a job that never runs.
+  ci-ok:
+    name: CI OK
+    needs: [changes, repo, agent, web]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
+            exit 1
+          fi
