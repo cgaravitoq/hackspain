@@ -1,0 +1,22 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "hackspain-agent",
+  "main": "src/index.ts",
+  // Newest date the bundled workerd (vitest-pool-workers 0.22.0) can run.
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "traces": { "enabled": true }
+  },
+  "vars": { "ENVIRONMENT": "production" },
+  // Bindings and vars are not inherited by named environments, so staging
+  // repeats everything it needs.
+  "env": {
+    "staging": {
+      "name": "hackspain-agent-staging",
+      "vars": { "ENVIRONMENT": "staging" }
+    }
+  }
+}
