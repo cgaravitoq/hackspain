@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "hackspain-web",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Every path except /api/* is answered by the static Vue build; the Worker
+  // only proxies the API to the agent over a service binding, so the browser
+  // sees one origin and no CORS.
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "services": [{ "binding": "AGENT", "service": "hackspain-agent" }],
+  "env": {
+    "staging": {
+      "name": "hackspain-web-staging",
+      "services": [{ "binding": "AGENT", "service": "hackspain-agent-staging" }]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "types": ["./worker-configuration.d.ts", "vite/client"]
+  },
+  "include": [
+    "src",
+    "worker-configuration.d.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}
