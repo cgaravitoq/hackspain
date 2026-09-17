@@ -44,7 +44,7 @@ Manual deploys from a laptop are for emergencies only: `bun --filter @hackspain/
 
 ## Environments
 
-| Environment | Agent Worker | Web Worker |
+| Environment | Web | Agent |
 |---|---|---|
-| staging | `hackspain-agent-staging` | `hackspain-web-staging` |
-| production | `hackspain-agent` | `hackspain-web` |
+| staging | https://hackspain-web-staging.carlos-garavito.workers.dev | https://hackspain-agent-staging.carlos-garavito.workers.dev/health |
+| production | https://hackspain-web.carlos-garavito.workers.dev | https://hackspain-agent.carlos-garavito.workers.dev/health |
