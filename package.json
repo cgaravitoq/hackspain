@@ -27,7 +27,7 @@
     "lefthook": "2.1.14",
     "oxlint": "1.83.0",
     "secretlint": "13.0.5",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
     "ultracite": "7.12.0",
     "wrangler": "4.133.0"
   }
