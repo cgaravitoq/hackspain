@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledMcpjsonServers": ["linear"],
+  "permissions": {
+    "allow": [
+      "Bash(bun install)",
+      "Bash(bun install:*)",
+      "Bash(bun run:*)",
+      "Bash(bun --filter:*)",
+      "Bash(bunx biome:*)",
+      "Bash(bunx wrangler dev:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
+    ],
+    "deny": [
+      "Read(./**/.dev.vars)",
+      "Read(./**/.dev.vars.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git add -A:*)",
+      "Bash(git add .:*)",
+      "Bash(wrangler delete:*)"
+    ]
+  }
+}

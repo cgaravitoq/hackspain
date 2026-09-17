@@ -1,0 +1,59 @@
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  "dataDirectory": ".btca",
+  "resources": [
+    {
+      "type": "git",
+      "name": "cloudflare-docs",
+      "url": "https://github.com/cloudflare/cloudflare-docs",
+      "branch": "production",
+      "searchPaths": [
+        "src/content/docs/workers",
+        "src/content/docs/agents",
+        "src/content/docs/ai-gateway",
+        "src/content/docs/workers-ai",
+        "src/content/docs/durable-objects",
+        "src/content/docs/d1",
+        "src/content/docs/kv",
+        "src/content/docs/vectorize"
+      ],
+      "specialNotes": "Authoritative for wrangler.jsonc keys, bindings, environments, static assets and service bindings. Check compatibility dates here before bumping apps/*/wrangler.jsonc."
+    },
+    {
+      "type": "git",
+      "name": "agents",
+      "url": "https://github.com/cloudflare/agents",
+      "branch": "main",
+      "searchPaths": ["packages/agents", "docs", "examples"],
+      "specialNotes": "The Cloudflare Agents SDK. Not installed yet; read it when the track needs a stateful agent (Agent class, routeAgentRequest, scheduling, WebSocket state)."
+    },
+    {
+      "type": "git",
+      "name": "hono",
+      "url": "https://github.com/honojs/hono",
+      "branch": "main",
+      "searchPaths": ["src", "docs"],
+      "specialNotes": "Routing, middleware, validators and context.json used in apps/agent/src/app.ts. Prefer built-ins over new dependencies."
+    },
+    {
+      "type": "git",
+      "name": "workers-sdk",
+      "url": "https://github.com/cloudflare/workers-sdk",
+      "branch": "main",
+      "searchPaths": [
+        "packages/vitest-pool-workers",
+        "packages/vite-plugin-cloudflare",
+        "packages/wrangler/src/config"
+      ],
+      "specialNotes": "Source of truth for the cloudflareTest vitest plugin used in apps/agent, the Vite plugin used in apps/web, and the wrangler config schema."
+    },
+    {
+      "type": "git",
+      "name": "vue",
+      "url": "https://github.com/vuejs/docs",
+      "branch": "main",
+      "searchPaths": ["src/guide", "src/api"],
+      "specialNotes": "Vue 3 composition API with script setup, as used in apps/web/src."
+    }
+  ]
+}
