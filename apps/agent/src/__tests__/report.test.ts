@@ -283,9 +283,6 @@ describe("report tools", () => {
   });
 
   it("exports a named company through MCP as a text URL and structured metadata", async () => {
-    await env.DB.prepare(
-      "INSERT INTO companies SELECT 'COMP_0176', group_id, scorable, month, score, state, json_set(summary, '$.company_id', 'COMP_0176'), json_set(detail, '$.company_id', 'COMP_0176') FROM companies WHERE company_id = 'COMP_A'",
-    ).run();
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });

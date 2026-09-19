@@ -1,7 +1,9 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
+import { compareSchema } from "@hackspain/shared";
 import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { createApp } from "../app.ts";
 import { seed } from "./fixtures.ts";
 
@@ -33,7 +35,10 @@ function textReply(text: string) {
   ]);
 }
 
-function toolCall(name: string, input: { company_id: string }) {
+function toolCall(
+  name: string,
+  input: { company_id?: string; company_ids?: string[] },
+) {
   return stream([
     {
       type: "tool-call",
@@ -78,6 +83,23 @@ function systemPrompt(model: MockLanguageModelV4, call: number) {
     .join("\n");
 }
 
+function toolResult(model: MockLanguageModelV4) {
+  const parts =
+    model.doStreamCalls[1]?.prompt
+      .filter((message) => message.role === "tool")
+      .flatMap((message) => message.content) ?? [];
+  const result = parts.find((part) => part.type === "tool-result");
+  return result?.type === "tool-result"
+    ? { toolName: result.toolName, output: JSON.stringify(result.output) }
+    : { toolName: null, output: "" };
+}
+
+function toolsHandedToModel(model: MockLanguageModelV4) {
+  return (model.doStreamCalls[0]?.tools ?? []).flatMap((tool) =>
+    tool.type === "function" ? [tool] : [],
+  );
+}
+
 describe("POST /chat", () => {
   it("grounds the model in the radiography of the company on screen", async () => {
     const model = new MockLanguageModelV4({
@@ -106,20 +128,49 @@ describe("POST /chat", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("COMP_B está sana");
     expect(model.doStreamCalls).toHaveLength(2);
-    const parts =
-      model.doStreamCalls[1]?.prompt
-        .filter((message) => message.role === "tool")
-        .flatMap((message) => message.content) ?? [];
-    const toolResult = parts.find((part) => part.type === "tool-result");
-    const output =
-      toolResult?.type === "tool-result"
-        ? JSON.stringify(toolResult.output)
-        : "";
-    expect(toolResult?.type === "tool-result" && toolResult.toolName).toBe(
-      "score",
-    );
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("score");
     expect(output).toContain('"score":91');
     expect(output).toContain('"state":"healthy"');
+  });
+
+  it("offers the model a compare tool that names its cap and the demo names", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    const response = await ask(model, {});
+    expect(await response.text()).toContain("ok");
+    const tools = toolsHandedToModel(model);
+    expect(tools.map((tool) => tool.name)).toContain("compare");
+    const compare = tools.find((tool) => tool.name === "compare");
+    expect(compare?.description).toContain("Up to three companies");
+    expect(compare?.description).toContain("Talleres Ribera");
+    expect(compare?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["company_ids"],
+      properties: {
+        company_ids: { type: "array", minItems: 1, maxItems: 3 },
+      },
+    });
+  });
+
+  it("runs the compare tool the model asks for and feeds both companies back", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("compare", { company_ids: ["COMP_B", "Talleres Ribera"] }),
+        textReply("COMP_B va mejor que Talleres Ribera."),
+      ],
+    });
+    const response = await ask(model, {});
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("COMP_B va mejor");
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("compare");
+    const comparison = z
+      .object({ type: z.literal("json"), value: compareSchema })
+      .parse(JSON.parse(output)).value;
+    expect(comparison.companies.map((company) => company.company_id)).toEqual([
+      "COMP_B",
+      "COMP_0176",
+    ]);
   });
 
   it("rejects a body without messages", async () => {

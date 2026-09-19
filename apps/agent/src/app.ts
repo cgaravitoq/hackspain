@@ -39,6 +39,13 @@ const alertsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 
+const compareQuerySchema = z.object({
+  ids: z
+    .string()
+    .transform((value) => value.split(",").map((id) => id.trim()))
+    .pipe(z.array(z.string().min(1)).min(1).max(3)),
+});
+
 export function createApp(options: AppOptions = {}) {
   const model = options.model ?? ((env: Env) => workersAiModel(env.AI));
   const app = new Hono<{ Bindings: Env }>();
@@ -76,6 +83,22 @@ export function createApp(options: AppOptions = {}) {
     return "error" in explanation
       ? context.json(explanation, 404)
       : context.json(explanation);
+  });
+
+  app.get("/compare", async (context) => {
+    const query = compareQuerySchema.safeParse(context.req.query());
+    if (!query.success) {
+      return context.json(
+        { error: "ids takes between 1 and 3 companies" },
+        400,
+      );
+    }
+    const comparison = await createTools(createStore(context.env.DB)).compare({
+      company_ids: query.data.ids,
+    });
+    return "error" in comparison
+      ? context.json(comparison, 404)
+      : context.json(comparison);
   });
 
   app.get("/companies/:id/report", async (context) => {

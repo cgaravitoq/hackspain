@@ -2,6 +2,8 @@ import {
   type Alert,
   alertKindSchema,
   type CompanyDetail,
+  type Compare,
+  DEMO_COMPANY_NAMES,
   type Explain,
   type Group,
   type GroupMap,
@@ -12,9 +14,30 @@ import {
 import { z } from "zod";
 import type { Store } from "./store.ts";
 
+const COMPANY_NAMES = new Map(
+  Object.entries(DEMO_COMPANY_NAMES).map(([name, id]) => [
+    normalizeKey(name),
+    id,
+  ]),
+);
+
+function normalizeKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
+export function resolveCompanyId(value: string): string {
+  return COMPANY_NAMES.get(normalizeKey(value)) ?? value.trim();
+}
+
 const companyId = z
   .string()
-  .describe("Embat company id, for example COMP_0176");
+  .describe(
+    "Company name or Embat id, for example Talleres Ribera or COMP_0176",
+  );
 
 export const toolInputs = {
   score: z.object({ company_id: companyId }),
@@ -29,6 +52,13 @@ export const toolInputs = {
   what_changed: z.object({ company_id: companyId }),
   group_map: z.object({
     group_id: z.string().describe("Embat group id, for example GROUP_0220"),
+  }),
+  compare: z.object({
+    company_ids: z
+      .array(companyId)
+      .min(1)
+      .max(3)
+      .describe("One to three companies to compare side by side"),
   }),
   alerts: z.object({
     kind: alertKindSchema
@@ -47,6 +77,8 @@ export const toolDescriptions = {
     "What moved the score since the previous month and since when the company is in its current state",
   group_map:
     "Every company of a group with score, state and share of the group debt, plus whether the group is under tension",
+  compare:
+    "Up to three companies side by side, aligned on the union of observed months; accepts demo names (Talleres Ribera) or Embat ids (COMP_0176)",
   alerts:
     "Companies whose state changed in the latest month, worst first, with the driver behind each one",
 };
@@ -59,6 +91,13 @@ const DOWN: readonly State[] = ["slipping", "falling"];
 
 function unknownCompany(id: string): Unknown {
   return { error: `Unknown company ${id}` };
+}
+
+function unknownCompanies(ids: string[]): Unknown {
+  const [only, ...rest] = ids;
+  return only !== undefined && rest.length === 0
+    ? unknownCompany(only)
+    : { error: `Unknown companies ${ids.join(", ")}` };
 }
 
 function latestScored(company: CompanyDetail): MonthEntry | undefined {
@@ -162,6 +201,18 @@ function whatChangedOf(company: CompanyDetail) {
   };
 }
 
+function compareOf(companies: CompanyDetail[]): Compare {
+  const months = new Set<string>();
+  for (const company of companies) {
+    for (const entry of company.series) {
+      if (entry.observed) {
+        months.add(entry.month);
+      }
+    }
+  }
+  return { companies, months: [...months].sort() };
+}
+
 function groupMapOf(group: Group): GroupMap {
   return {
     ...group,
@@ -196,31 +247,32 @@ function withLabel(alert: Alert) {
 export function createTools(store: Store) {
   return {
     async score(input: z.infer<typeof toolInputs.score>) {
-      const company = await store.company(input.company_id);
-      return company ? scoreOf(company) : unknownCompany(input.company_id);
+      const companyId = resolveCompanyId(input.company_id);
+      const company = await store.company(companyId);
+      return company ? scoreOf(company) : unknownCompany(companyId);
     },
 
     async explain(input: z.infer<typeof toolInputs.explain>) {
-      const company = await store.company(input.company_id);
+      const companyId = resolveCompanyId(input.company_id);
+      const company = await store.company(companyId);
       if (!company) {
-        return unknownCompany(input.company_id);
+        return unknownCompany(companyId);
       }
       const entry = input.month
         ? company.series.find((item) => item.month === input.month)
         : latestScored(company);
       if (!entry) {
         return {
-          error: `No scored month ${input.month ?? ""} for ${input.company_id}`,
+          error: `No scored month ${input.month ?? ""} for ${companyId}`,
         };
       }
       return explainOf(company, entry);
     },
 
     async what_changed(input: z.infer<typeof toolInputs.what_changed>) {
-      const company = await store.company(input.company_id);
-      return company
-        ? whatChangedOf(company)
-        : unknownCompany(input.company_id);
+      const companyId = resolveCompanyId(input.company_id);
+      const company = await store.company(companyId);
+      return company ? whatChangedOf(company) : unknownCompany(companyId);
     },
 
     async group_map(input: z.infer<typeof toolInputs.group_map>) {
@@ -228,6 +280,16 @@ export function createTools(store: Store) {
       return group
         ? groupMapOf(group)
         : { error: `Unknown group ${input.group_id}` };
+    },
+
+    async compare(input: z.infer<typeof toolInputs.compare>) {
+      const ids = input.company_ids.map(resolveCompanyId);
+      const companies = await store.details(ids);
+      const found = new Set(companies.map((company) => company.company_id));
+      const unknown = ids.filter((id) => !found.has(id));
+      return unknown.length > 0
+        ? unknownCompanies(unknown)
+        : compareOf(companies);
     },
 
     async alerts(input: z.infer<typeof toolInputs.alerts>) {

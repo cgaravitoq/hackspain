@@ -96,6 +96,11 @@ export async function chat(
         inputSchema: toolInputs.group_map,
         execute: tools.group_map,
       }),
+      compare: tool({
+        description: toolDescriptions.compare,
+        inputSchema: toolInputs.compare,
+        execute: tools.compare,
+      }),
       alerts: tool({
         description: toolDescriptions.alerts,
         inputSchema: toolInputs.alerts,

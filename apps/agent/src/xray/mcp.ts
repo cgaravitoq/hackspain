@@ -64,6 +64,13 @@ export function createMcpServer(store: Store, report: ReportTool): McpServer {
   );
   register(
     server,
+    "compare",
+    toolDescriptions.compare,
+    toolInputs.compare,
+    tools.compare,
+  );
+  register(
+    server,
     "alerts",
     toolDescriptions.alerts,
     toolInputs.alerts,
