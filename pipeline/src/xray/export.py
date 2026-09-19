@@ -96,7 +96,7 @@ def _month_entry(
         "adjustment": round(row["adjustment"], 1) if row["level"] is not None else None,
         "score": round(row["score"], 1) if row["score"] is not None else None,
         "state": row["state"],
-        "confidence": confidence(row["months_observed"], row["share_uncategorised"] or 0.0),
+        "confidence": confidence(row["months_observed"], row["share_uncategorised"] or 0.0) if row["score"] is not None else "none",
         "components": d.components(row),
         "drivers": d.drivers(row, {"debt_break": row["e3"]}),
         "changed": d.changed(row, previous),
@@ -332,7 +332,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             previous = row
         latest = series[-1]
         if max(row["month"] for row in rows if row["observed"]) < STALE_BEFORE:
-            latest = {**latest, "state": NOT_EVALUABLE}
+            latest = {**latest, "state": NOT_EVALUABLE, "confidence": "none"}
         before = series[-2] if len(series) > 1 else None
         record = _company_record(
             company_id,

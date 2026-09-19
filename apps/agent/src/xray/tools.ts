@@ -278,7 +278,16 @@ export function createTools(store: Store) {
           error: `No scored month ${input.month ?? ""} for ${companyId}`,
         };
       }
-      return explainOf(company, entry);
+      return explainOf(
+        company,
+        input.month
+          ? entry
+          : {
+              ...entry,
+              state: company.latest.state,
+              confidence: company.latest.confidence,
+            },
+      );
     },
 
     async what_changed(input: z.infer<typeof toolInputs.what_changed>) {

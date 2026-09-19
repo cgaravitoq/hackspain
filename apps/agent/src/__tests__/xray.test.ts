@@ -11,7 +11,9 @@ import {
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { backtest, meta, seed } from "./fixtures.ts";
+import { createStore } from "../xray/store.ts";
+import { createTools } from "../xray/tools.ts";
+import { backtest, company, meta, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 
@@ -98,6 +100,61 @@ describe("GET /alerts", () => {
 });
 
 describe("GET /companies/:id/explain", () => {
+  it.each(["stale", "gap"])(
+    "keeps current confidence unavailable for %s data without changing explicit history",
+    async (reason) => {
+      const detail = company(
+        `COMP_UNAVAILABLE_${reason}`,
+        "GROUP_UNAVAILABLE",
+        reason === "stale"
+          ? [{ month: "2026-06", score: 75, state: "healthy" }]
+          : [
+              { month: "2026-06", score: 75, state: "healthy" },
+              { month: "2026-07", score: null, state: "not_evaluable" },
+            ],
+      );
+      detail.stale = reason === "stale";
+      detail.latest = {
+        ...detail.latest,
+        state: "not_evaluable",
+        confidence: "none",
+      };
+      const { series: _series, ...summary } = detail;
+      await env.DB.prepare(
+        "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      )
+        .bind(
+          detail.company_id,
+          detail.group_id,
+          detail.scorable ? 1 : 0,
+          detail.latest.month,
+          detail.latest.score,
+          detail.latest.state,
+          JSON.stringify(summary),
+          JSON.stringify(detail),
+        )
+        .run();
+      const response = await SELF.fetch(
+        `https://agent.test/companies/${detail.company_id}/explain`,
+      );
+      expect(response.status).toBe(200);
+      const current = explainSchema.parse(await response.json());
+      expect(current.confidence).toBe("none");
+      expect(current.state).toBe("not_evaluable");
+      expect(current.month).toBe("2026-06");
+      expect(current.score).toBe(75);
+      const historical = explainSchema.parse(
+        await createTools(createStore(env.DB)).explain({
+          company_id: detail.company_id,
+          month: "2026-06",
+        }),
+      );
+      expect(historical.confidence).toBe("high");
+      expect(historical.state).toBe("healthy");
+      expect(historical.score).toBe(current.score);
+    },
+  );
+
   it("explains the latest month with drivers, events and the Embat action", async () => {
     const response = await SELF.fetch(
       "https://agent.test/companies/COMP_A/explain",

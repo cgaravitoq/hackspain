@@ -54,12 +54,27 @@ def debt_break(debt_repayment: list[float]) -> list[int]:
 
 def overdue_invoice_months(invoices: pl.DataFrame) -> dict[str, date]:
     limit = CUTOFF - timedelta(days=OVERDUE_DAYS)
+    paid_late = (
+        (pl.col("status") == "paid")
+        & (pl.col("pending_amount") == 0)
+        & (pl.col("payment_date") < CUTOFF)
+        & ((pl.col("payment_date") - pl.col("due_date")) >= pl.duration(days=OVERDUE_DAYS))
+    )
+    still_unpaid = (
+        pl.col("status").is_in(("open", "pending", "overdue", "paymentOrder", "payment_in_progress"))
+        & (pl.col("pending_amount") > 0)
+    )
     first = (
-        invoices.filter(pl.col("due_date") <= limit)
-        .filter(
-            ((pl.col("payment_date") - pl.col("due_date")) >= pl.duration(days=OVERDUE_DAYS))
-            | (pl.col("pending_amount") > 0)
+        invoices.filter(
+            pl.col("amount").is_finite()
+            & (pl.col("amount") > 0)
+            & pl.col("pending_amount").is_finite()
+            & pl.col("pending_amount").is_between(0, pl.col("amount"))
+            & (pl.col("due_date") >= pl.col("issuance_date"))
+            & (pl.col("due_date") < limit)
+            & (pl.col("payment_date").is_null() | (pl.col("payment_date") >= pl.col("issuance_date")))
         )
+        .filter(paid_late | still_unpaid)
         .with_columns(event=(pl.col("due_date") + pl.duration(days=OVERDUE_DAYS)).dt.truncate("1mo"))
         .group_by("company_id")
         .agg(pl.col("event").min())
