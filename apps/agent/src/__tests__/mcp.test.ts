@@ -30,7 +30,7 @@ const rpcResult = z.object({
 });
 
 describe("POST /mcp", () => {
-  it("lists the five X Ray tools with their input schemas", async () => {
+  it("lists the six X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -49,6 +49,7 @@ describe("POST /mcp", () => {
       "explain",
       "what_changed",
       "group_map",
+      "compare",
       "alerts",
     ]);
   });

@@ -2,6 +2,7 @@ import {
   type Alert,
   alertKindSchema,
   type CompanyDetail,
+  type Compare,
   DEMO_COMPANY_NAMES,
   type Explain,
   type Group,
@@ -52,6 +53,13 @@ export const toolInputs = {
   group_map: z.object({
     group_id: z.string().describe("Embat group id, for example GROUP_0220"),
   }),
+  compare: z.object({
+    company_ids: z
+      .array(companyId)
+      .min(1)
+      .max(3)
+      .describe("One to three companies to compare side by side"),
+  }),
   alerts: z.object({
     kind: alertKindSchema
       .optional()
@@ -69,6 +77,8 @@ export const toolDescriptions = {
     "What moved the score since the previous month and since when the company is in its current state",
   group_map:
     "Every company of a group with score, state and share of the group debt, plus whether the group is under tension",
+  compare:
+    "Up to three companies side by side, aligned on the union of observed months; accepts demo names (Talleres Ribera) or Embat ids (COMP_0176)",
   alerts:
     "Companies whose state changed in the latest month, worst first, with the driver behind each one",
 };
@@ -184,6 +194,18 @@ function whatChangedOf(company: CompanyDetail) {
   };
 }
 
+function compareOf(companies: CompanyDetail[]): Compare {
+  const months = new Set<string>();
+  for (const company of companies) {
+    for (const entry of company.series) {
+      if (entry.observed) {
+        months.add(entry.month);
+      }
+    }
+  }
+  return { companies, months: [...months].sort() };
+}
+
 function groupMapOf(group: Group): GroupMap {
   return {
     ...group,
@@ -251,6 +273,16 @@ export function createTools(store: Store) {
       return group
         ? groupMapOf(group)
         : { error: `Unknown group ${input.group_id}` };
+    },
+
+    async compare(input: z.infer<typeof toolInputs.compare>) {
+      const ids = input.company_ids.map(resolveCompanyId);
+      const companies = await store.details(ids);
+      const found = new Set(companies.map((company) => company.company_id));
+      const unknown = ids.filter((id) => !found.has(id));
+      return unknown.length > 0
+        ? { error: `Unknown companies ${unknown.join(", ")}` }
+        : compareOf(companies);
     },
 
     async alerts(input: z.infer<typeof toolInputs.alerts>) {
