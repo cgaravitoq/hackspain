@@ -23,6 +23,7 @@ import {
   reportPdf,
 } from "./xray/report-pdf.ts";
 import { createReportTool } from "./xray/report-tool.ts";
+import { simulateCompany, simulateQuery } from "./xray/simulate.ts";
 import { createStore } from "./xray/store.ts";
 import { createTools } from "./xray/tools.ts";
 
@@ -110,6 +111,23 @@ export function createApp(options: AppOptions = {}) {
     return "error" in comparison
       ? context.json(comparison, 404)
       : context.json(comparison);
+  });
+
+  app.get("/companies/:id/simulate", async (context) => {
+    const query = simulateQuery.safeParse(context.req.query());
+    if (!query.success) {
+      return context.json(
+        { error: query.error.issues[0]?.message ?? "Invalid query" },
+        400,
+      );
+    }
+    const simulation = await simulateCompany(createStore(context.env.DB), {
+      ...query.data,
+      company: context.req.param("id"),
+    });
+    return "error" in simulation
+      ? context.json(simulation, 404)
+      : context.json(simulation);
   });
 
   app.get("/companies/:id/report", async (context) => {

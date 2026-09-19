@@ -14,6 +14,7 @@ import { z } from "zod";
 import { createApp } from "../app.ts";
 import { chat } from "../xray/chat.ts";
 import type { reportInput } from "../xray/report-tool.ts";
+import type { SimulateInput } from "../xray/simulate.ts";
 import { createStore } from "../xray/store.ts";
 import { seed } from "./fixtures.ts";
 import { relationsJson, seedRelations } from "./relations.ts";
@@ -54,13 +55,15 @@ function textReply(text: string) {
 
 function toolCall(
   name: string,
-  input: {
-    company?: string;
-    company_id?: string;
-    company_ids?: string[];
-    relation_type?: RelationType;
-    role?: Role;
-  },
+  input:
+    | {
+        company?: string;
+        company_id?: string;
+        company_ids?: string[];
+        relation_type?: RelationType;
+        role?: Role;
+      }
+    | Partial<SimulateInput>,
 ) {
   return stream([
     {
@@ -297,6 +300,22 @@ describe("POST /chat", () => {
       "COMP_B",
       "COMP_0176",
     ]);
+  });
+
+  it("runs the simulate tool the model asks for and feeds the scenario back", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("simulate", { company: "COMP_B", advance: 50_000, fee: 0.02 }),
+        textReply("He simulado el anticipo con esas cifras."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_B" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("He simulado el anticipo");
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("simulate");
+    expect(output).toContain('"label":"escenario"');
+    expect(output).toContain('"kind":"receivable_advance"');
   });
 
   it("hands the model a relations tool and feeds every inferred edge back", async () => {

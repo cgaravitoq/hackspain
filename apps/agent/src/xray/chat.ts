@@ -14,6 +14,11 @@ import {
   reportDescription,
   reportInput,
 } from "./report-tool.ts";
+import {
+  simulateCompany,
+  simulateDescription,
+  simulateInput,
+} from "./simulate.ts";
 import type { Store } from "./store.ts";
 import {
   createTools,
@@ -123,6 +128,11 @@ export async function chat(
             export_url: url,
           };
         },
+      }),
+      simulate: tool({
+        description: simulateDescription,
+        inputSchema: simulateInput,
+        execute: (input) => simulateCompany(store, input),
       }),
       score: tool({
         description: toolDescriptions.score,

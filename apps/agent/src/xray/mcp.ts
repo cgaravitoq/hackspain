@@ -5,6 +5,11 @@ import {
   reportDescription,
   reportInput,
 } from "./report-tool.ts";
+import {
+  simulateCompany,
+  simulateDescription,
+  simulateInput,
+} from "./simulate.ts";
 import type { Store } from "./store.ts";
 import {
   createTools,
@@ -75,6 +80,20 @@ export function createMcpServer(store: Store, report: ReportTool): McpServer {
     toolDescriptions.alerts,
     toolInputs.alerts,
     tools.alerts,
+  );
+  server.registerTool(
+    "simulate",
+    { description: simulateDescription, inputSchema: simulateInput.shape },
+    async (input) => ({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            await simulateCompany(store, simulateInput.parse(input)),
+          ),
+        },
+      ],
+    }),
   );
   server.registerTool(
     "report",

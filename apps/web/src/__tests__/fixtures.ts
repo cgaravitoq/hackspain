@@ -147,6 +147,12 @@ export function company(id: string, groupId: string): CompanyDetail {
       overdue_amount: 12_000,
       oldest_overdue_days: 45,
     },
+    treasury: {
+      starting_cash: 150_000,
+      pending_receivables: 33_333.33,
+      credit_line_limit: 73_333.33,
+      credit_line_drawn: 40_000,
+    },
     latest: {
       month: "2026-08",
       score: 12.3,

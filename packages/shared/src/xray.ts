@@ -118,6 +118,15 @@ export const latestSchema = z.object({
   confidence: confidenceSchema,
 });
 
+export const treasurySchema = z.object({
+  starting_cash: z.number(),
+  pending_receivables: z.number(),
+  credit_line_limit: z.number(),
+  credit_line_drawn: z.number(),
+});
+
+export type Treasury = z.infer<typeof treasurySchema>;
+
 export const companySummarySchema = z.object({
   rule_version: z.string(),
   company_id: z.string(),
@@ -135,6 +144,7 @@ export const companySummarySchema = z.object({
     oldest_overdue_days: z.number().optional(),
     top3_share_of_pending: z.number().optional(),
   }),
+  treasury: treasurySchema,
   latest: latestSchema,
 });
 
@@ -451,6 +461,73 @@ export const relationsArtifactSchema = z.object({
 });
 
 export type RelationsArtifact = z.infer<typeof relationsArtifactSchema>;
+
+export const simulateScenarioKindSchema = z.enum([
+  "receivable_advance",
+  "credit_line_draw",
+]);
+
+export type SimulateScenarioKind = z.infer<typeof simulateScenarioKindSchema>;
+
+export const simulateScenarioSchema = z.object({
+  kind: simulateScenarioKindSchema,
+  requested: z.number(),
+  applied: z.number(),
+  capped: z.boolean(),
+  cost: z.number(),
+  cash: z.array(z.number()).min(1),
+  final_cash: z.number(),
+  minimum_cash: z.number(),
+  minimum_cash_month: z.number().int(),
+  score: z.number().nullable(),
+  score_delta: z.number(),
+  debt_outstanding_after: z.number(),
+  decision_figures: z.array(reportFigureSchema),
+});
+
+export type SimulateScenario = z.infer<typeof simulateScenarioSchema>;
+
+export const simulateSchema = z
+  .object({
+    company_id: z.string(),
+    label: z.literal("escenario"),
+    horizon: z.number().int(),
+    inputs: z.object({
+      starting_cash: z.number(),
+      pending_receivables: z.number(),
+      credit_line_limit: z.number(),
+      credit_line_drawn: z.number(),
+      net_flow_monthly: z.number(),
+    }),
+    baseline: z.object({
+      cash: z.array(z.number()).min(1),
+      final_cash: z.number(),
+      minimum_cash: z.number(),
+      minimum_cash_month: z.number().int(),
+      score: z.number().nullable(),
+    }),
+    scenarios: z.array(simulateScenarioSchema),
+  })
+  .superRefine((simulate, context) => {
+    const paths = [
+      { path: ["baseline", "cash"], cash: simulate.baseline.cash },
+      ...simulate.scenarios.map((scenario, index) => ({
+        path: ["scenarios", index, "cash"],
+        cash: scenario.cash,
+      })),
+    ];
+    for (const { path, cash } of paths) {
+      if (cash.length !== simulate.horizon + 1) {
+        context.addIssue({
+          code: "custom",
+          message: `expected ${simulate.horizon + 1} cash entries, one per month from today to the horizon`,
+          path,
+        });
+      }
+    }
+  });
+
+export type Simulate = z.infer<typeof simulateSchema>;
 
 export const DEMO_COMPANY_NAMES = {
   "Talleres Ribera": "COMP_0176",

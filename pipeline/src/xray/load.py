@@ -16,6 +16,7 @@ class Dataset:
     transactions: pl.DataFrame
     invoices: pl.DataFrame
     debt: pl.DataFrame
+    balances: pl.DataFrame
 
 
 def _to_date(column: str) -> pl.Expr:
@@ -71,9 +72,15 @@ def read(data_dir: Path) -> Dataset:
     debt = (
         pl.read_csv(
             data_dir / "debt_products.csv",
-            columns=["company_id", "type", "outstanding"],
-            schema_overrides={"outstanding": pl.Float64},
+            columns=["company_id", "type", "currency", "outstanding", "granted"],
+            schema_overrides={"outstanding": pl.Float64, "granted": pl.Float64},
         )
-        .with_columns(pl.col("outstanding").abs().fill_null(0.0))
+        .filter(pl.col("currency") == "EUR")
+        .with_columns(pl.col("outstanding").abs().fill_null(0.0), pl.col("granted").abs().fill_null(0.0))
     )
-    return Dataset(companies, groups, transactions, invoices, debt)
+    balances = pl.read_csv(
+        data_dir / "balances.csv",
+        columns=["product_id", "company_id", "balance"],
+        schema_overrides={"balance": pl.Float64},
+    ).filter(pl.col("product_id").is_in(eur_products.implode()))
+    return Dataset(companies, groups, transactions, invoices, debt, balances)

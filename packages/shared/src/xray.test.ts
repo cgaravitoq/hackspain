@@ -26,7 +26,10 @@ import {
   reportSectionCodeSchema,
   reportSectionSchema,
   roleSchema,
+  simulateScenarioKindSchema,
+  simulateSchema,
   stateSchema,
+  treasurySchema,
 } from "./index.ts";
 
 const stableMonth = {
@@ -63,6 +66,13 @@ const stableMonth = {
   events: { E1: false, E2: false, E3: false, E4: false },
 };
 
+const demoTreasury = {
+  starting_cash: 150_000,
+  pending_receivables: 33_333.33,
+  credit_line_limit: 73_333.33,
+  credit_line_drawn: 40_000,
+};
+
 const demoCompanySummary = {
   rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
@@ -75,6 +85,7 @@ const demoCompanySummary = {
   stale: false,
   debt_outstanding: 1200,
   invoice_facts: {},
+  treasury: demoTreasury,
   latest: {
     month: "2026-08",
     score: 50,
@@ -147,6 +158,42 @@ const demoReport = {
   export_url: "/reports/COMP_0176/2026-08.pdf",
 };
 
+const demoScenario = {
+  kind: "receivable_advance",
+  requested: 50_000,
+  applied: 33_333.33,
+  capped: true,
+  cost: 666.67,
+  cash: [150_000, 122_666.66, 62_666.66],
+  final_cash: 62_666.66,
+  minimum_cash: 62_666.66,
+  minimum_cash_month: 2,
+  score: 34.2,
+  score_delta: 5.6,
+  debt_outstanding_after: 40_000,
+  decision_figures: [
+    { label: "Caja mínima", value: 62_666.66, unit: "EUR" },
+    { label: "Caja final", value: 62_666.66, unit: "EUR" },
+    { label: "Coste", value: 666.67, unit: "EUR" },
+    { label: "Delta score", value: 5.6, unit: "pts" },
+  ],
+};
+
+const demoSimulate = {
+  company_id: "COMP_B",
+  label: "escenario",
+  horizon: 2,
+  inputs: { ...demoTreasury, net_flow_monthly: -60_000 },
+  baseline: {
+    cash: [150_000, 90_000, 30_000],
+    final_cash: 30_000,
+    minimum_cash: 30_000,
+    minimum_cash_month: 2,
+    score: 28.6,
+  },
+  scenarios: [demoScenario],
+};
+
 describe("xray contracts", () => {
   it.each([
     { delta_3: -1.2, delta_6: 5.4 },
@@ -196,6 +243,7 @@ describe("xray contracts", () => {
       stale: false,
       debt_outstanding: 0,
       invoice_facts: {},
+      treasury: demoTreasury,
       latest: {
         month: "2026-08",
         score: 51.2,
@@ -865,6 +913,148 @@ describe("xray contracts", () => {
       "Bodegas Altamira": "COMP_0077",
       "Meridian Logística": "COMP_0909",
     });
+  });
+
+  it("rejects a company summary without a treasury snapshot", () => {
+    const { treasury: _treasury, ...withoutTreasury } = demoCompanySummary;
+    const result = companySummarySchema.safeParse(withoutTreasury);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["treasury"],
+    ]);
+    expect(
+      companySummarySchema.parse({
+        ...withoutTreasury,
+        treasury: demoTreasury,
+      }).treasury,
+    ).toEqual(demoTreasury);
+  });
+
+  it("rejects a treasury that omits the undrawn credit line", () => {
+    const { credit_line_drawn: _drawn, ...incomplete } = demoTreasury;
+    const result = treasurySchema.safeParse(incomplete);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["credit_line_drawn"],
+    ]);
+  });
+
+  it("accepts a labelled scenario payload with its figures in order", () => {
+    const simulate = simulateSchema.parse(demoSimulate);
+    expect(simulate.label).toBe("escenario");
+    expect(simulate.scenarios[0]?.decision_figures.map((f) => f.label)).toEqual(
+      ["Caja mínima", "Caja final", "Coste", "Delta score"],
+    );
+    expect(simulate.scenarios[0]?.kind).toBe("receivable_advance");
+  });
+
+  it("accepts a baseline whose score is not evaluable yet", () => {
+    const simulate = simulateSchema.parse({
+      ...demoSimulate,
+      baseline: { ...demoSimulate.baseline, score: null },
+      scenarios: [{ ...demoScenario, score: null, score_delta: 0 }],
+    });
+    expect(simulate.baseline.score).toBeNull();
+  });
+
+  it("rejects a payload whose label is not escenario", () => {
+    const result = simulateSchema.safeParse({
+      ...demoSimulate,
+      label: "observado",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["label"],
+    ]);
+  });
+
+  it("rejects a payload without the escenario label", () => {
+    const { label: _label, ...unlabelled } = demoSimulate;
+    const result = simulateSchema.safeParse(unlabelled);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["label"],
+    ]);
+  });
+
+  it("rejects a scenario whose kind is not one of the two simulated decisions", () => {
+    const result = simulateSchema.safeParse({
+      ...demoSimulate,
+      scenarios: [{ ...demoScenario, kind: "receivable_sale" }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["scenarios", 0, "kind"],
+    ]);
+    expect(simulateScenarioKindSchema.options).toEqual([
+      "receivable_advance",
+      "credit_line_draw",
+    ]);
+  });
+
+  it("rejects a scenario without its decision figures", () => {
+    const { decision_figures: _figures, ...scenario } = demoScenario;
+    const result = simulateSchema.safeParse({
+      ...demoSimulate,
+      scenarios: [scenario],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["scenarios", 0, "decision_figures"],
+    ]);
+  });
+
+  it("rejects a scenario figure whose unit is missing", () => {
+    const result = simulateSchema.safeParse({
+      ...demoSimulate,
+      scenarios: [
+        {
+          ...demoScenario,
+          decision_figures: [{ label: "Coste", value: 666.67 }],
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["scenarios", 0, "decision_figures", 0, "unit"],
+    ]);
+  });
+
+  it("rejects a baseline cash path without its starting month", () => {
+    const result = simulateSchema.safeParse({
+      ...demoSimulate,
+      baseline: { ...demoSimulate.baseline, cash: [] },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["baseline", "cash"],
+      ["baseline", "cash"],
+    ]);
+  });
+
+  it("rejects a cash path that does not carry horizon plus one entries", () => {
+    const truncated = simulateSchema.safeParse({
+      ...demoSimulate,
+      baseline: { ...demoSimulate.baseline, cash: [150_000, 90_000] },
+      scenarios: [{ ...demoScenario, cash: [150_000, 122_666.66] }],
+    });
+    expect(truncated.success).toBe(false);
+    expect(
+      truncated.error?.issues.map((issue) => [issue.path, issue.message]),
+    ).toEqual([
+      [
+        ["baseline", "cash"],
+        "expected 3 cash entries, one per month from today to the horizon",
+      ],
+      [
+        ["scenarios", 0, "cash"],
+        "expected 3 cash entries, one per month from today to the horizon",
+      ],
+    ]);
+    expect(
+      simulateSchema.safeParse({ ...demoSimulate, horizon: 3 }).success,
+    ).toBe(false);
+    expect(simulateSchema.safeParse(demoSimulate).success).toBe(true);
   });
 });
 

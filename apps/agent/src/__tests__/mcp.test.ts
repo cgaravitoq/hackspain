@@ -58,7 +58,7 @@ async function toolResult(name: string, args: Params["arguments"]) {
 }
 
 describe("POST /mcp", () => {
-  it("lists the eight X Ray tools with their input schemas", async () => {
+  it("lists the nine X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -83,6 +83,7 @@ describe("POST /mcp", () => {
       "group_map",
       "compare",
       "alerts",
+      "simulate",
       "report",
       "relations",
     ]);
@@ -94,6 +95,25 @@ describe("POST /mcp", () => {
     ).toBe(
       "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
     );
+  });
+
+  it("keeps credit, solvency and forecast wording out of the simulate tool", async () => {
+    const response = await rpc("tools/list", {});
+    const body = z
+      .object({
+        result: z.object({
+          tools: z.array(
+            z.object({ name: z.string(), description: z.string() }),
+          ),
+        }),
+      })
+      .loose()
+      .parse(await response.json());
+    const simulate = body.result.tools.find((tool) => tool.name === "simulate");
+    expect(simulate?.description).toContain(
+      "the output is a scenario, never an observation",
+    );
+    expect(simulate?.description).not.toMatch(/forecast|credit|solvenc/i);
   });
 
   it("echoes the JSON-RPC id the caller sent", async () => {
