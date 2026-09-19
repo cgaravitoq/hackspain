@@ -11,5 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Component styles reach jsdom so a test can read the compiled rules.
+    css: true,
   },
 });

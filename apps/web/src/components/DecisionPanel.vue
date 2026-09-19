@@ -399,21 +399,27 @@ input {
   stroke-width: 3;
 }
 
-.decision-series.baseline,
-.decision-minimum.baseline {
+.decision-series.baseline {
   stroke: var(--stable);
+}
+
+.decision-series.receivable_advance {
+  stroke: var(--accent);
+}
+
+.decision-series.credit_line_draw {
+  stroke: var(--improving);
+}
+
+.decision-minimum.baseline {
   fill: var(--stable);
 }
 
-.decision-series.receivable_advance,
 .decision-minimum.receivable_advance {
-  stroke: var(--accent);
   fill: var(--accent);
 }
 
-.decision-series.credit_line_draw,
 .decision-minimum.credit_line_draw {
-  stroke: var(--improving);
   fill: var(--improving);
 }
 

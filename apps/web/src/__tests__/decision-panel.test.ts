@@ -157,6 +157,35 @@ describe("DecisionPanel", () => {
     );
   });
 
+  it("strokes the scenario cash paths without filling them", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://web.test");
+      return Promise.resolve(
+        Response.json(
+          url.pathname.endsWith("/simulate")
+            ? simulation
+            : company("COMP_A", "GROUP_1"),
+        ),
+      );
+    });
+    const wrapper = mount(DecisionPanel, {
+      props: { companyId: "COMP_A", role: "financiero" },
+    });
+    await flushPromises();
+    expect(wrapper.findAll("svg path.decision-series")).toHaveLength(3);
+    const rules = [...document.styleSheets]
+      .flatMap((sheet) => [...sheet.cssRules])
+      .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
+      .filter((rule) => rule.selectorText.includes(".decision-series"));
+    const [base, ...kinds] = rules;
+    expect(base?.style.fill).toBe("none");
+    expect(kinds.map((rule) => rule.style.cssText)).toEqual([
+      "stroke: var(--stable);",
+      "stroke: var(--accent);",
+      "stroke: var(--improving);",
+    ]);
+  });
+
   it("explains when three observed months are unavailable", async () => {
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
       const url = new URL(String(input), "https://web.test");
