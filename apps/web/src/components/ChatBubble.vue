@@ -7,9 +7,8 @@ import type {
   Report,
   Role,
 } from "@hackspain/shared";
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import ChatPanel from "./ChatPanel.vue";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "./ui/sheet";
 
 const SEEN_KEY = "xray.chat.seen";
 
@@ -44,6 +43,12 @@ function close() {
   open.value = false;
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    close();
+  }
+}
+
 async function openChat() {
   open.value = true;
   seen.value = true;
@@ -70,37 +75,34 @@ onMounted(() => {
   } catch {
     seen.value = false;
   }
+  window.addEventListener("keydown", handleKeydown);
 });
+
+onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
 </script>
 
 <template>
-  <Sheet v-model:open="open" :modal="false">
-    <SheetContent
-      :force-mount="true"
-      class="w-full gap-0 p-0 data-[state=closed]:invisible sm:max-w-[420px]"
-      :portal-disabled="true"
-      side="right"
-    >
-      <SheetTitle class="sr-only">Asistente</SheetTitle>
-      <SheetDescription class="sr-only">
-        Consulta y compara la salud financiera de las empresas.
-      </SheetDescription>
-      <div ref="panel" v-show="open" class="chat-sheet-body">
-        <ChatPanel
-          ref="chatPanel"
-          :company-id="props.companyId"
-          :alerts="props.alerts"
-          :role="props.role"
-          :confirmed-commitment="props.confirmedCommitment"
-          @close="close"
-          @compare="emit('compare', $event)"
-          @report="emit('report', $event)"
-          @commitment="emit('commitment', $event)"
-          @draft="emit('draft', $event)"
-        />
-      </div>
-    </SheetContent>
-  </Sheet>
+  <div
+    ref="panel"
+    v-show="open"
+    class="chat-popover"
+    role="dialog"
+    aria-label="Asistente"
+    @keydown.esc="close"
+  >
+    <ChatPanel
+      ref="chatPanel"
+      :company-id="props.companyId"
+      :alerts="props.alerts"
+      :role="props.role"
+      :confirmed-commitment="props.confirmedCommitment"
+      @close="close"
+      @compare="emit('compare', $event)"
+      @report="emit('report', $event)"
+      @commitment="emit('commitment', $event)"
+      @draft="emit('draft', $event)"
+    />
+  </div>
   <button
     type="button"
     class="chat-bubble"
@@ -119,15 +121,19 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.chat-sheet-body,
-.chat-sheet-body :deep(.chat) {
-  height: 100%;
+.chat-popover {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 30;
+  width: 380px;
+  height: min(560px, calc(100dvh - 112px));
 }
 
-.chat-sheet-body :deep(.chat) {
+.chat-popover :deep(.chat) {
+  height: 100%;
   overflow: hidden;
-  border: 0;
-  border-radius: 0;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
 }
 
 .chat-bubble {
@@ -175,6 +181,13 @@ onMounted(() => {
 }
 
 @media (max-width: 1100px) {
+  .chat-popover {
+    right: 8px;
+    bottom: 84px;
+    width: calc(100vw - 16px);
+    height: 70vh;
+  }
+
   .chat-bubble {
     right: 16px;
     bottom: 16px;
