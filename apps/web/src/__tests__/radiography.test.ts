@@ -94,10 +94,11 @@ describe("Radiography", () => {
       "Por qué",
       "Qué cambió",
       "Informe",
+      "Compromiso",
       "Grupo",
     ]);
     expect(tabs(wrapper).map((tab) => tab.attributes("aria-selected"))).toEqual(
-      ["true", "false", "false", "false", "false", "false"],
+      ["true", "false", "false", "false", "false", "false", "false"],
     );
     expect(wrapper.find('[role="tabpanel"] .action').text()).toBe(ACTION);
     expect(wrapper.find(".drivers").exists()).toBe(false);
@@ -138,5 +139,25 @@ describe("Radiography", () => {
     expect(wrapper.emitted("select")).toEqual([["COMP_B"]]);
     const alone = mountRadiography({}, false);
     expect(tabs(alone).map((tab) => tab.text())).not.toContain("Grupo");
+  });
+
+  it("shows Compromiso to treasury and finance and hides it from sales", async () => {
+    const finance = mountRadiography();
+    await openTab(finance, "Compromiso");
+    expect(finance.find(".commitment").exists()).toBe(true);
+    expect(finance.find(".action").exists()).toBe(false);
+    const sales = mount(Radiography, {
+      props: {
+        company: detail,
+        explanation: explain("COMP_A", "GROUP_1"),
+        comparison: [detail],
+        alerts,
+        group,
+        selected: "COMP_A",
+        role: "ventas",
+      },
+    });
+    expect(tabs(sales).map((tab) => tab.text())).not.toContain("Compromiso");
+    expect(sales.find(".commitment").exists()).toBe(false);
   });
 });

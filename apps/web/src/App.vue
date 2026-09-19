@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   type Alert,
+  type CommitmentEvaluation,
+  type CommitmentRequest,
   type CompanyDetail,
   type CompanySummary,
   type Explain,
@@ -14,7 +16,6 @@ import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import ChatBubble from "./components/ChatBubble.vue";
 import CompanySelector from "./components/CompanySelector.vue";
-import CommitmentPanel from "./components/CommitmentPanel.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
 import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
@@ -39,7 +40,12 @@ const company = ref<CompanyDetail | null>(null);
 const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
+const commitmentLaunch = ref<{
+  token: number;
+  assumptions: CommitmentRequest;
+} | null>(null);
 let compareRequest = 0;
+let commitmentToken = 0;
 
 async function load(companyId: string) {
   error.value = "";
@@ -109,6 +115,22 @@ function openReport(
 ) {
   role.value = result.role;
   selected.value = result.company_id;
+}
+
+function openCommitment(
+  result: Pick<CommitmentEvaluation, "company_id" | "assumptions">,
+) {
+  if (role.value === "ventas") {
+    role.value = "financiero";
+  }
+  onGraph.value = false;
+  selected.value = result.company_id;
+  window.location.hash = result.company_id;
+  commitmentToken += 1;
+  commitmentLaunch.value = {
+    token: commitmentToken,
+    assumptions: result.assumptions,
+  };
 }
 
 function selectRole(nextRole: Role) {
@@ -225,13 +247,8 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         :group="group"
         :selected="selected"
         :role="role"
+        :commitment-launch="commitmentLaunch"
         @select="select"
-      />
-      <CommitmentPanel
-        v-if="company && explanation && (role === 'tesorero' || role === 'financiero')"
-        :key="`${selected}-${role}`"
-        :company-id="selected"
-        :role="role"
       />
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
     </div>
@@ -243,6 +260,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
     :role="role"
     @compare="replaceComparison"
     @report="openReport"
+    @commitment="openCommitment"
   />
 </template>
 

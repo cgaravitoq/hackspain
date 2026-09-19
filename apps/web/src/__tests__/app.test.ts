@@ -1,11 +1,22 @@
+import {
+  COMMITMENT_LABEL,
+  type CommitmentRequest,
+  commitmentRequestSchema,
+} from "@hackspain/shared";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
-import { company, fakeApi } from "./fixtures.ts";
+import {
+  commitmentAssumptions,
+  commitmentEvaluation,
+  compactCommitmentOutput,
+  company,
+  fakeApi,
+} from "./fixtures.ts";
 
 const ChatPanelStub = {
   props: ["companyId", "alerts", "role"],
-  emits: ["close", "compare", "report"],
+  emits: ["close", "compare", "report", "commitment"],
   template:
     "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
 };
@@ -697,15 +708,161 @@ describe("App", () => {
     expect(window.location.hash).toBe("#COMP_C");
   });
 
-  it("shows commitment simulation only to treasury and finance roles", async () => {
+  it("shows the Compromiso tab only to treasury and finance roles", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
+    expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toContain(
+      "Compromiso",
+    );
+    await openTab(wrapper, "Compromiso");
     expect(wrapper.find(".commitment").exists()).toBe(true);
     await selectRole(wrapper, "Tesorero");
-    expect(wrapper.find(".commitment").exists()).toBe(true);
+    expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toContain(
+      "Compromiso",
+    );
     await selectRole(wrapper, "Ventas");
+    expect(
+      wrapper.findAll('[role="tab"]').map((tab) => tab.text()),
+    ).not.toContain("Compromiso");
     expect(wrapper.find(".commitment").exists()).toBe(false);
+  });
+
+  it("opens Compromiso from a streamed simulate_commitment tool through the assistant", async () => {
+    const posts: { path: string; body: CommitmentRequest }[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal(
+      "fetch",
+      (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), "https://web.test");
+        if (url.pathname === "/api/chat") {
+          return Promise.resolve(
+            sse([
+              { type: "start" },
+              {
+                type: "tool-input-available",
+                toolCallId: "commitment-1",
+                toolName: "simulate_commitment",
+                input: { company: "COMP_B", ...commitmentAssumptions },
+              },
+              {
+                type: "tool-output-available",
+                toolCallId: "commitment-1",
+                output: compactCommitmentOutput("COMP_B"),
+              },
+              { type: "finish" },
+            ]),
+          );
+        }
+        if (url.pathname === "/api/companies/COMP_B/commitment") {
+          const body = commitmentRequestSchema.parse(
+            JSON.parse(String(init?.body)),
+          );
+          posts.push({ path: url.pathname, body });
+          return Promise.resolve(
+            Response.json(commitmentEvaluation(body, "COMP_B")),
+          );
+        }
+        return base(input);
+      },
+    );
+    mounted = mount(App, { attachTo: document.body });
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await selectRole(wrapper, "Ventas");
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    await wrapper.find("#chat-input").setValue("Simula el compromiso");
+    await wrapper.find(".chat form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
+        "Compromiso",
+      ),
+    );
+    expect(wrapper.find(".graph-screen").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(wrapper.find(".role-tabs .active").text()).toBe("Financiero");
+    expect(posts).toEqual([
+      { path: "/api/companies/COMP_B/commitment", body: commitmentAssumptions },
+    ]);
+    expect(wrapper.find(".commitment-label").text()).toBe(COMMITMENT_LABEL);
+  });
+
+  it("keeps treasury selected when chat opens a commitment simulation", async () => {
+    const posts: string[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal(
+      "fetch",
+      (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), "https://web.test");
+        if (url.pathname.endsWith("/commitment")) {
+          posts.push(url.pathname);
+          const body = commitmentRequestSchema.parse(
+            JSON.parse(String(init?.body)),
+          );
+          return Promise.resolve(
+            Response.json(commitmentEvaluation(body, "COMP_B")),
+          );
+        }
+        return base(input);
+      },
+    );
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await selectRole(wrapper, "Tesorero");
+    wrapper.findComponent(ChatPanelStub).vm.$emit("commitment", {
+      company_id: "COMP_B",
+      assumptions: commitmentAssumptions,
+    });
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".role-tabs .active").text()).toBe("Tesorero");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
+      "Compromiso",
+    );
+    expect(posts).toEqual(["/api/companies/COMP_B/commitment"]);
+  });
+
+  it("refreshes Compromiso when chat repeats the same commitment assumptions", async () => {
+    const posts: CommitmentRequest[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal(
+      "fetch",
+      (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), "https://web.test");
+        if (!url.pathname.endsWith("/commitment")) {
+          return base(input);
+        }
+        const body = commitmentRequestSchema.parse(
+          JSON.parse(String(init?.body)),
+        );
+        posts.push(body);
+        return Promise.resolve(
+          Response.json(commitmentEvaluation(body, "COMP_A")),
+        );
+      },
+    );
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const payload = {
+      company_id: "COMP_A",
+      assumptions: commitmentAssumptions,
+    };
+    wrapper.findComponent(ChatPanelStub).vm.$emit("commitment", payload);
+    await flushPromises();
+    await flushPromises();
+    wrapper.findComponent(ChatPanelStub).vm.$emit("commitment", payload);
+    await flushPromises();
+    await flushPromises();
+    expect(posts).toEqual([commitmentAssumptions, commitmentAssumptions]);
+    expect(wrapper.find(".commitment-label").text()).toBe(COMMITMENT_LABEL);
   });
 });

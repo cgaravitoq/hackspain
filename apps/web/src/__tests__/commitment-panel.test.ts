@@ -8,6 +8,7 @@ import {
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommitmentPanel from "../components/CommitmentPanel.vue";
+import { commitmentAssumptions, commitmentEvaluation } from "./fixtures.ts";
 
 function evaluation(request: CommitmentRequest): CommitmentEvaluation {
   const alternatives: CommitmentEvaluation["alternatives"] = [
@@ -188,5 +189,39 @@ describe("CommitmentPanel", () => {
       "Revisa el saldo inicial supuesto: valor no válido",
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("hydrates seeded assumptions and posts them through the shared request contract", async () => {
+    const posts: CommitmentRequest[] = [];
+    const seededAssumptions = {
+      ...commitmentAssumptions,
+      advance_bps: [0, 1234, 10_000],
+    };
+    vi.stubGlobal(
+      "fetch",
+      (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const posted = commitmentRequestSchema.parse(
+          JSON.parse(String(init?.body)),
+        );
+        posts.push(posted);
+        return Promise.resolve(
+          Response.json(commitmentEvaluation(posted, "COMP_A")),
+        );
+      },
+    );
+    const wrapper = mount(CommitmentPanel, {
+      props: {
+        companyId: "COMP_A",
+        role: "financiero",
+        seedToken: 1,
+        seedAssumptions: seededAssumptions,
+      },
+    });
+    await flushPromises();
+    expect(posts).toEqual([seededAssumptions]);
+    expect(wrapper.find(".commitment-label").text()).toBe(COMMITMENT_LABEL);
+    await wrapper.setProps({ seedToken: 2 });
+    await flushPromises();
+    expect(posts).toEqual([seededAssumptions, seededAssumptions]);
   });
 });

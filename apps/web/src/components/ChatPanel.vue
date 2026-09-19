@@ -2,6 +2,8 @@
 import { Chat } from "@ai-sdk/vue";
 import {
   type Alert,
+  type CommitmentEvaluation,
+  commitmentEvaluationSchema,
   compareSchema,
   type Report,
   type Role,
@@ -15,11 +17,16 @@ import { ALERTS_LIMIT } from "../api.ts";
 const props = defineProps<{ companyId: string; alerts: Alert[]; role: Role }>();
 
 type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
+type CommitmentResult = Pick<
+  CommitmentEvaluation,
+  "company_id" | "assumptions"
+>;
 
 const emit = defineEmits<{
   close: [];
   compare: [companyIds: string[]];
   report: [result: ReportResult];
+  commitment: [result: CommitmentResult];
 }>();
 
 const chat = new Chat({
@@ -36,6 +43,10 @@ const reportResultSchema = reportSchema.pick({
   company_id: true,
   role: true,
   export_url: true,
+});
+const commitmentResultSchema = commitmentEvaluationSchema.pick({
+  company_id: true,
+  assumptions: true,
 });
 const handledTools = new Set<string>();
 
@@ -63,6 +74,12 @@ function handleFinishedTools() {
         if (report.success) {
           handledTools.add(part.toolCallId);
           emit("report", report.data);
+        }
+      } else if (part.type === "tool-simulate_commitment") {
+        const commitment = commitmentResultSchema.safeParse(part.output);
+        if (commitment.success) {
+          handledTools.add(part.toolCallId);
+          emit("commitment", commitment.data);
         }
       }
     }

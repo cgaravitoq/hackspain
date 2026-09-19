@@ -2,7 +2,12 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ALERTS_LIMIT } from "../api.ts";
 import ChatPanel from "../components/ChatPanel.vue";
-import { alert, alerts } from "./fixtures.ts";
+import {
+  alert,
+  alerts,
+  commitmentAssumptions,
+  compactCommitmentOutput,
+} from "./fixtures.ts";
 
 function sse(chunks: object[]): Response {
   const body = [
@@ -132,6 +137,82 @@ describe("ChatPanel", () => {
         },
       ],
     ]);
+  });
+
+  it("emits the company and assumptions from a finished simulate_commitment tool", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        sse([
+          { type: "start" },
+          {
+            type: "tool-input-available",
+            toolCallId: "commitment-1",
+            toolName: "simulate_commitment",
+            input: { company: "COMP_B", ...commitmentAssumptions },
+          },
+          {
+            type: "tool-output-available",
+            toolCallId: "commitment-1",
+            output: compactCommitmentOutput("COMP_B"),
+          },
+          { type: "finish" },
+        ]),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
+    });
+    await wrapper.find("input").setValue("Simula el compromiso");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(wrapper.emitted("commitment")).toEqual([
+        [{ company_id: "COMP_B", assumptions: commitmentAssumptions }],
+      ]),
+    );
+  });
+
+  it("emits again when simulate_commitment finishes with the same assumptions", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        sse([
+          { type: "start" },
+          {
+            type: "tool-input-available",
+            toolCallId: "commitment-1",
+            toolName: "simulate_commitment",
+            input: { company: "COMP_B", ...commitmentAssumptions },
+          },
+          {
+            type: "tool-output-available",
+            toolCallId: "commitment-1",
+            output: compactCommitmentOutput("COMP_B"),
+          },
+          {
+            type: "tool-input-available",
+            toolCallId: "commitment-2",
+            toolName: "simulate_commitment",
+            input: { company: "COMP_B", ...commitmentAssumptions },
+          },
+          {
+            type: "tool-output-available",
+            toolCallId: "commitment-2",
+            output: compactCommitmentOutput("COMP_B"),
+          },
+          { type: "finish" },
+        ]),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
+    });
+    await wrapper.find("input").setValue("Simula otra vez");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(wrapper.emitted("commitment")).toEqual([
+        [{ company_id: "COMP_B", assumptions: commitmentAssumptions }],
+        [{ company_id: "COMP_B", assumptions: commitmentAssumptions }],
+      ]),
+    );
   });
 
   it("labels each tool chip with the entity it queries, or the bare name without one", async () => {

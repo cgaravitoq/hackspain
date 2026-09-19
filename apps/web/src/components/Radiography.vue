@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   Alert,
+  CommitmentRequest,
   CompanyDetail,
   Explain,
   GroupMap,
@@ -20,6 +21,10 @@ defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  commitmentLaunch?: {
+    token: number;
+    assumptions: CommitmentRequest;
+  } | null;
 }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
 </script>
@@ -47,6 +52,7 @@ const emit = defineEmits<{ select: [companyId: string] }>();
       :group="group"
       :selected="selected"
       :role="role"
+      :commitment-launch="commitmentLaunch"
       @select="emit('select', $event)"
     />
   </section>
