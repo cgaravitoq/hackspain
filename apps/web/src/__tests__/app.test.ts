@@ -62,6 +62,22 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("renders the financiero toolbar without legacy header metadata", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/meta");
+    expect(wrapper.find(".topbar").text()).not.toContain(
+      "salud financiera de cada empresa, cada mes",
+    );
+    expect(wrapper.find(".topbar").text()).not.toContain("datos hasta");
+    expect(wrapper.find(".toolbar .search").exists()).toBe(true);
+    expect(wrapper.findAll(".toolbar .compare-chip")).toHaveLength(1);
+    expect(wrapper.find(".toolbar").text()).toContain("hasta 3");
+  });
+
   it("opens on the worst alert and shows its radiography, action and group", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
@@ -100,9 +116,8 @@ describe("App", () => {
     expect(seen).toContain("/api/companies/COMP_0176");
     expect(seen.slice(before)).not.toContain("/api/compare");
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
-    expect(wrapper.find(".search").exists()).toBe(false);
+    expect(wrapper.find(".toolbar").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
-    expect(wrapper.find(".compare-selector").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
   });
 

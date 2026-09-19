@@ -11,11 +11,13 @@ function cappedAlerts() {
 }
 
 describe("AlertList", () => {
-  it("emits the clicked company id through select", async () => {
+  it("renders one alert pill per alert and emits the clicked company id", async () => {
     const wrapper = mount(AlertList, {
       props: { alerts, selected: "" },
     });
-    await wrapper.findAll("button")[1]?.trigger("click");
+    const pills = wrapper.findAll(".alert-pill");
+    expect(pills).toHaveLength(alerts.length);
+    await pills[1]?.trigger("click");
     expect(wrapper.emitted("select")).toEqual([["COMP_C"]]);
   });
 
