@@ -1,9 +1,7 @@
 import {
-  type CompanyDetail,
   DEMO_COMPANY_NAMES,
   type Report,
   type ReportFigure,
-  type ReportSection,
   type Role,
   reportSchema,
   reportSectionCodeSchema,
@@ -13,7 +11,6 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { type Judge, RED_LINES, type RedLine } from "./report-judge.ts";
 import { ROLE_SECTIONS, reportInstructions } from "./report-policy.ts";
-import { simulate } from "./simulate.ts";
 import { createStore } from "./store.ts";
 import { createTools } from "./tools.ts";
 
@@ -49,24 +46,6 @@ export function companyName(companyId: string): string {
   );
 }
 
-export function decisionSimulation(company: CompanyDetail) {
-  const observed = company.series.filter((entry) => entry.observed).slice(-3);
-  if (observed.length !== 3) {
-    return null;
-  }
-  return simulate(company, observed, {
-    company: company.company_id,
-    horizon: 6,
-    advance: company.treasury.pending_receivables,
-    draw: Math.max(
-      company.treasury.credit_line_limit - company.treasury.credit_line_drawn,
-      0,
-    ),
-    fee: 0.02,
-    apr: 0.06,
-  });
-}
-
 export async function reportSources(db: D1Database, companyId: string) {
   const store = createStore(db);
   const company = await store.company(companyId);
@@ -78,7 +57,6 @@ export async function reportSources(db: D1Database, companyId: string) {
     throw new HTTPException(422, { message: "No observed month available" });
   }
   const tools = createTools(store);
-  const simulation = decisionSimulation(company);
   const [explanation, changed, group, alerts] = await Promise.all([
     tools.explain({ company_id: companyId, month: latest.month }),
     tools.what_changed({ company_id: companyId }),
@@ -97,7 +75,6 @@ export async function reportSources(db: D1Database, companyId: string) {
         : { error: "Latest month is not scored" },
     group,
     alerts: alerts.filter((alert) => alert.company_id === companyId),
-    simulation,
   };
 }
 
@@ -231,57 +208,6 @@ function sectionFigures(sources: ReportSources) {
   };
 }
 
-const SCENARIOS = {
-  receivable_advance: {
-    name: "Adelanto de cobros",
-    label: "adelanto de cobros",
-    cap: "pendiente de cobro",
-  },
-  credit_line_draw: {
-    name: "Disposición de línea",
-    label: "disposición de línea",
-    cap: "línea disponible",
-  },
-};
-
-const DECISION_FRAME =
-  "Escenario, no observación ni previsión: compara, no aconseja; la decisión corresponde a las personas autorizadas.";
-const NO_SCENARIOS = "Sin importes disponibles para construir escenarios.";
-
-function decisionSection(sources: ReportSources): ReportSection {
-  const scenarios = sources.simulation?.scenarios ?? [];
-  const money = new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: sources.company.currency ?? "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-  const points = new Intl.NumberFormat("es-ES", {
-    signDisplay: "exceptZero",
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-  const sentences = scenarios.map((scenario) => {
-    const { name, cap } = SCENARIOS[scenario.kind];
-    const applied = `${name} de ${money.format(scenario.applied)}${scenario.capped ? ` (tope: ${cap})` : ""}`;
-    return `${applied}: caja mínima ${money.format(scenario.minimum_cash)}, caja final ${money.format(scenario.final_cash)}, coste ${money.format(scenario.cost)}, delta score ${points.format(scenario.score_delta)} puntos.`;
-  });
-  return {
-    code: "decision",
-    title: "Decisión",
-    figures: scenarios.flatMap((scenario) =>
-      scenario.decision_figures.map((item) => ({
-        ...item,
-        label: `${SCENARIOS[scenario.kind].label} · ${item.label}`,
-      })),
-    ),
-    body:
-      sentences.length > 0
-        ? [...sentences, DECISION_FRAME].join(" ")
-        : NO_SCENARIOS,
-  };
-}
-
 const FORMAT_RETRY =
   "La respuesta anterior no cumplió el formato. Respeta las secciones y no escribas cifras en la narrativa.";
 
@@ -339,13 +265,10 @@ async function narrate(
         rule_version: sources.explanation.evidence.rule_version,
         generated_at: new Date().toISOString(),
         summary: output.summary,
-        sections: [
-          ...output.sections.map((section, index) => ({
-            ...section,
-            figures: figures[sections[index]?.source ?? "evidence"],
-          })),
-          decisionSection(sources),
-        ],
+        sections: output.sections.map((section, index) => ({
+          ...section,
+          figures: figures[sections[index]?.source ?? "evidence"],
+        })),
         export_url: `/api/companies/${encodeURIComponent(sources.explanation.company_id)}/report.pdf?role=${role}`,
       });
     } catch {
