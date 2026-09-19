@@ -1,4 +1,4 @@
-import { type DOMWrapper, mount } from "@vue/test-utils";
+import { type DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import Sparkline from "../components/Sparkline.vue";
 import { company, month } from "./fixtures.ts";
@@ -52,6 +52,10 @@ function score(y: number) {
 
 function segments(path: Pick<DOMWrapper<Element>, "attributes">) {
   return (path.attributes("d") ?? "").split("C").length - 1;
+}
+
+function hover(wrapper: VueWrapper, index: number) {
+  return wrapper.findAll("rect.hit")[index]?.trigger("pointerenter");
 }
 
 describe("Sparkline", () => {
@@ -326,6 +330,93 @@ describe("Sparkline", () => {
     expect(score(Number(points[6]?.[1]))).toBeCloseTo(85);
   });
 
+  it("cuts the observed window to six months when 6M is pressed while the projection stays", async () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          {
+            ...company("COMP_A", "GROUP_1"),
+            series: twoYears().map((name, index) => ({
+              ...month(name, 40 + (index % 5), "stable"),
+              momentum: index === 24 ? 9 : null,
+            })),
+          },
+        ],
+      },
+    });
+    const buttons = wrapper.findAll(".range button");
+    expect(buttons.map((button) => button.text())).toEqual([
+      "6M",
+      "12M",
+      "24M",
+    ]);
+    expect(buttons.map((button) => button.attributes("aria-pressed"))).toEqual([
+      "false",
+      "false",
+      "true",
+    ]);
+    expect(segments(wrapper.get("path.series-line"))).toBe(23);
+    await buttons[0]?.trigger("click");
+    expect(buttons.map((button) => button.attributes("aria-pressed"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(segments(wrapper.get("path.series-line"))).toBe(5);
+    expect(wrapper.get("path.series-line").attributes("d")).toMatch(/^M44,/);
+    expect(Number(wrapper.get("line.today-marker").attributes("x1"))).toBe(
+      601.5,
+    );
+    expect(wrapper.findAll("text.month").map((item) => item.text())).toEqual([
+      "sep 26",
+      "dic 26",
+      "mar 27",
+    ]);
+    expect(coordinates(wrapper.get("polyline.projection-line"))).toHaveLength(
+      4,
+    );
+    expect(wrapper.get("svg").attributes("aria-label")).toBe(
+      "Evolución del score en 6 meses y proyección por tendencia a 3 meses",
+    );
+  });
+
+  it("shows the hovered month with each score, the projected value on future months, and hides on leave", async () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          {
+            ...company("COMP_A", "GROUP_1"),
+            series: [
+              month("2026-11", 30, "stable"),
+              { ...month("2026-12", 40, "stable"), momentum: 15 },
+            ],
+          },
+          withMonths("COMP_B", ["2026-12"]),
+        ],
+      },
+    });
+    expect(wrapper.find(".tooltip").exists()).toBe(false);
+    expect(wrapper.findAll("rect.hit")).toHaveLength(5);
+    await hover(wrapper, 0);
+    let tooltip = wrapper.get(".tooltip");
+    expect(tooltip.get("strong").text()).toBe("noviembre de 2026");
+    expect(tooltip.findAll("span").map((row) => row.text())).toEqual([
+      "COMP_A 30",
+      "COMP_B –",
+    ]);
+    expect(Number(wrapper.get("line.hover-line").attributes("x1"))).toBe(44);
+    await hover(wrapper, 2);
+    tooltip = wrapper.get(".tooltip");
+    expect(tooltip.get("strong").text()).toBe("enero de 2027");
+    expect(tooltip.findAll("span").map((row) => row.text())).toEqual([
+      "COMP_A proyección 45",
+    ]);
+    expect(Number(wrapper.get("line.hover-line").attributes("x1"))).toBe(490);
+    await wrapper.get("svg").trigger("pointerleave");
+    expect(wrapper.find(".tooltip").exists()).toBe(false);
+    expect(wrapper.find("line.hover-line").exists()).toBe(false);
+  });
+
   it("names the trend projection and band in the legend and accessible chart label", () => {
     const wrapper = mount(Sparkline, {
       props: { companies: [company("COMP_A", "GROUP_1")] },
@@ -333,6 +424,7 @@ describe("Sparkline", () => {
     expect(wrapper.get("svg").attributes("aria-label")).toBe(
       "Evolución del score en 24 meses y proyección por tendencia a 3 meses",
     );
+    expect(wrapper.get(".chart-head h2").text()).toBe("Evolución del score");
     expect(wrapper.get(".legend").text()).toContain(
       "proyección por tendencia (3 meses)",
     );
