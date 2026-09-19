@@ -277,6 +277,9 @@ def test_overdue_invoice_months_uses_the_earliest_due_plus_ninety_days():
     invoices = pl.DataFrame(
         {
             "company_id": ["C1", "C1", "C2", "C3"],
+            "amount": [100.0] * 4,
+            "issuance_date": [date(2025, 12, 1)] * 4,
+            "status": ["pending", "pending", "pending", "paid"],
             "pending_amount": [10.0, 5.0, 1.0, 0.0],
             "due_date": [date(2026, 1, 15), date(2026, 6, 3), date(2026, 6, 4), date(2026, 1, 1)],
             "payment_date": [None, None, None, date(2026, 1, 1)],
@@ -289,6 +292,9 @@ def test_e2_fires_for_a_late_payment_and_for_an_invoice_still_unpaid_ninety_days
     invoices = pl.DataFrame(
         {
             "company_id": ["C1", "C2", "C3", "C4"],
+            "amount": [100.0] * 4,
+            "issuance_date": [date(2026, 1, 1)] * 4,
+            "status": ["paid", "paid", "pending", "pending"],
             "due_date": [date(2026, 1, 31), date(2026, 1, 31), date(2026, 1, 31), date(2026, 6, 10)],
             "payment_date": [date(2026, 5, 1), date(2026, 4, 30), None, None],
             "pending_amount": [0.0, 0.0, 50.0, 100.0],
@@ -296,6 +302,70 @@ def test_e2_fires_for_a_late_payment_and_for_an_invoice_still_unpaid_ninety_days
     )
     # C1 is exactly ninety days late; C2 is one day short; C3 is unpaid and due ninety days ago; C4 falls past the cutoff.
     assert overdue_invoice_months(invoices) == {"C1": date(2026, 5, 1), "C3": date(2026, 5, 1)}
+
+
+def invoice_evidence(**changes: object) -> pl.DataFrame:
+    row = {
+        "company_id": "C1", "amount": 100.0, "pending_amount": 0.0, "status": "paid",
+        "issuance_date": date(2026, 1, 1), "due_date": date(2026, 1, 31), "payment_date": date(2026, 5, 1),
+    }
+    return pl.DataFrame([{**row, **changes}], schema_overrides={
+        "amount": pl.Float64, "pending_amount": pl.Float64, "status": pl.String,
+        "issuance_date": pl.Date, "due_date": pl.Date, "payment_date": pl.Date,
+    })
+
+
+@pytest.mark.parametrize("changes", [
+    {"status": "cancel", "pending_amount": 50.0},
+    {"status": "unknown", "pending_amount": 50.0},
+    {"status": "pending"},
+    {"pending_amount": 50.0},
+    {"pending_amount": -1.0},
+    {"pending_amount": None},
+    {"pending_amount": float("nan")},
+    {"status": "pending", "pending_amount": 101.0},
+    {"status": "pending", "pending_amount": float("inf")},
+    {"amount": float("inf")},
+    {"amount": float("nan")},
+    {"amount": 0.0},
+    {"amount": -100.0},
+    {"issuance_date": date(2026, 2, 1)},
+    {"issuance_date": None},
+    {"payment_date": date(2026, 9, 1)},
+    {"payment_date": date(6913, 11, 20)},
+    {"payment_date": None},
+    {"status": "pending", "pending_amount": 50.0, "payment_date": date(2025, 12, 31)},
+])
+def test_e2_rejects_inconsistent_invoice_evidence(changes):
+    assert overdue_invoice_months(invoice_evidence(**changes)) == {}
+
+
+@pytest.mark.parametrize("status", ["pending", "overdue", "paymentOrder", "payment_in_progress", "open"])
+@pytest.mark.parametrize("payment_date", [None, date(2026, 1, 31), date(2026, 10, 1)])
+def test_e2_uses_the_outstanding_balance_not_the_scheduled_payment_date(status, payment_date):
+    invoice = invoice_evidence(status=status, pending_amount=50.0, payment_date=payment_date)
+
+    assert overdue_invoice_months(invoice) == {"C1": date(2026, 5, 1)}
+
+
+def test_e2_excludes_an_event_that_only_reaches_ninety_days_at_the_exclusive_cutoff():
+    invoices = pl.concat([
+        invoice_evidence(company_id="C1", status="pending", pending_amount=50.0,
+                         due_date=date(2026, 6, 2), payment_date=None),
+        invoice_evidence(company_id="C2", status="pending", pending_amount=50.0,
+                         due_date=date(2026, 6, 3), payment_date=None),
+    ])
+
+    assert overdue_invoice_months(invoices) == {"C1": date(2026, 8, 1)}
+
+
+def test_e2_filters_invalid_earlier_invoices_before_selecting_the_first_event():
+    invoices = pl.concat([
+        invoice_evidence(status="cancel", pending_amount=100.0, due_date=date(2026, 1, 1)),
+        invoice_evidence(),
+    ])
+
+    assert overdue_invoice_months(invoices) == {"C1": date(2026, 5, 1)}
 
 
 def test_alert_kind_labels_down_up_and_recovered_transitions():

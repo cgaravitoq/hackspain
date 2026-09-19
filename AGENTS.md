@@ -53,6 +53,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - **The browser talks to one origin.** Web calls `/api/...`, the web Worker forwards to the agent. Do not add CORS to the agent.
 - **`compatibility_date` stays at or below the date the bundled workerd supports.** The comment in `apps/agent/wrangler.jsonc` says which one; bump both together.
 - **Pipeline commits carry no scope.** commitlint allows only `agent`, `web`, `shared`, `ci` and `repo`; changes under `pipeline/` go unscoped.
+- **The original HackSpain extract is synthetic.** Its supplied `data_dictionary.md` documents no realized-settlement meaning for invoice `payment_date` and no invoice-to-transaction allocation ledger. Dataset E2E runs are not validation on real companies. Matching bank fields corroborates a subset, not settlement truth for unmatched invoices.
 
 ## Conventions
 
