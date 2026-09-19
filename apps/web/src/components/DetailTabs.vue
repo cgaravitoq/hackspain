@@ -14,8 +14,8 @@ import {
   eventLabel,
   points,
 } from "../format.ts";
-import DecisionPanel from "./DecisionPanel.vue";
 import CommitmentPanel from "./CommitmentPanel.vue";
+import DecisionPanel from "./DecisionPanel.vue";
 import GroupStrip from "./GroupStrip.vue";
 import ReportPanel from "./ReportPanel.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";

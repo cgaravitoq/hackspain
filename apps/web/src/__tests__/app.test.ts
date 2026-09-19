@@ -780,13 +780,15 @@ describe("App", () => {
     await wrapper.find("#chat-input").setValue("Simula el compromiso");
     await wrapper.find(".chat form").trigger("submit");
     await vi.waitFor(() =>
-      expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
-        "Compromiso",
-      ),
+      expect(
+        wrapper.find('.details [role="tab"][aria-selected="true"]').text(),
+      ).toBe("Compromiso"),
     );
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find("h1").text()).toBe("COMP_B");
-    expect(wrapper.find(".role-tabs .active").text()).toBe("Financiero");
+    expect(wrapper.find('.role-tabs [data-state="active"]').text()).toBe(
+      "Financiero",
+    );
     expect(posts).toEqual([
       { path: "/api/companies/COMP_B/commitment", body: commitmentAssumptions },
     ]);
@@ -822,11 +824,13 @@ describe("App", () => {
     });
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find(".role-tabs .active").text()).toBe("Tesorero");
-    expect(wrapper.find("h1").text()).toBe("COMP_B");
-    expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
-      "Compromiso",
+    expect(wrapper.find('.role-tabs [data-state="active"]').text()).toBe(
+      "Tesorero",
     );
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(
+      wrapper.find('.details [role="tab"][aria-selected="true"]').text(),
+    ).toBe("Compromiso");
     expect(posts).toEqual(["/api/companies/COMP_B/commitment"]);
   });
 
