@@ -32,6 +32,14 @@ async function error(response: Response): Promise<{ error: string }> {
   return z.object({ error: z.string() }).parse(await response.json());
 }
 
+function cents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function tenths(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 describe("GET /companies/:id/simulate", () => {
   it("carries the loaded treasury into the baseline cash path it projects", async () => {
     const body = await simulation("COMP_B/simulate");
@@ -108,6 +116,26 @@ describe("GET /companies/:id/simulate", () => {
     expect(draw.debt_outstanding_after).toBe(73_333.33);
   });
 
+  it("re-scores the draw with its interest inside both the fees and the outflow of every projected month", async () => {
+    const body = await simulation("COMP_B/simulate?draw=50000&apr=0.07");
+    const draw = single(body);
+    const interest = cents((33_333.33 * 0.07) / 12);
+    const windowInflow = 3 * 40_000;
+    const windowOutflow = 3 * (100_000 + interest);
+    const windowFees = 3 * interest;
+    const drawnLevel =
+      (100 * windowInflow) / (windowInflow + windowOutflow) -
+      (100 * windowFees) / windowOutflow;
+    const baselineLevel = (100 * windowInflow) / (windowInflow + 300_000);
+    expect(interest).toBe(194.44);
+    expect(body.baseline.score).toBe(tenths(baselineLevel));
+    expect(draw.score).toBe(tenths(drawnLevel));
+    expect(draw.score_delta).toBe(
+      tenths(tenths(drawnLevel) - tenths(baselineLevel)),
+    );
+    expect(draw.score_delta).toBe(-0.3);
+  });
+
   it("scores the projected months of the scenario against the baseline", async () => {
     const body = await simulation(
       "COMP_B/simulate?advance=30000&fee=0.02&horizon=3",
@@ -123,12 +151,16 @@ describe("GET /companies/:id/simulate", () => {
       "COMP_B/simulate?advance=30000&fee=0.02&horizon=3",
     );
     const advance = single(body);
+    const cost = 30_000 * 0.02;
+    const monthOne = 150_000 - 60_000 + 30_000 - cost;
+    const monthThree = monthOne - 2 * 60_000;
     expect(advance.decision_figures).toEqual([
-      { label: "Caja mínima", value: advance.minimum_cash, unit: "EUR" },
-      { label: "Caja final", value: advance.final_cash, unit: "EUR" },
-      { label: "Coste", value: advance.cost, unit: "EUR" },
-      { label: "Delta score", value: advance.score_delta, unit: "pts" },
+      { label: "Caja mínima", value: monthThree, unit: "EUR" },
+      { label: "Caja final", value: monthThree, unit: "EUR" },
+      { label: "Coste", value: cost, unit: "EUR" },
+      { label: "Delta score", value: 5.6, unit: "pts" },
     ]);
+    expect(monthThree).toBe(-600);
   });
 
   it("rejects a horizon above the six months the projection covers", async () => {

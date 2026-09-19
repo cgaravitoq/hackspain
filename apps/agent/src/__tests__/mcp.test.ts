@@ -58,7 +58,7 @@ async function toolResult(name: string, args: Params["arguments"]) {
 }
 
 describe("POST /mcp", () => {
-  it("lists the eight X Ray tools with their input schemas", async () => {
+  it("lists the nine X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
