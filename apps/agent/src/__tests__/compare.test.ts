@@ -6,6 +6,8 @@ import {
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createStore } from "../xray/store.ts";
+import { createTools } from "../xray/tools.ts";
 import { seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
@@ -16,6 +18,22 @@ function observedMonths(company: CompanyDetail | undefined) {
   return company?.series
     .filter((entry) => entry.observed)
     .map((entry) => entry.month);
+}
+
+function countingDb(db: D1Database) {
+  const queries: string[] = [];
+  const proxy = new Proxy(db, {
+    get(target, property) {
+      if (property !== "prepare") {
+        throw new Error(`compare reached D1 through ${String(property)}`);
+      }
+      return (query: string) => {
+        queries.push(query);
+        return target.prepare(query);
+      };
+    },
+  });
+  return { db: proxy, queries };
 }
 
 describe("GET /compare", () => {
@@ -94,6 +112,24 @@ describe("GET /compare", () => {
     expect(compareSchema.parse(await byName.json())).toEqual(
       compareSchema.parse(await byId.json()),
     );
+  });
+});
+
+describe("compare tool", () => {
+  it("reads three companies from D1 in a single query", async () => {
+    const { db, queries } = countingDb(env.DB);
+    const comparison = compareSchema.parse(
+      await createTools(createStore(db)).compare({
+        company_ids: ["COMP_D", "COMP_A", "COMP_B"],
+      }),
+    );
+    expect(comparison.companies.map((company) => company.company_id)).toEqual([
+      "COMP_D",
+      "COMP_A",
+      "COMP_B",
+    ]);
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toMatch(/company_id IN \(/);
   });
 });
 
