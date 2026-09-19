@@ -567,6 +567,50 @@ describe("xray contracts", () => {
     ]);
   });
 
+  it("rejects an empty report naming every required field", () => {
+    const result = reportSchema.safeParse({});
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["company_id"],
+      ["month"],
+      ["role"],
+      ["rule_version"],
+      ["generated_at"],
+      ["summary"],
+      ["sections"],
+      ["export_url"],
+    ]);
+  });
+
+  it("rejects an empty report section naming every required field", () => {
+    const result = reportSectionSchema.safeParse({});
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["code"],
+      ["title"],
+      ["body"],
+    ]);
+  });
+
+  it("rejects an empty report figure naming every required field", () => {
+    const result = reportFigureSchema.safeParse({});
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["label"],
+      ["value"],
+      ["unit"],
+    ]);
+  });
+
+  it("rejects an empty compare payload naming every required field", () => {
+    const result = compareSchema.safeParse({});
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["months"],
+      ["companies"],
+    ]);
+  });
+
   it("maps each demo company name to its fictional company id", () => {
     expect(DEMO_COMPANY_NAMES).toEqual({
       "Talleres Ribera": "COMP_0176",
