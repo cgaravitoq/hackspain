@@ -44,7 +44,7 @@ function mountApp() {
 
 async function selectRole(wrapper: VueWrapper, label: string) {
   const tab = wrapper
-    .findAll(".role-tabs button")
+    .findAll('[aria-label="Perfil"] button')
     .find((button) => button.text() === label);
   await tab?.trigger("click");
   await flushPromises();
@@ -53,7 +53,7 @@ async function selectRole(wrapper: VueWrapper, label: string) {
 
 async function openRoute(wrapper: VueWrapper, label: string) {
   const tab = wrapper
-    .findAll(".route-tabs button")
+    .findAll('[aria-label="Pantalla"] button')
     .find((button) => button.text() === label);
   await tab?.trigger("click");
   await flushPromises();
@@ -240,7 +240,7 @@ describe("App", () => {
     await openTab(wrapper, "Grupo");
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
-    expect(wrapper.findAll("svg circle")).toHaveLength(1);
+    expect(wrapper.findAll(".chart-card svg circle")).toHaveLength(1);
     expect(wrapper.find(".chat-stub").text()).toBe("COMP_A financiero");
   });
 
@@ -282,8 +282,8 @@ describe("App", () => {
     await flushPromises();
     await selectRole(wrapper, "Tesorero");
     await openTab(wrapper, "Grupo");
-    expect(wrapper.findAll(".group button")).toHaveLength(2);
-    await wrapper.findAll(".group button")[1]?.trigger("click");
+    expect(wrapper.findAll("section.group button")).toHaveLength(2);
+    await wrapper.findAll("section.group button")[1]?.trigger("click");
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
@@ -555,7 +555,7 @@ describe("App", () => {
     );
     expect(exportLink.attributes("target")).toBe("_blank");
     const salesTab = wrapper
-      .findAll(".role-tabs button")
+      .findAll('[aria-label="Perfil"] button')
       .find((button) => button.text() === "Ventas");
     await salesTab?.trigger("click");
     await flushPromises();
@@ -644,6 +644,48 @@ describe("App", () => {
     await flushPromises();
     await openRoute(wrapper, "Grafo");
     expect(window.location.hash).toBe("#graph");
+  });
+
+  it("tracks the active view and role in the sidebar", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(
+      wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
+    ).toBe("Radiografía");
+    expect(
+      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
+    ).toBe("Financiero");
+    await openRoute(wrapper, "Grafo");
+    await selectRole(wrapper, "Ventas");
+    expect(
+      wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
+    ).toBe("Grafo");
+    expect(
+      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
+    ).toBe("Ventas");
+  });
+
+  it("leaves the current view and role untouched for placeholder items", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const hash = window.location.hash;
+    const role = wrapper
+      .find('[aria-label="Perfil"] [data-active="true"]')
+      .text();
+    const alertItem = wrapper
+      .findAll('[aria-label="Pantalla"] button')
+      .find((button) => button.text() === "Alertas");
+    expect(alertItem?.attributes("aria-disabled")).toBe("true");
+    expect(alertItem?.attributes("title")).toBe("Próximamente");
+    await alertItem?.trigger("click");
+    expect(window.location.hash).toBe(hash);
+    expect(
+      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
+    ).toBe(role);
   });
 
   it("returns from the graph to the company that was on screen", async () => {

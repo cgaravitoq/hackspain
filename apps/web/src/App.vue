@@ -1,28 +1,30 @@
 <script setup lang="ts">
-import {
-  type Alert,
-  type CompanyDetail,
-  type CompanySummary,
-  type Explain,
-  type GroupMap,
-  type Meta,
-  type Report,
-  ROLE_LABELS,
-  type Role,
+import type {
+  Alert,
+  CompanyDetail,
+  CompanySummary,
+  Explain,
+  GroupMap,
+  Meta,
+  Report,
+  Role,
 } from "@hackspain/shared";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
-import ChatBubble from "./components/ChatBubble.vue";
+import AppSidebar from "./components/AppSidebar.vue";
+import ChatSheet from "./components/ChatSheet.vue";
 import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
-import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { Separator } from "./components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "./components/ui/sidebar";
 
-const roles = [
-  { value: "tesorero", label: ROLE_LABELS.tesorero },
-  { value: "financiero", label: ROLE_LABELS.financiero },
-  { value: "ventas", label: ROLE_LABELS.ventas },
-] satisfies { value: Role; label: string }[];
+type View = "radiography" | "graph";
+
 const TREASURER_COMPANY = "COMP_0176";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
@@ -31,6 +33,7 @@ const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
 const onGraph = ref(window.location.hash === `#${GRAPH_ROUTE}`);
+const chatOpen = ref(false);
 const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
 const compareIds = ref<string[]>([]);
 const comparison = ref<CompanyDetail[]>([]);
@@ -80,6 +83,14 @@ function openRadiography() {
       "",
   );
   window.location.hash = selected.value;
+}
+
+function selectView(view: View) {
+  if (view === "graph") {
+    openGraph();
+    return;
+  }
+  openRadiography();
 }
 
 function addComparison(companyId: string) {
@@ -176,91 +187,72 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 </script>
 
 <template>
-  <header class="topbar">
-    <div class="brand">X Ray</div>
-    <Tabs :model-value="onGraph ? GRAPH_ROUTE : 'radiography'">
-      <TabsList class="route-tabs" aria-label="Pantalla">
-        <TabsTrigger value="radiography" @click="openRadiography">
-          Radiografía
-        </TabsTrigger>
-        <TabsTrigger :value="GRAPH_ROUTE" @click="openGraph">Grafo</TabsTrigger>
-      </TabsList>
-    </Tabs>
-    <Tabs :model-value="role">
-      <TabsList class="role-tabs" aria-label="Perfil">
-        <TabsTrigger
-        v-for="item in roles"
-        :key="item.value"
-        :value="item.value"
-        @click="selectRole(item.value)"
-      >
-        {{ item.label }}
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
-    <CompanySelector
-      v-if="role !== 'tesorero'"
-      :alerts="alerts"
-      :companies="companies"
-      :company="company"
-      :selected="selected"
-      :comparison="compareIds"
-      @open="openCompany"
-      @compare="setComparison"
+  <SidebarProvider>
+    <AppSidebar
+      :view="onGraph ? 'graph' : 'radiography'"
+      :role="role"
+      @chat="chatOpen = true"
+      @role="selectRole"
+      @view="selectView"
     />
-  </header>
-  <main v-if="onGraph" class="graph-layout">
-    <RelationGraph />
-  </main>
-  <main v-else class="layout">
-    <div class="center">
-      <p v-if="error" class="error panel">{{ error }}</p>
-      <Radiography
-        v-if="company && explanation"
-        :company="company"
-        :explanation="explanation"
-        :comparison="comparison.length ? comparison : [company]"
-        :alerts="alerts"
-        :group="group"
-        :selected="selected"
-        :role="role"
-        @select="select"
-      />
-      <p v-else-if="!error" class="loading">Cargando radiografía…</p>
-    </div>
-  </main>
-  <ChatBubble
-    v-if="selected"
-    :company-id="selected"
-    :alerts="alerts"
-    :role="role"
-    @compare="replaceComparison"
-    @report="openReport"
-  />
+    <SidebarInset>
+      <header class="topbar">
+        <SidebarTrigger />
+        <Separator orientation="vertical" class="h-4" />
+        <h2 class="view-title">{{ onGraph ? "Grafo" : "Radiografía" }}</h2>
+        <CompanySelector
+          v-if="role !== 'tesorero'"
+          :alerts="alerts"
+          :companies="companies"
+          :company="company"
+          :selected="selected"
+          :comparison="compareIds"
+          @open="openCompany"
+          @compare="setComparison"
+        />
+      </header>
+      <div v-if="onGraph" class="graph-layout">
+        <RelationGraph />
+      </div>
+      <div v-else class="layout">
+        <div class="center">
+          <p v-if="error" class="error panel">{{ error }}</p>
+          <Radiography
+            v-if="company && explanation"
+            :company="company"
+            :explanation="explanation"
+            :comparison="comparison.length ? comparison : [company]"
+            :alerts="alerts"
+            :group="group"
+            :selected="selected"
+            :role="role"
+            @select="select"
+          />
+          <p v-else-if="!error" class="loading">Cargando radiografía…</p>
+        </div>
+      </div>
+    </SidebarInset>
+    <ChatSheet
+      v-if="selected"
+      v-model:open="chatOpen"
+      :company-id="selected"
+      :alerts="alerts"
+      :role="role"
+      @compare="replaceComparison"
+      @report="openReport"
+    />
+  </SidebarProvider>
 </template>
 
 <style scoped>
-.route-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 8px;
-  background: var(--chip-bg);
-}
-
-.route-tabs :deep([data-slot="tabs-trigger"]) {
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.route-tabs :deep([data-state="active"]) {
-  background: var(--card);
-  color: var(--accent);
+.view-title {
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.topbar :deep(.company-selector) {
+  margin-left: auto;
 }
 
 .graph-layout {
@@ -268,29 +260,6 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   min-height: 0;
   padding: 16px 20px 24px;
   overflow: auto;
-}
-
-.role-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 8px;
-  background: var(--chip-bg);
-}
-
-.role-tabs :deep([data-slot="tabs-trigger"]) {
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.role-tabs :deep([data-state="active"]) {
-  background: var(--card);
-  color: var(--accent);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
 }
 
 .center {
