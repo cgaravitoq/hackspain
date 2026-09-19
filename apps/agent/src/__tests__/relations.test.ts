@@ -173,6 +173,30 @@ describe("GET /companies/:id/relations", () => {
     expect(body.edges[0]?.counterpart_score).toBe(91);
   });
 
+  it("returns the incoming edges of a company with the source as counterpart", async () => {
+    const response = await SELF.fetch(
+      "https://agent.test/companies/COMP_B/relations",
+    );
+    expect(response.status).toBe(200);
+    const body = companyRelationsSchema.parse(await response.json());
+    expect(body.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ["COMP_A", "COMP_B"],
+      ["COMP_D", "COMP_B"],
+    ]);
+    expect(body.edges.map((edge) => edge.counterpart_company_id)).toEqual([
+      "COMP_A",
+      "COMP_D",
+    ]);
+    expect(body.edges.map((edge) => edge.counterpart_group_id)).toEqual([
+      "GROUP_1",
+      "GROUP_2",
+    ]);
+    expect(body.edges.map((edge) => edge.counterpart_state)).toEqual([
+      "falling",
+      "slipping",
+    ]);
+  });
+
   it("returns an empty edge list for a known company with no relation", async () => {
     const response = await SELF.fetch(
       "https://agent.test/companies/COMP_E/relations",
