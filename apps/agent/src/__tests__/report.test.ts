@@ -22,7 +22,6 @@ const narrative = {
     { code: "grupo", title: "Mi grupo" },
     { code: "datos_y_limites", title: "Calidad del análisis" },
     { code: "que_hacer", title: "Acciones posibles" },
-    { code: "decision", title: "Decisión" },
   ].map((section) => ({
     ...section,
     body: "Contrastar los datos disponibles antes de actuar.",
@@ -399,7 +398,6 @@ describe("GET /companies/:id/report", () => {
         "Contexto del grupo",
         "Cobertura y reproducibilidad",
         "Seguimiento humano",
-        "Decisión",
       ],
       codes: [
         "resumen",
@@ -409,7 +407,6 @@ describe("GET /companies/:id/report", () => {
         "grupo",
         "datos_y_limites",
         "que_hacer",
-        "decision",
       ],
     },
     {
@@ -421,7 +418,6 @@ describe("GET /companies/:id/report", () => {
         "Alcance del grupo",
         "Capacidades pertinentes",
         "Qué sabemos y qué falta",
-        "Decisión",
       ],
       codes: [
         "resumen",
@@ -430,7 +426,6 @@ describe("GET /companies/:id/report", () => {
         "grupo",
         "que_hacer",
         "datos_y_limites",
-        "decision",
       ],
     },
   ])(
@@ -455,12 +450,16 @@ describe("GET /companies/:id/report", () => {
       expect(response.status).toBe(200);
       const report = reportSchema.parse(await response.json());
       expect(report.role).toBe(role);
-      expect(report.sections.map((section) => section.code)).toEqual(codes);
+      expect(report.sections.map((section) => section.code)).toEqual([
+        ...codes,
+        "decision",
+      ]);
       const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
       for (const title of titles) {
         expect(prompt).toContain(title);
       }
       expect(prompt).toContain(role);
+      expect(prompt).not.toContain("Decisión");
       expect(
         report.sections.flatMap((section) => section.figures),
       ).toContainEqual({
@@ -531,6 +530,13 @@ describe("GET /companies/:id/report", () => {
   it.each([
     JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
     JSON.stringify({ ...narrative, sections: narrative.sections.slice(0, 2) }),
+    JSON.stringify({
+      ...narrative,
+      sections: [
+        ...narrative.sections,
+        { code: "decision", title: "Decisión", body: "Comparar escenarios." },
+      ],
+    }),
     "not JSON",
   ])(
     "returns 502 after two invalid outputs and leaves no cached report",
@@ -621,21 +627,23 @@ describe("GET /companies/:id/report", () => {
     expect(row?.count).toBe(0);
   });
 
-  it("rejects a decision section outside the final position", async () => {
-    const misplaced = {
-      ...narrative,
-      sections: [narrative.sections.at(-1), ...narrative.sections.slice(0, -1)],
-    };
+  it("writes the no-scenario sentence with zero figures when nothing can be simulated", async () => {
     const model = new MockLanguageModelV4({
-      doGenerate: reply(JSON.stringify(misplaced)),
+      doGenerate: reply(JSON.stringify(narrative)),
     });
     const response = await createApp({ model: () => model }).request(
-      "/companies/COMP_A/report?role=tesorero",
+      "/companies/COMP_G/report?role=tesorero",
       undefined,
       env,
     );
-    expect(response.status).toBe(502);
-    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(response.status).toBe(200);
+    const report = reportSchema.parse(await response.json());
+    expect(report.sections.at(-1)).toEqual({
+      code: "decision",
+      title: "Decisión",
+      figures: [],
+      body: "Sin importes disponibles para construir escenarios.",
+    });
   });
 
   it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
@@ -718,7 +726,10 @@ describe("GET /companies/:id/report", () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });
-    const app = createApp({ model: () => model });
+    const judge = vi.fn((_narrative: Narrative) =>
+      Promise.resolve<Verdict>({ verdict: "accepted" }),
+    );
+    const app = createApp({ model: () => model, judge: () => judge });
     const response = await app.request(
       "/companies/COMP_A/report?role=tesorero",
       undefined,
@@ -726,9 +737,10 @@ describe("GET /companies/:id/report", () => {
     );
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
-    expect(report.sections.map((section) => section.title)).toEqual(
-      narrative.sections.map((section) => section.title),
-    );
+    expect(report.sections.map((section) => section.title)).toEqual([
+      ...narrative.sections.map((section) => section.title),
+      "Decisión",
+    ]);
     expect(report.sections[0]?.figures).toContainEqual({
       label: "score · 2026-08 · explain",
       value: 12.3,
@@ -744,9 +756,11 @@ describe("GET /companies/:id/report", () => {
       value: 2,
       unit: "companies",
     });
-    expect(report.sections.at(-1)).toMatchObject({
+    const decision = decisionSimulation(falling);
+    expect(report.sections.at(-1)).toEqual({
       code: "decision",
       title: "Decisión",
+      body: "Adelanto de cobros de 33.333\u00a0€: caja mínima -177.333\u00a0€, caja final -177.333\u00a0€, coste 667\u00a0€, delta score -1,3 puntos. Disposición de línea de 33.333\u00a0€: caja mínima -177.667\u00a0€, caja final -177.667\u00a0€, coste 1000\u00a0€, delta score -0,2 puntos. Escenario, no observación ni previsión: compara, no aconseja; la decisión corresponde a las personas autorizadas.",
       figures: [
         {
           label: "adelanto de cobros · Caja mínima",
@@ -790,12 +804,24 @@ describe("GET /companies/:id/report", () => {
         },
       ],
     });
+    expect(
+      report.sections.at(-1)?.figures.map((figure) => figure.value),
+    ).toEqual(
+      decision?.scenarios.flatMap((scenario) =>
+        scenario.decision_figures.map((figure) => figure.value),
+      ),
+    );
+    expect(judge).toHaveBeenCalledTimes(1);
+    expect(
+      judge.mock.calls[0]?.[0]?.sections.map((section) => section.title),
+    ).not.toContain("Decisión");
     expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
     expect(prompt).toContain("tesorero");
     for (const section of narrative.sections) {
       expect(prompt).toContain(section.title);
     }
+    expect(prompt).not.toContain("Decisión");
     expect(prompt).toContain("12.3");
     expect(prompt).toContain("-27.9");
     const repeated = await app.request(

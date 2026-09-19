@@ -3,6 +3,7 @@ import {
   DEMO_COMPANY_NAMES,
   type Report,
   type ReportFigure,
+  type ReportSection,
   type Role,
   reportSchema,
   reportSectionCodeSchema,
@@ -25,7 +26,7 @@ const narrativeSchema = z.strictObject({
   summary: prose,
   sections: z.array(
     z.strictObject({
-      code: reportSectionCodeSchema,
+      code: reportSectionCodeSchema.exclude(["decision"]),
       title: prose.max(160),
       body: prose,
     }),
@@ -111,7 +112,7 @@ function figure(
 }
 
 function sectionFigures(sources: ReportSources) {
-  const { explanation: e, changed, group, simulation } = sources;
+  const { explanation: e, changed, group } = sources;
   const label = (name: string) => `${name} · ${e.month} · explain`;
   const situation = [
     ...figure(label("score"), e.score, "points"),
@@ -219,17 +220,6 @@ function sectionFigures(sources: ReportSources) {
       "ratio",
     ),
   ];
-  const decision =
-    simulation?.scenarios.flatMap((scenario) => {
-      const name =
-        scenario.kind === "receivable_advance"
-          ? "adelanto de cobros"
-          : "disposición de línea";
-      return scenario.decision_figures.map((item) => ({
-        ...item,
-        label: `${name} · ${item.label}`,
-      }));
-    }) ?? [];
   return {
     situation,
     changes,
@@ -238,7 +228,57 @@ function sectionFigures(sources: ReportSources) {
     group: groupFigures,
     evidence,
     actions: review,
-    decision,
+  };
+}
+
+const SCENARIOS = {
+  receivable_advance: {
+    name: "Adelanto de cobros",
+    label: "adelanto de cobros",
+    cap: "pendiente de cobro",
+  },
+  credit_line_draw: {
+    name: "Disposición de línea",
+    label: "disposición de línea",
+    cap: "línea disponible",
+  },
+};
+
+const DECISION_FRAME =
+  "Escenario, no observación ni previsión: compara, no aconseja; la decisión corresponde a las personas autorizadas.";
+const NO_SCENARIOS = "Sin importes disponibles para construir escenarios.";
+
+function decisionSection(sources: ReportSources): ReportSection {
+  const scenarios = sources.simulation?.scenarios ?? [];
+  const money = new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: sources.company.currency ?? "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const points = new Intl.NumberFormat("es-ES", {
+    signDisplay: "exceptZero",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const sentences = scenarios.map((scenario) => {
+    const { name, cap } = SCENARIOS[scenario.kind];
+    const applied = `${name} de ${money.format(scenario.applied)}${scenario.capped ? ` (tope: ${cap})` : ""}`;
+    return `${applied}: caja mínima ${money.format(scenario.minimum_cash)}, caja final ${money.format(scenario.final_cash)}, coste ${money.format(scenario.cost)}, delta score ${points.format(scenario.score_delta)} puntos.`;
+  });
+  return {
+    code: "decision",
+    title: "Decisión",
+    figures: scenarios.flatMap((scenario) =>
+      scenario.decision_figures.map((item) => ({
+        ...item,
+        label: `${SCENARIOS[scenario.kind].label} · ${item.label}`,
+      })),
+    ),
+    body:
+      sentences.length > 0
+        ? [...sentences, DECISION_FRAME].join(" ")
+        : NO_SCENARIOS,
   };
 }
 
@@ -299,10 +339,13 @@ async function narrate(
         rule_version: sources.explanation.evidence.rule_version,
         generated_at: new Date().toISOString(),
         summary: output.summary,
-        sections: output.sections.map((section, index) => ({
-          ...section,
-          figures: figures[sections[index]?.source ?? "evidence"],
-        })),
+        sections: [
+          ...output.sections.map((section, index) => ({
+            ...section,
+            figures: figures[sections[index]?.source ?? "evidence"],
+          })),
+          decisionSection(sources),
+        ],
         export_url: `/api/companies/${encodeURIComponent(sources.explanation.company_id)}/report.pdf?role=${role}`,
       });
     } catch {
