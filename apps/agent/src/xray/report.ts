@@ -1,4 +1,5 @@
 import {
+  type CompanyDetail,
   DEMO_COMPANY_NAMES,
   type Report,
   type ReportFigure,
@@ -47,6 +48,24 @@ export function companyName(companyId: string): string {
   );
 }
 
+export function decisionSimulation(company: CompanyDetail) {
+  const observed = company.series.filter((entry) => entry.observed).slice(-3);
+  if (observed.length !== 3) {
+    return null;
+  }
+  return simulate(company, observed, {
+    company: company.company_id,
+    horizon: 6,
+    advance: company.treasury.pending_receivables,
+    draw: Math.max(
+      company.treasury.credit_line_limit - company.treasury.credit_line_drawn,
+      0,
+    ),
+    fee: 0.02,
+    apr: 0.06,
+  });
+}
+
 export async function reportSources(db: D1Database, companyId: string) {
   const store = createStore(db);
   const company = await store.company(companyId);
@@ -58,22 +77,7 @@ export async function reportSources(db: D1Database, companyId: string) {
     throw new HTTPException(422, { message: "No observed month available" });
   }
   const tools = createTools(store);
-  const observed = company.series.filter((entry) => entry.observed).slice(-3);
-  const simulation =
-    observed.length === 3
-      ? simulate(company, observed, {
-          company: companyId,
-          horizon: 6,
-          advance: company.treasury.pending_receivables,
-          draw: Math.max(
-            company.treasury.credit_line_limit -
-              company.treasury.credit_line_drawn,
-            0,
-          ),
-          fee: 0.02,
-          apr: 0.06,
-        })
-      : null;
+  const simulation = decisionSimulation(company);
   const [explanation, changed, group, alerts] = await Promise.all([
     tools.explain({ company_id: companyId, month: latest.month }),
     tools.what_changed({ company_id: companyId }),
