@@ -29,7 +29,7 @@ def components(row: Row) -> dict[str, float]:
     }
 
 
-def drivers(row: Row, previous: Row | None, facts: dict[str, Any]) -> list[dict[str, Any]]:
+def drivers(row: Row, facts: dict[str, Any]) -> list[dict[str, Any]]:
     if row["level"] is None:
         return []
     window = _window(row)
