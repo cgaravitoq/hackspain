@@ -45,7 +45,10 @@ def seed_dataset(
     folder.mkdir(parents=True, exist_ok=True)
     _write_csv(folder / "companies.csv", [{"company_id": "C1", "group_id": "G1", "currency": "EUR"}])
     _write_csv(folder / "groups.csv", [{"group_id": "G1", "erp": "holded"}])
-    _write_csv(folder / "banking_products.csv", [{"product_id": "P1", "currency": "EUR"}])
+    _write_csv(
+        folder / "banking_products.csv",
+        [{"product_id": "P1", "currency": "EUR"}, {"product_id": "P2", "currency": "USD"}],
+    )
     txs: list[dict[str, object]] = []
     for index in range(months):
         if index + 1 in missing_months:
@@ -90,13 +93,17 @@ def seed_dataset(
     _write_csv(folder / "invoices.csv", [{**invoice, **(invoice_date_override or {})}])
     _write_csv(
         folder / "balances.csv",
-        [{"product_id": "P1", "company_id": "C1", "date": "2026-09-01", "balance": 1000.0}],
+        [
+            {"product_id": "P1", "company_id": "C1", "date": "2026-09-01", "balance": 1000.0},
+            {"product_id": "P2", "company_id": "C1", "date": "2026-09-01", "balance": 700.0},
+        ],
     )
     _write_csv(
         folder / "debt_products.csv",
         [
-            {"company_id": "C1", "type": "loan", "outstanding": 10.0, "granted": 100.0},
-            {"company_id": "C1", "type": "lineofcredit", "outstanding": -2000.0, "granted": -5000.0},
+            {"company_id": "C1", "type": "loan", "currency": "EUR", "outstanding": 10.0, "granted": 100.0},
+            {"company_id": "C1", "type": "lineofcredit", "currency": "EUR", "outstanding": -2000.0, "granted": -5000.0},
+            {"company_id": "C1", "type": "lineofcredit", "currency": "USD", "outstanding": -300.0, "granted": -900.0},
         ],
     )
     return folder
@@ -638,7 +645,7 @@ def test_treasury_is_zero_for_a_company_without_balances_invoices_or_credit_line
     data = seed_dataset(tmp_path / "data")
     for name, header in (
         ("balances.csv", "product_id,company_id,date,balance\n"),
-        ("debt_products.csv", "company_id,type,outstanding,granted\n"),
+        ("debt_products.csv", "company_id,type,currency,outstanding,granted\n"),
         (
             "invoices.csv",
             "company_id,document_type,amount,pending_amount,issuance_date,due_date,payment_date,status,counterparty_id\n",
@@ -655,3 +662,19 @@ def test_treasury_is_zero_for_a_company_without_balances_invoices_or_credit_line
         "credit_line_drawn": 0.0,
     }
     assert json.loads((out / "scores" / "C1.json").read_text())["treasury"] == record["treasury"]
+
+
+def test_treasury_counts_only_eur_accounts_and_eur_credit_lines(tmp_path: Path):
+    dataset = read(seed_dataset(tmp_path / "data"))
+    assert dataset.balances.get_column("product_id").to_list() == ["P1"]
+    assert dataset.balances.get_column("balance").sum() == 1000.0
+    lines = dataset.debt.filter(pl.col("type") == "lineofcredit")
+    assert lines.get_column("currency").to_list() == ["EUR"]
+    assert lines.get_column("granted").sum() == 5000.0
+    assert lines.get_column("outstanding").sum() == 2000.0
+    out = tmp_path / "out"
+    build(dataset, out, seed=42)
+    treasury = json.loads((out / "companies.json").read_text())[0]["treasury"]
+    assert treasury["starting_cash"] == 1000.0
+    assert treasury["credit_line_limit"] == 5000.0
+    assert treasury["credit_line_drawn"] == 2000.0
