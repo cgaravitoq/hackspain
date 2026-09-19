@@ -157,6 +157,32 @@ describe("App", () => {
     ]);
   });
 
+  it("replaces the oldest chip when a fourth company is opened", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    window.location.hash = "COMP_D";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_D");
+    expect(chips(wrapper)).toEqual(["COMP_B", "COMP_C", "COMP_D"]);
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "COMP_B",
+      "COMP_C",
+      "COMP_D",
+    ]);
+  });
+
   it("does not duplicate a chip when the company on screen is opened again", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();

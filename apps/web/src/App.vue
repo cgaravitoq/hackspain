@@ -24,6 +24,7 @@ const roles = [
   { value: "ventas", label: ROLE_LABELS.ventas },
 ] satisfies { value: Role; label: string }[];
 const TREASURER_COMPANY = "COMP_0176";
+const MAX_COMPARED = 3;
 const role = ref<Role>("financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
@@ -61,9 +62,10 @@ function select(companyId: string) {
 }
 
 function addComparison(companyId: string) {
-  if (!compareIds.value.includes(companyId) && compareIds.value.length < 3) {
-    compareIds.value = [...compareIds.value, companyId];
+  if (compareIds.value.includes(companyId)) {
+    return;
   }
+  compareIds.value = [...compareIds.value, companyId].slice(-MAX_COMPARED);
 }
 
 function removeComparison(companyId: string) {
