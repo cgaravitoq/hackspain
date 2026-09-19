@@ -233,6 +233,70 @@ export const metaSchema = z.object({
 
 export type Meta = z.infer<typeof metaSchema>;
 
+export const roleSchema = z.enum(["tesorero", "financiero", "ventas"]);
+
+export type Role = z.infer<typeof roleSchema>;
+
+export const ROLE_LABELS: Record<Role, string> = {
+  tesorero: "Tesorero",
+  financiero: "Financiero",
+  ventas: "Ventas",
+};
+
+export const reportSectionCodeSchema = z.enum([
+  "resumen",
+  "por_que",
+  "que_hacer",
+  "datos_y_limites",
+  "grupo",
+  "decision",
+]);
+
+export type ReportSectionCode = z.infer<typeof reportSectionCodeSchema>;
+
+export const reportFigureSchema = z.object({
+  label: z.string(),
+  value: z.number(),
+  unit: z.string(),
+});
+
+export type ReportFigure = z.infer<typeof reportFigureSchema>;
+
+export const reportSectionSchema = z.object({
+  code: reportSectionCodeSchema,
+  title: z.string(),
+  body: z.string(),
+  figures: z.array(reportFigureSchema).default([]),
+});
+
+export type ReportSection = z.infer<typeof reportSectionSchema>;
+
+export const reportSchema = z.object({
+  company_id: z.string(),
+  month: z.string(),
+  role: roleSchema,
+  rule_version: z.string(),
+  generated_at: z.iso.datetime(),
+  summary: z.string(),
+  sections: z.array(reportSectionSchema).min(1),
+  export_url: z.string(),
+});
+
+export type Report = z.infer<typeof reportSchema>;
+
+export const compareSchema = z.object({
+  months: z.array(z.string()).min(1),
+  companies: z.array(companyDetailSchema).min(1).max(3),
+});
+
+export type Compare = z.infer<typeof compareSchema>;
+
+export const DEMO_COMPANY_NAMES = {
+  "Talleres Ribera": "COMP_0176",
+  "Bodegas Altamira": "COMP_0077",
+  "Meridian Logística": "COMP_0909",
+} satisfies Record<string, string>;
+
 const chatPartSchema = z
   .object({
     type: z.string().min(1),
@@ -249,6 +313,7 @@ export const chatMessageSchema = z
 
 export const chatRequestSchema = z.object({
   company_id: z.string().min(1).optional(),
+  role: roleSchema.optional(),
   messages: z.array(chatMessageSchema).min(1),
 });
 
