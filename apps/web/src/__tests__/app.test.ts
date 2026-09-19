@@ -1,3 +1,4 @@
+import type { Role } from "@hackspain/shared";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
@@ -39,9 +40,10 @@ function installStorage() {
   });
 }
 
-function mountApp() {
+function mountApp(props: { initialRole?: Role } = {}) {
   mounted = mount(App, {
     attachTo: document.body,
+    props,
     global: { stubs: { ChatPanel: ChatPanelStub } },
   });
   return mounted;
@@ -368,6 +370,19 @@ describe("App", () => {
     expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
+  });
+
+  it("opens pinned to the treasurer's company when entered with that role", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp({ initialRole: "tesorero" });
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_0176");
+    expect(seen).not.toContain("/api/compare");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find(".company-selector").exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="Cambiar rol"]').text()).toBe("TE");
   });
 
   it("keeps the treasurer on its company when the hash changes", async () => {
