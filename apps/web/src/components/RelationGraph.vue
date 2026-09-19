@@ -157,7 +157,6 @@ let panStart = { clientX: 0, clientY: 0, viewX: 0, viewY: 0 };
 
 const emit = defineEmits<{
   analyze: [companyId: string];
-  compare: [companyId: string];
 }>();
 
 const cursorStyle = computed(() => {
@@ -563,12 +562,6 @@ function analyzeSelected() {
   }
 }
 
-function compareSelected() {
-  if (selectedNode.value) {
-    emit("compare", selectedNode.value.company_id);
-  }
-}
-
 async function load() {
   const request = ++graphRequest;
   error.value = "";
@@ -789,9 +782,8 @@ onUnmounted(() => resizeObserver?.disconnect());
           </div>
           <div class="graph-panel-actions">
             <button type="button" class="graph-panel-primary" @click="analyzeSelected">
-              Analizar
+              Ver gráfico
             </button>
-            <button type="button" @click="compareSelected">Comparar</button>
           </div>
         </div>
       </div>

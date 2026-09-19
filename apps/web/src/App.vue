@@ -215,7 +215,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         />
       </header>
       <div v-if="onGraph" class="graph-layout">
-        <RelationGraph @analyze="analyzeFromGraph" @compare="addComparison" />
+        <RelationGraph @analyze="analyzeFromGraph" />
       </div>
       <div v-else class="layout">
         <div class="center">

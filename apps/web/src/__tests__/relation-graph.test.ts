@@ -306,8 +306,8 @@ describe("RelationGraph", () => {
     expect(window.location.hash).toBe("");
     const panel = text(wrapper, ".graph-panel");
     expect(panel).toContain("COMP_D");
-    expect(panel).toContain("Analizar");
-    expect(panel).toContain("Comparar");
+    expect(panel).toContain("Ver gráfico");
+    expect(panel).not.toContain("Comparar");
   });
 
   it("closes the detail panel and opens a different node's panel on click", async () => {
@@ -325,7 +325,7 @@ describe("RelationGraph", () => {
     expect(wrapper.find(".graph-panel").exists()).toBe(false);
   });
 
-  it("emits analyze with the selected company when Analizar is clicked", async () => {
+  it("emits analyze with the selected company when Ver gráfico is clicked", async () => {
     const wrapper = await mountGraph();
     const position = drawn("COMP_D");
     await wrapper
@@ -333,17 +333,6 @@ describe("RelationGraph", () => {
       .trigger("click", { clientX: position.x, clientY: position.y });
     await wrapper.find(".graph-panel-primary").trigger("click");
     expect(wrapper.emitted("analyze")).toEqual([["COMP_D"]]);
-  });
-
-  it("emits compare with the selected company when Comparar is clicked", async () => {
-    const wrapper = await mountGraph();
-    const position = drawn("COMP_D");
-    await wrapper
-      .find("canvas")
-      .trigger("click", { clientX: position.x, clientY: position.y });
-    const buttons = wrapper.findAll(".graph-panel-actions button");
-    await buttons[1]?.trigger("click");
-    expect(wrapper.emitted("compare")).toEqual([["COMP_D"]]);
   });
 
   it("pans the graph so nodes track the drag distance", async () => {
