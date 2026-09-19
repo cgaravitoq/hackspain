@@ -148,20 +148,31 @@ def test_alert_kind_labels_down_up_and_recovered_transitions():
     assert alert_kind("healthy", "stable") is None
 
 
+def backtest_rows(states: list[str], e1: list[bool]) -> list[dict[str, object]]:
+    return [{"state": state, "e1": flag, "e3": 0} for state, flag in zip(states, e1, strict=True)]
+
+
 def test_backtest_keeps_the_third_month_of_an_e1_run_as_a_hit():
-    states = ["healthy"] * 5 + ["slipping"] + ["falling"] * 6
-    e1 = [False] * 5 + [True, True, True] + [False] * 4
-    rows = [{"state": state, "e1": flag, "e3": 0} for state, flag in zip(states, e1, strict=True)]
-    summary = backtest({"C1": rows})
+    alert_on_second_month = backtest_rows(
+        ["healthy"] * 6 + ["slipping"] + ["falling"] * 6,
+        [False] * 5 + [True] * 3 + [False] * 5,
+    )
+    run_cut_after_second_month = backtest_rows(["healthy", "slipping", "falling"], [False, True, True])
+    summary = backtest({"C1": alert_on_second_month, "C2": run_cut_after_second_month})
     assert summary["events"]["E1"] == {
-        "events": 1,
+        "events": 2,
         "with_prior_alert": 0,
         "coverage": 0.0,
         "median_lead_months": None,
     }
-    assert summary["alerts"]["evaluated"] == 1
-    assert summary["alerts"]["false_alarms"] == 0
-    assert summary["alerts"]["reverted_within_3_months"] == 0
+    assert summary["alerts"] == {
+        "evaluated": 1,
+        "false_alarms": 0,
+        "false_alarm_rate": 0.0,
+        "reverted_within_3_months": 0,
+        "revert_rate": 0.0,
+        "censored": 1,
+    }
 
 
 def test_read_rejects_unparsable_transaction_dates(tmp_path: Path):
