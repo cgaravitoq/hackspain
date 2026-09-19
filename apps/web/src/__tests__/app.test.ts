@@ -75,8 +75,46 @@ function chips(wrapper: VueWrapper) {
     .map((chip) => chip.text().replace("×", "").trim());
 }
 
+async function openSelector(wrapper: VueWrapper) {
+  const trigger = wrapper.find('button[aria-label="Seleccionar empresa"]');
+  if (trigger.attributes("aria-expanded") !== "true") {
+    await trigger.trigger("click");
+    await flushPromises();
+  }
+}
+
+function companyOption(wrapper: VueWrapper, companyId: string) {
+  const option = wrapper
+    .findAll(".company-option")
+    .find((item) => item.find(".company-id").text() === companyId);
+  if (!option) {
+    throw new Error(`Missing selector option ${companyId}`);
+  }
+  return option;
+}
+
+async function openCompanyFromSelector(wrapper: VueWrapper, companyId: string) {
+  await openSelector(wrapper);
+  await companyOption(wrapper, companyId).trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
+async function compareCompany(wrapper: VueWrapper, companyId: string) {
+  await openSelector(wrapper);
+  await companyOption(wrapper, companyId)
+    .find(".compare-toggle")
+    .trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
 beforeEach(() => {
   installStorage();
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => undefined,
+  });
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 
@@ -157,7 +195,7 @@ describe("App", () => {
     expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(true);
   });
 
-  it("renders the financiero toolbar without legacy header metadata", async () => {
+  it("renders the financiero selector without legacy header metadata", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp();
@@ -168,9 +206,9 @@ describe("App", () => {
       "salud financiera de cada empresa, cada mes",
     );
     expect(wrapper.find(".topbar").text()).not.toContain("datos hasta");
-    expect(wrapper.find(".toolbar .search").exists()).toBe(true);
-    expect(wrapper.findAll(".toolbar .compare-chip")).toHaveLength(1);
-    expect(wrapper.find(".toolbar").text()).toContain("hasta 3");
+    expect(wrapper.find(".company-selector").exists()).toBe(true);
+    expect(wrapper.findAll(".company-selector .compare-chip")).toHaveLength(1);
+    expect(wrapper.find(".alerts").exists()).toBe(false);
   });
 
   it("opens on the worst alert and shows its radiography, action and group", async () => {
@@ -215,7 +253,7 @@ describe("App", () => {
     expect(seen).toContain("/api/companies/COMP_0176");
     expect(seen.slice(before)).not.toContain("/api/compare");
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
-    expect(wrapper.find(".toolbar").exists()).toBe(false);
+    expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
   });
@@ -259,9 +297,7 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.findAll(".alerts button")[1]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
+    await compareCompany(wrapper, "COMP_C");
     window.location.hash = "COMP_0176";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
@@ -283,13 +319,8 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
-    await flushPromises();
-    await flushPromises();
-    await wrapper.findAll(".alerts button")[1]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    await compareCompany(wrapper, "COMP_C");
     expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(3);
     await selectRole(wrapper, "Tesorero");
@@ -307,13 +338,8 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
-    await flushPromises();
-    await flushPromises();
-    await wrapper.findAll(".alerts button")[1]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    await compareCompany(wrapper, "COMP_C");
     expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     window.location.hash = "COMP_D";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -414,10 +440,7 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
-    await flushPromises();
-    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
     expect(pending.map((request) => request.ids)).toEqual([
       ["COMP_A"],
       ["COMP_A", "COMP_B"],
@@ -439,22 +462,15 @@ describe("App", () => {
     ]);
   });
 
-  it("does not duplicate a chip when the company on screen is opened again", async () => {
+  it("opens a selected company as the only comparison", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
-    await flushPromises();
-    await flushPromises();
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B"]);
-    await wrapper.findAll(".alerts button")[0]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("COMP_A");
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B"]);
-    expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    await openCompanyFromSelector(wrapper, "COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(chips(wrapper)).toEqual(["COMP_B"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
   });
 
   it("opens the company named in the URL hash", async () => {
@@ -487,19 +503,14 @@ describe("App", () => {
     expect(wrapper.text()).not.toContain("grupo en tensión");
   });
 
-  it("adds companies from search and alerts and removes their chart series", async () => {
+  it("adds companies from the selector and removes their chart series", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
-    await flushPromises();
-    await flushPromises();
-    await wrapper.findAll(".alerts button")[1]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    await compareCompany(wrapper, "COMP_C");
     expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(3);
     await wrapper.find('button[aria-label="Quitar COMP_B"]').trigger("click");
@@ -574,30 +585,30 @@ describe("App", () => {
     );
   });
 
-  it("opens the first company matching a typed id prefix", async () => {
+  it("filters selector companies by a typed id", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("comp_");
-    await wrapper.find("form.search").trigger("submit");
+    await openSelector(wrapper);
+    await wrapper.find("#company-search").setValue("COMP_B");
     await flushPromises();
-    await flushPromises();
-    expect(seen).toContain("/api/companies/COMP_B");
-    expect(wrapper.find("h1").text()).toBe("COMP_B");
-    expect(window.location.hash).toBe("#COMP_B");
+    expect(wrapper.findAll(".company-id").map((item) => item.text())).toEqual([
+      "COMP_B",
+    ]);
+    expect(seen).not.toContain("/api/companies/COMP_B");
   });
 
-  it("keeps the company on screen when the search is submitted empty", async () => {
+  it("keeps the company on screen while the selector search is empty", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_A");
+    await openSelector(wrapper);
     await wrapper.find("#company-search").setValue("  ");
-    await wrapper.find("form.search").trigger("submit");
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_A");
@@ -670,16 +681,14 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
-  it("loads another company when an alert is clicked", async () => {
+  it("loads another company when its alert row is selected", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
     await openTab(wrapper, "Informe");
-    await wrapper.findAll(".alerts button")[1]?.trigger("click");
-    await flushPromises();
-    await flushPromises();
+    await openCompanyFromSelector(wrapper, "COMP_C");
     expect(seen).toContain("/api/companies/COMP_C");
     expect(seen).toContain("/api/companies/COMP_C/report");
     expect(wrapper.find("h1").text()).toBe("COMP_C");
