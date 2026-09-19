@@ -594,10 +594,7 @@ describe("Sparkline", () => {
       wrapper
         .findAll(".chart-company i")
         .map((item) => item.attributes("style")),
-    ).toEqual([
-      "background: rgb(29, 78, 216);",
-      "background: rgb(180, 83, 9);",
-    ]);
+    ).toEqual(["background: var(--series-1);", "background: var(--series-2);"]);
     expect(wrapper.get(".chart-controls").element.children[0]?.className).toBe(
       "chart-companies",
     );

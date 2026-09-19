@@ -1,3 +1,4 @@
+import type { Role } from "@hackspain/shared";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
@@ -39,26 +40,13 @@ function installStorage() {
   });
 }
 
-function mountApp() {
+function mountApp(props: { initialRole?: Role } = {}) {
   mounted = mount(App, {
     attachTo: document.body,
+    props,
     global: { stubs: { ChatPanel: ChatPanelStub } },
   });
   return mounted;
-}
-
-async function selectRole(wrapper: VueWrapper, label: string) {
-  const trigger = wrapper.find('button[aria-label="Cambiar rol"]');
-  if (trigger.attributes("aria-expanded") !== "true") {
-    await trigger.trigger("click");
-    await flushPromises();
-  }
-  const option = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
-  ).find((item) => item.textContent?.includes(label));
-  option?.click();
-  await flushPromises();
-  await flushPromises();
 }
 
 async function openRoute(wrapper: VueWrapper, label: string) {
@@ -153,20 +141,25 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("shows a first-load notice until the assistant is opened", async () => {
+  it("shows a new insight in the sidebar footer until TellMe is opened", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    const button = wrapper.find('button[aria-label="Abrir el asistente"]');
-    expect(button.exists()).toBe(true);
-    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
-    await button.trigger("click");
-    expect(wrapper.find('[aria-label="1 aviso"]').exists()).toBe(false);
+    const footer = wrapper.find('[data-sidebar="footer"]');
+    const button = footer.find('button[aria-label="Abrir el asistente"]');
+    expect(button.text()).toBe("TellMe");
+    expect(footer.find(".insight").text()).toBe("1 nuevo insight");
+    expect(footer.find('[aria-label="Rol: Financiero"]').exists()).toBe(false);
+    expect(footer.text()).not.toContain("Ajustes");
+    await footer.find(".insight").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(footer.find(".insight").exists()).toBe(false);
     expect(window.localStorage.getItem("xray.chat.seen")).toBe("true");
   });
 
-  it("toggles the assistant from its bubble and focuses the chat", async () => {
+  it("toggles the assistant from the TellMe entry and focuses the chat", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
@@ -221,11 +214,12 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
+    expect(wrapper.find(".insight").text()).toBe("1 nuevo insight");
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
     expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(wrapper.find(".insight").exists()).toBe(false);
   });
 
   it("renders the financiero selector without legacy header metadata", async () => {
@@ -357,13 +351,11 @@ describe("App", () => {
   it("pins the treasurer to its company without search, alerts or comparison", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    const before = seen.length;
-    await selectRole(wrapper, "Tesorero");
     expect(seen).toContain("/api/companies/COMP_0176");
-    expect(seen.slice(before)).not.toContain("/api/compare");
+    expect(seen).not.toContain("/api/compare");
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
@@ -372,10 +364,9 @@ describe("App", () => {
 
   it("keeps the treasurer on its company when the hash changes", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await selectRole(wrapper, "Tesorero");
     window.location.hash = "COMP_B";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
@@ -387,10 +378,9 @@ describe("App", () => {
   it("keeps the treasurer on its company when a group member is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await selectRole(wrapper, "Tesorero");
     await openTab(wrapper, "Grupo");
     expect(wrapper.findAll("section.group button")).toHaveLength(2);
     await wrapper.findAll("section.group button")[1]?.trigger("click");
@@ -399,44 +389,16 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(seen).not.toContain("/api/companies/COMP_B");
-    await selectRole(wrapper, "Financiero");
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
   });
 
-  it("draws one series when the treasurer takes over the company already on screen", async () => {
+  it("draws only the treasurer's series even when the hash names another company", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    window.location.hash = "COMP_0176";
-    const wrapper = mountApp();
+    window.location.hash = "COMP_C";
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await compareCompany(wrapper, "COMP_C");
-    window.location.hash = "COMP_0176";
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-    await flushPromises();
-    await flushPromises();
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera", "COMP_C"]);
-    expect(wrapper.findAll(".series-line")).toHaveLength(2);
-    await selectRole(wrapper, "Tesorero");
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
-    expect(wrapper.findAll(".series-line")).toHaveLength(1);
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
-    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "proyección por tendencia (3 meses)",
-      "rango por tendencia",
-    ]);
-  });
-
-  it("draws only the treasurer's series after comparing three companies", async () => {
-    vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
-    await flushPromises();
-    await flushPromises();
-    await compareCompany(wrapper, "COMP_B");
-    await compareCompany(wrapper, "COMP_C");
-    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
-    expect(wrapper.findAll(".series-line")).toHaveLength(3);
-    await selectRole(wrapper, "Tesorero");
-    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
+    expect(window.location.hash).toBe("#COMP_0176");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
@@ -464,9 +426,9 @@ describe("App", () => {
         .findAll(".chart-company i")
         .map((item) => item.attributes("style")),
     ).toEqual([
-      "background: rgb(29, 78, 216);",
-      "background: rgb(180, 83, 9);",
-      "background: rgb(15, 118, 110);",
+      "background: var(--series-1);",
+      "background: var(--series-2);",
+      "background: var(--series-3);",
     ]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "proyección por tendencia (3 meses)",
@@ -729,7 +691,18 @@ describe("App", () => {
       "/api/companies/COMP_A/report.pdf?role=financiero",
     );
     expect(exportLink.attributes("target")).toBe("_blank");
-    await selectRole(wrapper, "Ventas");
+  });
+
+  it("requests the report for the role the dashboard was entered with", async () => {
+    const requested: string[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      requested.push(String(input));
+      return base(input);
+    });
+    const wrapper = mountApp({ initialRole: "ventas" });
+    await flushPromises();
+    await flushPromises();
     expect(requested).toContain("/api/companies/COMP_A/report?role=ventas");
     expect(wrapper.find(".report-export").attributes("href")).toBe(
       "/api/companies/COMP_A/report.pdf?role=ventas",
@@ -799,12 +772,17 @@ describe("App", () => {
     expect(wrapper.find(".layout").exists()).toBe(false);
     expect(seen).toContain("/api/graph");
     expect(seen).not.toContain("/api/companies/COMP_A");
+    const tellMe = wrapper.find('button[aria-label="Abrir el asistente"]');
+    expect(tellMe.attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".insight").exists()).toBe(false);
     window.location.hash = "COMP_B";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(tellMe.attributes("disabled")).toBeUndefined();
+    expect(wrapper.find(".insight").text()).toBe("1 nuevo insight");
   });
 
   it("points the browser at the graph route from the header", async () => {
@@ -816,46 +794,35 @@ describe("App", () => {
     expect(window.location.hash).toBe("#graph");
   });
 
-  it("renders only the role control in the footer and switches roles", async () => {
+  it("keeps the entered role without an avatar or a menu to change it", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "ventas" });
     await flushPromises();
     await flushPromises();
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Radiografía");
-    const roleTrigger = wrapper.find('[aria-label="Cambiar rol"]');
-    expect(roleTrigger.attributes("aria-label")).toBe("Cambiar rol");
-    expect(roleTrigger.text()).toBe("FI");
+    expect(wrapper.find('[aria-label="Rol: Ventas"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Cambiar rol"]').exists()).toBe(false);
     const footer = wrapper.find('[data-sidebar="footer"]');
     expect(footer.findAll('[data-sidebar="menu-button"]')).toHaveLength(1);
     expect(footer.text()).not.toContain("Ajustes");
     expect(wrapper.find('[aria-label="Alertas · próximamente"]').exists()).toBe(
       false,
     );
-    await wrapper.find('[aria-label="Cambiar rol"]').trigger("click");
-    await flushPromises();
-    expect(
-      Array.from(
-        document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
-      ).map((item) => item.textContent?.trim()),
-    ).toEqual(["TE Tesorero", "FI Financiero", "VE Ventas"]);
     await openRoute(wrapper, "Grafo");
-    await selectRole(wrapper, "Ventas");
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Grafo");
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe("VE");
+    expect(wrapper.find(".chat-stub").text()).toContain("ventas");
   });
 
   it("keeps the graph unavailable to the treasurer", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    window.location.hash = "graph";
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await openRoute(wrapper, "Grafo");
-    expect(wrapper.find(".graph-screen").exists()).toBe(true);
-    await selectRole(wrapper, "Tesorero");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
@@ -926,7 +893,6 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     const hash = window.location.hash;
-    const role = wrapper.find('[aria-label="Cambiar rol"]').text();
     const placeholders = wrapper
       .find('[aria-label="Pantalla"]')
       .findAll(":scope > li > [data-sidebar='menu-button']")
@@ -941,7 +907,7 @@ describe("App", () => {
       await placeholder.trigger("click");
     }
     expect(window.location.hash).toBe(hash);
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
+    expect(wrapper.find(".chat-stub").text()).toContain("financiero");
   });
 
   it("opens a company from the graph alone instead of adding it to the comparison", async () => {

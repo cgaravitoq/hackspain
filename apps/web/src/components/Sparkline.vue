@@ -15,7 +15,7 @@ const PAD_BOTTOM = 32;
 const RANGES = [6, 12, 24] as const;
 const GRID = [0, 25, 50, 75, 100];
 const FUTURE_STEPS = [1, 2, 3];
-const SERIES_COLORS = ["#1d4ed8", "#b45309", "#0f766e"];
+const SERIES_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
 const SHORT_MONTHS = [
   "ene",
   "feb",

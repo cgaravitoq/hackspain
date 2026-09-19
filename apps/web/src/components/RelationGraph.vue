@@ -65,27 +65,33 @@ const CLAIM_LABELS: Record<RelationEdge["claim_status"], string> = {
   inferred: "inferida",
 };
 
+const TYPE_VARIABLES: Record<RelationType, [string, string]> = {
+  INFERRED_PAYMENT_TO: ["--relation-payment", "#3878f6"],
+  OPEN_OBLIGATION_TO: ["--relation-obligation", "#ff9900"],
+  SHARES_COUNTERPARTY_WITH: ["--relation-counterparty", "#9d4bdd"],
+};
+
 const TYPE_COLORS: Record<RelationType, string> = {
-  INFERRED_PAYMENT_TO: "#1d4ed8",
-  OPEN_OBLIGATION_TO: "#b45309",
-  SHARES_COUNTERPARTY_WITH: "#0f766e",
+  INFERRED_PAYMENT_TO: "var(--relation-payment)",
+  OPEN_OBLIGATION_TO: "var(--relation-obligation)",
+  SHARES_COUNTERPARTY_WITH: "var(--relation-counterparty)",
 };
 
 const STATE_VARIABLES: Record<State, [string, string]> = {
   healthy: ["--healthy", "#1f7a4d"],
-  improving: ["--improving", "#0f766e"],
-  stable: ["--stable", "#475569"],
-  slipping: ["--slipping", "#b45309"],
+  improving: ["--improving", "#0f8a7a"],
+  stable: ["--stable", "#6e707c"],
+  slipping: ["--slipping", "#c2410c"],
   falling: ["--falling", "#b91c1c"],
-  not_evaluable: ["--muted", "#94a3b8"],
+  not_evaluable: ["--muted", "#a6a9b8"],
 };
 
 const GROUP_VARIABLES: [string, string][] = [
-  ["--group-1", "#5b7cfa"],
-  ["--group-2", "#e0a33e"],
-  ["--group-3", "#3fa87a"],
-  ["--group-4", "#c264a0"],
-  ["--group-5", "#7a86d8"],
+  ["--group-1", "#3878f6"],
+  ["--group-2", "#9d4bdd"],
+  ["--group-3", "#ff9900"],
+  ["--group-4", "#c357ec"],
+  ["--group-5", "#14a38b"],
 ];
 
 const HUB_LABEL_DEGREE = 25;
@@ -106,6 +112,7 @@ type Palette = {
   ink: string;
   inkSoft: string;
   states: Map<State, string>;
+  types: Map<RelationType, string>;
   groups: string[];
 };
 
@@ -284,9 +291,10 @@ function readPalette(): Palette {
     style.getPropertyValue(variable).trim() || fallback;
   return {
     card: read(["--card", "#ffffff"]),
-    ink: read(["--ink", "#16202a"]),
-    inkSoft: read(["--ink-soft", "#4b5865"]),
+    ink: read(["--ink", "#050b2c"]),
+    inkSoft: read(["--ink-soft", "#6e707c"]),
     states: new Map(states.map((item) => [item, read(STATE_VARIABLES[item])])),
+    types: new Map(types.map((item) => [item, read(TYPE_VARIABLES[item])])),
     groups: GROUP_VARIABLES.map(read),
   };
 }
@@ -365,7 +373,8 @@ function paint() {
   for (const link of layout.value.links) {
     const hovered =
       hover.value?.kind === "edge" && hover.value.edge === link.edge;
-    context.strokeStyle = TYPE_COLORS[link.edge.relation_type];
+    context.strokeStyle =
+      palette.types.get(link.edge.relation_type) ?? palette.inkSoft;
     context.globalAlpha = hovered ? 1 : 0.7;
     context.lineWidth = hovered ? 2.4 : 1.2;
     context.beginPath();

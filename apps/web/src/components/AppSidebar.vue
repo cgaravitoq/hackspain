@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ROLE_LABELS, type Role } from "@hackspain/shared";
+import type { Role } from "@hackspain/shared";
 import {
   Activity,
   BookOpen,
@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ScanSearch,
   Send,
+  Sparkles,
   Zap,
 } from "@lucide/vue";
 import {
@@ -17,14 +18,6 @@ import {
   CollapsibleRoot,
   CollapsibleTrigger,
 } from "reka-ui";
-import { Avatar, AvatarFallback } from "./ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -43,24 +36,15 @@ import {
 
 type View = "radiography" | "graph";
 
-defineProps<{ view: View; role: Role }>();
-
-const emit = defineEmits<{
-  role: [role: Role];
-  view: [view: View];
+defineProps<{
+  view: View;
+  role: Role;
+  chatOpen: boolean;
+  chatUnread: boolean;
+  chatDisabled: boolean;
 }>();
 
-const roles = [
-  { value: "tesorero", label: ROLE_LABELS.tesorero, initials: "TE" },
-  { value: "financiero", label: ROLE_LABELS.financiero, initials: "FI" },
-  { value: "ventas", label: ROLE_LABELS.ventas, initials: "VE" },
-] satisfies { value: Role; label: string; initials: string }[];
-
-const roleInitials = {
-  tesorero: "TE",
-  financiero: "FI",
-  ventas: "VE",
-} satisfies Record<Role, string>;
+const emit = defineEmits<{ view: [view: View]; chat: [] }>();
 
 const menuBeforeAnalytics = [
   { label: "Inicio", icon: LayoutDashboard },
@@ -164,47 +148,51 @@ const menuAfterAnalytics = [
     </SidebarContent>
 
     <SidebarFooter>
-      <SidebarMenu>
-        <SidebarMenuItem class="min-w-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <SidebarMenuButton
-                class="gap-1 px-1"
-                :tooltip="ROLE_LABELS[role]"
-                aria-label="Cambiar rol"
-              >
-                <Avatar class="size-6">
-                  <AvatarFallback class="bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {{ roleInitials[role] }}
-                  </AvatarFallback>
-                </Avatar>
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              aria-label="Perfil"
-              side="top"
-              align="start"
-            >
-              <DropdownMenuRadioGroup :model-value="role">
-                <DropdownMenuRadioItem
-                  v-for="option in roles"
-                  :key="option.value"
-                  :value="option.value"
-                  @select="emit('role', option.value)"
-                >
-                  <Avatar class="size-6">
-                    <AvatarFallback class="text-[10px] font-semibold">
-                      {{ option.initials }}
-                    </AvatarFallback>
-                  </Avatar>
-                  {{ option.label }}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <SidebarMenu class="flex-row items-center group-data-[collapsible=icon]:flex-col">
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            class="w-auto group-data-[collapsible=icon]:p-1.5!"
+            tooltip="TellMe"
+            aria-label="Abrir el asistente"
+            :aria-expanded="chatOpen"
+            :is-active="chatOpen"
+            :disabled="chatDisabled"
+            @click="emit('chat')"
+          >
+            <span class="flex size-5 shrink-0 items-center justify-center rounded-md bg-(image:--embat-gradient) text-white">
+              <Sparkles class="size-3" />
+            </span>
+            <span class="font-semibold">TellMe</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem v-if="chatUnread && !chatDisabled" class="group-data-[collapsible=icon]:hidden">
+          <button
+            type="button"
+            class="insight"
+            @click="emit('chat')"
+          >
+            1 nuevo insight
+          </button>
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarFooter>
     <SidebarRail />
   </Sidebar>
 </template>
+
+<style scoped>
+.insight {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #ecdcfb;
+  color: var(--embat-purple);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.insight:hover {
+  background: #e2cdf9;
+}
+</style>
