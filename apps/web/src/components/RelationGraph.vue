@@ -364,6 +364,7 @@ async function load() {
       return;
     }
     graph.value = result;
+    hover.value = null;
     knownGroups.value = [
       ...new Set([
         ...knownGroups.value,
@@ -450,18 +451,20 @@ onMounted(load);
     </div>
     <p v-if="error" class="error panel">{{ error }}</p>
     <div class="graph-stage panel">
-      <canvas
-        ref="canvas"
-        class="graph-canvas"
-        :width="LAYOUT_WIDTH"
-        :height="LAYOUT_HEIGHT"
-        @mousemove="onMove"
-        @mouseleave="hover = null"
-        @click="onClick"
-      />
-      <div v-if="tooltip" class="graph-tooltip" role="tooltip" :style="tooltipStyle">
-        <strong>{{ tooltip.title }}</strong>
-        <span v-for="line in tooltip.lines" :key="line">{{ line }}</span>
+      <div class="graph-frame">
+        <canvas
+          ref="canvas"
+          class="graph-canvas"
+          :width="LAYOUT_WIDTH"
+          :height="LAYOUT_HEIGHT"
+          @mousemove="onMove"
+          @mouseleave="hover = null"
+          @click="onClick"
+        />
+        <div v-if="tooltip" class="graph-tooltip" role="tooltip" :style="tooltipStyle">
+          <strong>{{ tooltip.title }}</strong>
+          <span v-for="line in tooltip.lines" :key="line">{{ line }}</span>
+        </div>
       </div>
     </div>
     <div class="graph-legend">
@@ -532,9 +535,12 @@ onMounted(load);
 }
 
 .graph-stage {
-  position: relative;
   min-height: 0;
   padding: 8px;
+}
+
+.graph-frame {
+  position: relative;
 }
 
 .graph-canvas {
