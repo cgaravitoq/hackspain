@@ -14,6 +14,7 @@ import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import ChatBubble from "./components/ChatBubble.vue";
 import CompanySelector from "./components/CompanySelector.vue";
+import CommitmentPanel from "./components/CommitmentPanel.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
 import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
@@ -225,6 +226,12 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         :selected="selected"
         :role="role"
         @select="select"
+      />
+      <CommitmentPanel
+        v-if="company && explanation && (role === 'tesorero' || role === 'financiero')"
+        :key="`${selected}-${role}`"
+        :company-id="selected"
+        :role="role"
       />
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
     </div>

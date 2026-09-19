@@ -12,6 +12,15 @@ export function euro(value: number): string {
   return money(value, "EUR");
 }
 
+export function euroMinor(value: number): string {
+  const cents = BigInt(value);
+  const absolute = cents < 0n ? -cents : cents;
+  const euros = absolute / 100n;
+  const fraction = (absolute % 100n).toString().padStart(2, "0");
+  const sign = cents < 0n ? "−" : "";
+  return `${sign}${Number(euros).toLocaleString("es-ES")},${fraction} €`;
+}
+
 export function points(value: number | null): string {
   if (value === null) {
     return "–";

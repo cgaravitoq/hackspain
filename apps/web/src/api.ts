@@ -1,9 +1,12 @@
 import {
   type Alert,
   alertSchema,
+  type CommitmentEvaluation,
+  type CommitmentRequest,
   type CompanyDetail,
   type CompanySummary,
   type Compare,
+  commitmentEvaluationSchema,
   companyDetailSchema,
   companySummarySchema,
   compareSchema,
@@ -26,21 +29,34 @@ import {
 } from "@hackspain/shared";
 import { z } from "zod";
 
-async function get<Schema extends z.ZodType>(
+const errorSchema = z.object({ error: z.string() });
+
+async function request<Schema extends z.ZodType>(
+  path: string,
+  schema: Schema,
+  init?: RequestInit,
+): Promise<z.infer<Schema>> {
+  const response = await fetch(`/api${path}`, init);
+  if (!response.ok) {
+    let message = `${path} answered ${response.status}`;
+    try {
+      const failure = errorSchema.safeParse(await response.json());
+      if (failure.success) {
+        message = failure.data.error;
+      }
+    } catch {
+      message = `${path} answered ${response.status}`;
+    }
+    throw new Error(message);
+  }
+  return schema.parse(await response.json());
+}
+
+function get<Schema extends z.ZodType>(
   path: string,
   schema: Schema,
 ): Promise<z.infer<Schema>> {
-  const response = await fetch(`/api${path}`);
-  if (!response.ok) {
-    const parsed = z
-      .object({ error: z.string() })
-      .safeParse(await response.json().catch(() => null));
-    if (parsed.success) {
-      throw new Error(parsed.data.error);
-    }
-    throw new Error(`${path} answered ${response.status}`);
-  }
-  return schema.parse(await response.json());
+  return request(path, schema);
 }
 
 const companiesSchema = z.object({ companies: z.array(companySummarySchema) });
@@ -116,4 +132,13 @@ export const api = {
     ),
   simulate: (id: string, query: SimulateQuery): Promise<Simulate> =>
     get(`/companies/${id}/simulate?${simulateSearch(query)}`, simulateSchema),
+  simulateCommitment: (
+    id: string,
+    commitment: CommitmentRequest,
+  ): Promise<CommitmentEvaluation> =>
+    request(`/companies/${id}/commitment`, commitmentEvaluationSchema, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(commitment),
+    }),
 };
