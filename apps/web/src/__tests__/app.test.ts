@@ -809,8 +809,11 @@ describe("App", () => {
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Radiografía");
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toContain(
-      "Financiero",
+    const roleTrigger = wrapper.find('[aria-label="Cambiar rol"]');
+    expect(roleTrigger.attributes("aria-label")).toBe("Cambiar rol");
+    expect(roleTrigger.text()).toBe("FI");
+    expect(wrapper.find('[aria-label="Alertas · próximamente"]').exists()).toBe(
+      false,
     );
     await wrapper.find('[aria-label="Cambiar rol"]').trigger("click");
     await flushPromises();
@@ -824,9 +827,7 @@ describe("App", () => {
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Grafo");
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toContain(
-      "Ventas",
-    );
+    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe("VE");
   });
 
   it("keeps the graph unavailable to the treasurer", async () => {
