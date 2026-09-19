@@ -35,7 +35,6 @@ async function load(companyId: string) {
     company.value = detail;
     explanation.value = why;
     group.value = detail.group_id ? await api.group(detail.group_id) : null;
-    window.location.hash = companyId;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   }
@@ -56,6 +55,7 @@ watch(
   selected,
   (companyId) => {
     if (companyId) {
+      window.location.hash = companyId;
       load(companyId);
     }
   },
