@@ -18,7 +18,6 @@ import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
 import ReportPanel from "./components/ReportPanel.vue";
-import { monthLabel } from "./format.ts";
 
 const roles = [
   { value: "tesorero", label: ROLE_LABELS.tesorero },
@@ -194,10 +193,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 
 <template>
   <header class="topbar">
-    <div class="brand">
-      X Ray
-      <small>salud financiera de cada empresa, cada mes</small>
-    </div>
+    <div class="brand">X Ray</div>
     <nav class="route-tabs" aria-label="Pantalla">
       <button
         type="button"
@@ -228,8 +224,9 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         {{ item.label }}
       </button>
     </nav>
-    <span v-if="meta" class="month">datos hasta {{ monthLabel(meta.latest_month) }}</span>
-    <form v-if="role !== 'tesorero'" class="search" @submit.prevent="search">
+  </header>
+  <section v-if="role !== 'tesorero'" class="toolbar" aria-label="Herramientas de empresas">
+    <form class="search" @submit.prevent="search">
       <input
         id="company-search"
         v-model="query"
@@ -241,32 +238,33 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       </datalist>
       <button type="submit">Abrir</button>
     </form>
-  </header>
+    <div class="comparator">
+      <span class="compare-label">Comparar</span>
+      <span v-for="companyId in compareIds" :key="companyId" class="compare-chip">
+        {{ companyId }}
+        <button
+          type="button"
+          :aria-label="`Quitar ${companyId}`"
+          :disabled="compareIds.length === 1"
+          @click="removeComparison(companyId)"
+        >
+          ×
+        </button>
+      </span>
+      <span class="compare-hint">hasta 3</span>
+    </div>
+  </section>
   <main v-if="onGraph" class="graph-layout">
     <RelationGraph />
   </main>
-  <main v-else class="layout" :class="{ 'without-alerts': role === 'tesorero' }">
-    <AlertList
-      v-if="role !== 'tesorero'"
-      :alerts="alerts"
-      :selected="selected"
-      @select="select"
-    />
+  <main v-else class="layout">
     <div class="center">
-      <div v-if="role !== 'tesorero' && compareIds.length" class="compare-selector panel">
-        <span>Comparar</span>
-        <span v-for="companyId in compareIds" :key="companyId" class="compare-chip">
-          {{ companyId }}
-          <button
-            type="button"
-            :aria-label="`Quitar ${companyId}`"
-            :disabled="compareIds.length === 1"
-            @click="removeComparison(companyId)"
-          >
-            ×
-          </button>
-        </span>
-      </div>
+      <AlertList
+        v-if="role !== 'tesorero'"
+        :alerts="alerts"
+        :selected="selected"
+        @select="select"
+      />
       <p v-if="error" class="error panel">{{ error }}</p>
       <template v-if="company && explanation">
         <Radiography
@@ -344,22 +342,24 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
 }
 
-.without-alerts {
-  grid-template-columns: minmax(0, 1fr) 360px;
-}
-
-.month {
-  font-size: 13px;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-
-.compare-selector {
+.comparator {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.compare-label {
   color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compare-hint {
+  color: var(--muted);
   font-size: 12px;
 }
 

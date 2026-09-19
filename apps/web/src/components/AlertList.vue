@@ -21,13 +21,14 @@ const capped = computed(() => props.alerts.length >= ALERTS_LIMIT);
       <li v-for="alert in alerts" :key="alert.company_id">
         <button
           type="button"
+          class="alert-pill"
           :class="{ active: alert.company_id === selected }"
+          :aria-pressed="alert.company_id === selected"
           @click="emit('select', alert.company_id)"
         >
           <span class="dot" :style="{ background: STATE_COLORS[alert.state] }" />
           <span class="id">{{ alert.company_id }}</span>
           <span class="kind" :class="alert.kind">{{ KIND_LABELS[alert.kind] }}</span>
-          <span class="score">{{ alert.score }}</span>
           <span class="delta" :class="alert.kind">{{ points(alert.delta) }}</span>
         </button>
       </li>
@@ -38,43 +39,55 @@ const capped = computed(() => props.alerts.length >= ALERTS_LIMIT);
 <style scoped>
 .alerts {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
+  flex: none;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel-title {
+  align-self: stretch;
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 10px 14px;
+  border-right: 1px solid var(--line);
+  border-bottom: 0;
+  white-space: nowrap;
 }
 
 ul {
-  list-style: none;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
   margin: 0;
   padding: 6px;
-  min-height: 0;
-  overflow-y: auto;
+  overflow-x: auto;
+  list-style: none;
 }
 
-@media (max-width: 1100px) {
-  ul {
-    max-height: 60vh;
-  }
+li {
+  flex: none;
 }
 
 button {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 8px 1fr auto auto;
-  grid-template-areas:
-    "dot id score delta"
-    "dot kind score delta";
-  column-gap: 8px;
+  display: flex;
   align-items: center;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--paper);
+  white-space: nowrap;
 }
 
-button:hover,
-button.active {
+button:hover {
   background: var(--chip-bg);
+}
+
+button.active {
+  border-color: var(--accent);
+  background: #eff6ff;
 }
 
 button.active .id {
@@ -82,32 +95,21 @@ button.active .id {
 }
 
 .dot {
-  grid-area: dot;
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
 
 .id {
-  grid-area: id;
   font-weight: 600;
 }
 
 .kind {
-  grid-area: kind;
-  font-size: 12px;
   color: var(--ink-soft);
-}
-
-.score {
-  grid-area: score;
-  font-weight: 600;
+  font-size: 12px;
 }
 
 .delta {
-  grid-area: delta;
-  min-width: 46px;
-  text-align: right;
   font-size: 12px;
 }
 
