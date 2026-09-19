@@ -59,8 +59,12 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
     return null;
   }
   const name = part.type.slice("tool-".length);
-  const input = part.input ? JSON.stringify(part.input) : "";
-  return `${name} ${input}`;
+  // SAFETY: the agent's tool inputs always carry the entity they query.
+  const input = part.input as
+    | { company_id?: string; group_id?: string }
+    | undefined;
+  const target = input?.company_id ?? input?.group_id;
+  return target ? `${name} ${target}` : name;
 }
 </script>
 

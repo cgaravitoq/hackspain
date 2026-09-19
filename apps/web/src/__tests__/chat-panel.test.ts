@@ -61,6 +61,6 @@ describe("ChatPanel", () => {
     const body = JSON.parse(requests[0]?.body ?? "{}");
     expect(body.company_id).toBe("COMP_A");
     expect(body.messages[0].parts[0].text).toBe("¿Cómo está COMP_B?");
-    expect(wrapper.find(".tool").text()).toBe('score {"company_id":"COMP_B"}');
+    expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
 });
