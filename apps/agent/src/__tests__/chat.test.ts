@@ -199,6 +199,9 @@ describe("POST /chat", () => {
     const compare = tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
     expect(compare?.description).toContain("Talleres Ribera");
+    expect(systemPrompt(model, 0)).toContain(
+      "llama a compare en una sola llamada",
+    );
     expect(compare?.inputSchema).toMatchObject({
       type: "object",
       required: ["company_ids"],
