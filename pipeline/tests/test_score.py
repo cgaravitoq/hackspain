@@ -344,6 +344,27 @@ def test_backtest_splits_all_alerts_into_the_candidate_and_confirmed_blocks():
     }
 
 
+def test_confirmed_alerts_are_anchored_on_the_month_the_decline_reaches_falling():
+    # The decline drops back to stable two months after it reaches falling, so anchoring the confirmed
+    # alert on the episode start would report no revert while anchoring it on the falling month reports one.
+    rows = backtest_rows(
+        ["healthy"] * 4 + ["slipping", "slipping", "falling", "falling"] + ["stable"] * 5,
+        [False] * 13,
+    )
+    summary = backtest({"C1": rows})
+    assert summary["alerts_by_stage"]["candidate"] == {
+        "evaluated": 0,
+        "false_alarms": 0,
+        "false_alarm_rate": None,
+        "reverted_within_3_months": 0,
+        "revert_rate": None,
+        "censored": 0,
+    }
+    assert summary["alerts_by_stage"]["confirmed"]["evaluated"] == 1
+    assert summary["alerts_by_stage"]["confirmed"]["reverted_within_3_months"] == 1
+    assert summary["alerts"]["reverted_within_3_months"] == 0
+
+
 def test_backtest_measures_the_lead_of_an_e2_event():
     rows = backtest_rows(
         ["falling", "falling", "falling", "stable"] + ["stable"] * 5,
