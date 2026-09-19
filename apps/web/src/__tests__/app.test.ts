@@ -90,6 +90,16 @@ describe("App", () => {
     expect(window.location.hash).toBe("#COMP_B");
   });
 
+  it("shows the failing endpoint when the bootstrap requests fail", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response("down", { status: 500 })),
+    );
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".error").text()).toBe("/meta answered 500");
+  });
+
   it("loads another company when an alert is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
