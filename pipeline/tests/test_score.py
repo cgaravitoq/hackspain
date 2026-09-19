@@ -88,7 +88,17 @@ def seed_dataset(
         "counterparty_id": "X1",
     }
     _write_csv(folder / "invoices.csv", [{**invoice, **(invoice_date_override or {})}])
-    _write_csv(folder / "debt_products.csv", [{"company_id": "C1", "type": "loan", "outstanding": 10.0}])
+    _write_csv(
+        folder / "balances.csv",
+        [{"product_id": "P1", "company_id": "C1", "date": "2026-09-01", "balance": 1000.0}],
+    )
+    _write_csv(
+        folder / "debt_products.csv",
+        [
+            {"company_id": "C1", "type": "loan", "outstanding": 10.0, "granted": 100.0},
+            {"company_id": "C1", "type": "lineofcredit", "outstanding": -2000.0, "granted": -5000.0},
+        ],
+    )
     return folder
 
 
@@ -581,6 +591,13 @@ def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
             "driver": "Cobros 300 € frente a pagos 900 € en 2026-06 a 2026-08: cobertura 0.33",
         }
     ]
+    assert payload["treasury"] == {
+        "starting_cash": 1000.0,
+        "pending_receivables": 50.0,
+        "credit_line_limit": 5000.0,
+        "credit_line_drawn": 2000.0,
+    }
+    assert json.loads((out / "companies.json").read_text())[0]["treasury"] == payload["treasury"]
     meta = json.loads((out / "meta.json").read_text())
     assert meta["latest_month"] == "2026-08"
     assert meta["state_labels"]["healthy"] == "sana"
@@ -615,3 +632,26 @@ def test_meta_gap_counts_match_the_fixture(tmp_path: Path):
     assert gapped_meta["gaps"] == {"companies_with_gaps": 1, "unobserved_months": 2, "stale_companies": 0}
     stale_meta = json.loads((tmp_path / "stale-out" / "meta.json").read_text())
     assert stale_meta["gaps"] == {"companies_with_gaps": 0, "unobserved_months": 0, "stale_companies": 1}
+
+
+def test_treasury_is_zero_for_a_company_without_balances_invoices_or_credit_lines(tmp_path: Path):
+    data = seed_dataset(tmp_path / "data")
+    for name, header in (
+        ("balances.csv", "product_id,company_id,date,balance\n"),
+        ("debt_products.csv", "company_id,type,outstanding,granted\n"),
+        (
+            "invoices.csv",
+            "company_id,document_type,amount,pending_amount,issuance_date,due_date,payment_date,status,counterparty_id\n",
+        ),
+    ):
+        (data / name).write_text(header)
+    out = tmp_path / "out"
+    build(read(data), out, seed=42)
+    record = json.loads((out / "companies.json").read_text())[0]
+    assert record["treasury"] == {
+        "starting_cash": 0.0,
+        "pending_receivables": 0.0,
+        "credit_line_limit": 0.0,
+        "credit_line_drawn": 0.0,
+    }
+    assert json.loads((out / "scores" / "C1.json").read_text())["treasury"] == record["treasury"]

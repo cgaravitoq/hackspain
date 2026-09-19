@@ -14,6 +14,8 @@ from xray.score import DOWN_STATES, NOT_EVALUABLE, RULE_VERSION, confidence, pol
 
 HOLDOUT_SHARE = 0.2
 STALE_BEFORE = date(CUTOFF.year - 1, 12, 1) if CUTOFF.month == 1 else date(CUTOFF.year, CUTOFF.month - 1, 1)
+LINE_OF_CREDIT = "lineofcredit"
+TREASURY_COLUMNS = ("starting_cash", "pending_receivables", "credit_line_limit", "credit_line_drawn")
 STATE_LABELS = {
     "healthy": "sana",
     "improving": "mejorando",
@@ -110,6 +112,28 @@ def _month_entry(
     }
 
 
+def _treasury(dataset: Dataset) -> dict[str, dict[str, float]]:
+    lines = dataset.debt.filter(pl.col("type") == LINE_OF_CREDIT)
+    sources = {
+        "starting_cash": dataset.balances.group_by("company_id").agg(pl.col("balance").sum()),
+        "pending_receivables": dataset.invoices.filter(pl.col("pending_amount") > 0)
+        .group_by("company_id")
+        .agg(pl.col("pending_amount").sum()),
+        "credit_line_limit": lines.group_by("company_id").agg(pl.col("granted").sum()),
+        "credit_line_drawn": lines.group_by("company_id").agg(pl.col("outstanding").sum()),
+    }
+    treasury: dict[str, dict[str, float]] = {}
+    for column, frame in sources.items():
+        for company_id, total in frame.iter_rows():
+            treasury.setdefault(company_id, {})[column] = round(total, 2)
+    return treasury
+
+
+def _treasury_of(treasury: dict[str, dict[str, float]], company_id: str) -> dict[str, float]:
+    values = treasury.get(company_id, {})
+    return {column: values.get(column, 0.0) for column in TREASURY_COLUMNS}
+
+
 def _company_record(
     company_id: str,
     rows: list[dict[str, Any]],
@@ -119,6 +143,7 @@ def _company_record(
     holdout_groups: set[str],
     debt_by_company: dict[str, float],
     invoice_facts: dict[str, dict[str, Any]],
+    treasury: dict[str, float],
 ) -> dict[str, Any]:
     group_id = company_group.get(company_id)
     last_observed = max(row["month"] for row in rows if row["observed"])
@@ -134,6 +159,7 @@ def _company_record(
         "stale": last_observed < STALE_BEFORE,
         "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
         "invoice_facts": invoice_facts.get(company_id, {}),
+        "treasury": treasury,
         "latest": {key: latest[key] for key in ("month", "score", "delta_3", "delta_6", "level", "momentum", "state", "confidence")},
     }
 
@@ -171,6 +197,7 @@ def _unscorable(
     holdout_groups: set[str],
     debt_by_company: dict[str, float],
     invoice_facts: dict[str, dict[str, Any]],
+    treasury: dict[str, dict[str, float]],
 ) -> list[dict[str, Any]]:
     return [
         {
@@ -185,6 +212,7 @@ def _unscorable(
             "stale": False,
             "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
             "invoice_facts": invoice_facts.get(company_id, {}),
+            "treasury": _treasury_of(treasury, company_id),
             "latest": {
                 "month": None,
                 "score": None,
@@ -275,6 +303,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
     invoice_companies = set(dataset.invoices["company_id"].unique().to_list())
     debt_by_company = dict(dataset.debt.group_by("company_id").agg(pl.col("outstanding").sum()).iter_rows())
     invoice_facts = _invoice_facts(dataset.invoices)
+    treasury = _treasury(dataset)
     group_ids = sorted(dataset.groups["group_id"].to_list())
     holdout_groups = set(random.Random(seed).sample(group_ids, int(len(group_ids) * HOLDOUT_SHARE)))
     company_group = dict(
@@ -314,6 +343,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             holdout_groups,
             debt_by_company,
             invoice_facts,
+            _treasury_of(treasury, company_id),
         )
         companies_out.append(record)
         _write(out_dir / "scores" / f"{company_id}.json", {**record, "series": series})
@@ -322,7 +352,9 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             alerts.append(alert)
 
     companies_out.extend(
-        _unscorable(company_group, company_rows, company_currency, holdout_groups, debt_by_company, invoice_facts)
+        _unscorable(
+            company_group, company_rows, company_currency, holdout_groups, debt_by_company, invoice_facts, treasury
+        )
     )
     companies_out.sort(key=lambda item: item["company_id"])
     groups_out = _groups(group_ids, companies_out, holdout_groups)
