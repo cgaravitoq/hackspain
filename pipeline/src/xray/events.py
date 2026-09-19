@@ -84,8 +84,12 @@ def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         event_months: list[tuple[str, int]] = []
         for index, row in enumerate(rows):
             for code, flag in (("E1", row["e1"]), ("E3", row["e3"] > 0)):
-                if flag and not any(c == code and i == index - 1 and code == "E1" for c, i in event_months):
-                    event_months.append((code, index))
+                if not flag:
+                    continue
+                # Consecutive E1 months skip only when the previous month was recorded, so a 3-month run keeps the 1st and 3rd.
+                if code == "E1" and ("E1", index - 1) in event_months:
+                    continue
+                event_months.append((code, index))
         first_of: dict[str, int] = {}
         for code, index in event_months:
             first_of.setdefault(code, index)
