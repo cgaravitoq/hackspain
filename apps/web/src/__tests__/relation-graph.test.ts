@@ -189,7 +189,7 @@ describe("RelationGraph", () => {
     });
     const tooltip = text(wrapper, ".graph-tooltip");
     expect(tooltip).toContain("COMP_C");
-    expect(tooltip).toContain("Grupo GROUP_1");
+    expect(tooltip).toContain("Grupo GROUP_1 · 2 relaciones");
     expect(tooltip).toContain("Score 50");
     expect(tooltip).toContain("estable");
   });

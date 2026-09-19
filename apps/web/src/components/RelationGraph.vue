@@ -155,7 +155,7 @@ const tooltip = computed(() => {
     return {
       title: node.company_id,
       lines: [
-        `Grupo ${node.group_id ?? "sin grupo"} · ${node.degree} relaciones`,
+        `Grupo ${node.group_id ?? "sin grupo"} · ${node.degree} ${node.degree === 1 ? "relación" : "relaciones"}`,
         `Score ${node.score === null ? "–" : node.score} · ${STATE_LABELS[node.state]}`,
       ],
     };
