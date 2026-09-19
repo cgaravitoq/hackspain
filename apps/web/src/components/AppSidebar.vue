@@ -138,6 +138,7 @@ const roleInitials = {
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
               <SidebarMenuButton
+                class="gap-1 px-1"
                 :tooltip="ROLE_LABELS[role]"
                 aria-label="Cambiar rol"
               >
@@ -174,7 +175,7 @@ const roleInitials = {
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            class="w-auto group-data-[collapsible=icon]:w-full"
+            class="w-auto gap-1 px-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:p-2!"
             tooltip="Ajustes · próximamente"
             aria-disabled="true"
             title="Próximamente"
