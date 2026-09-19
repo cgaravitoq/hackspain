@@ -1,8 +1,13 @@
 import { env, SELF } from "cloudflare:test";
-import { compareSchema, relationsArtifactSchema } from "@hackspain/shared";
+import {
+  type CommitmentRequest,
+  commitmentEvaluationSchema,
+  compareSchema,
+  relationsArtifactSchema,
+} from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { seed } from "./fixtures.ts";
+import { commitmentRequest, seed } from "./fixtures.ts";
 import { relationsJson, seedRelations } from "./relations.ts";
 
 beforeAll(async () => {
@@ -15,7 +20,8 @@ beforeAll(async () => {
 
 type Params = {
   name?: string;
-  arguments?: {
+  arguments?: Partial<CommitmentRequest> & {
+    company?: string;
     company_id?: string;
     company_ids?: string[];
     kind?: string;
@@ -58,7 +64,7 @@ async function toolResult(name: string, args: Params["arguments"]) {
 }
 
 describe("POST /mcp", () => {
-  it("lists the nine X Ray tools with their input schemas", async () => {
+  it("lists the ten X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -84,6 +90,7 @@ describe("POST /mcp", () => {
       "compare",
       "alerts",
       "simulate",
+      "simulate_commitment",
       "report",
       "relations",
     ]);
@@ -95,6 +102,51 @@ describe("POST /mcp", () => {
     ).toBe(
       "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
     );
+    const commitment = body.result.tools.find(
+      (tool) => tool.name === "simulate_commitment",
+    );
+    expect(commitment?.description).toContain("labelled commitment capacity");
+    expect(commitment?.inputSchema).toMatchObject({
+      required: [
+        "opening_minor",
+        "revenue_minor",
+        "advance_date",
+        "final_date",
+        "advance_bps",
+        "costs",
+        "company",
+      ],
+      properties: {
+        opening_minor: { description: "Opening cash in integer EUR cents" },
+        advance_date: {
+          description: "Advance collection date as YYYY-MM-DD",
+        },
+      },
+    });
+    expect(
+      body.result.tools
+        .map((tool) => tool.name)
+        .filter((name) =>
+          ["reserve", "confirm", "release"].some((word) => name.includes(word)),
+        ),
+    ).toEqual([]);
+  });
+
+  it("returns the full labelled commitment evaluation through MCP", async () => {
+    const evaluation = commitmentEvaluationSchema.parse(
+      await toolResult("simulate_commitment", {
+        company: "Talleres Ribera",
+        ...commitmentRequest,
+      }),
+    );
+    expect(evaluation).toMatchObject({
+      company_id: "COMP_0176",
+      readiness: "SIMULATION_ONLY",
+      basis: "USER_ASSUMPTION",
+      assumptions: commitmentRequest,
+      minimum_tested_feasible_bps: 4000,
+    });
+    expect(evaluation.alternatives[0]?.path.length).toBeGreaterThan(0);
   });
 
   it("keeps credit, solvency and forecast wording out of the simulate tool", async () => {
