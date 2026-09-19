@@ -2,7 +2,6 @@
 import { ROLE_LABELS, type Role } from "@hackspain/shared";
 import {
   Activity,
-  Bell,
   BookOpen,
   ChartLine,
   ChartPie,
@@ -167,7 +166,7 @@ const menuAfterAnalytics = [
 
     <SidebarFooter>
       <SidebarMenu
-        class="grid grid-cols-[minmax(0,1fr)_auto_auto] group-data-[collapsible=icon]:grid-cols-1"
+        class="grid grid-cols-[auto_auto] justify-start group-data-[collapsible=icon]:grid-cols-1"
       >
         <SidebarMenuItem class="min-w-0">
           <DropdownMenu>
@@ -182,7 +181,6 @@ const menuAfterAnalytics = [
                     {{ roleInitials[role] }}
                   </AvatarFallback>
                 </Avatar>
-                <span>{{ ROLE_LABELS[role] }}</span>
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -217,17 +215,6 @@ const menuAfterAnalytics = [
           >
             <Settings />
             <span>Ajustes</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            class="w-auto group-data-[collapsible=icon]:w-full"
-            tooltip="Alertas · próximamente"
-            aria-label="Alertas · próximamente"
-            aria-disabled="true"
-            title="Próximamente"
-          >
-            <Bell />
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
