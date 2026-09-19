@@ -14,8 +14,11 @@
     "deploy:staging": "CLOUDFLARE_ENV=staging vite build && wrangler deploy --config dist/hackspain_web/wrangler.json"
   },
   "dependencies": {
+    "@ai-sdk/vue": "4.0.107",
     "@hackspain/shared": "workspace:*",
-    "vue": "3.5.43"
+    "ai": "7.0.107",
+    "vue": "3.5.43",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.11",
