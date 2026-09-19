@@ -5,8 +5,9 @@ import { company, fakeApi } from "./fixtures.ts";
 
 const ChatPanelStub = {
   props: ["companyId", "alerts", "role"],
-  emits: ["compare", "report"],
-  template: "<div class='chat-stub'>{{ companyId }} {{ role }}</div>",
+  emits: ["close", "compare", "report"],
+  template:
+    "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
 };
 
 function sse(chunks: object[]): Response {
@@ -21,8 +22,23 @@ function sse(chunks: object[]): Response {
 
 let mounted: VueWrapper | undefined;
 
+function installStorage() {
+  const values = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    },
+  });
+}
+
 function mountApp() {
-  mounted = mount(App, { global: { stubs: { ChatPanel: ChatPanelStub } } });
+  mounted = mount(App, {
+    attachTo: document.body,
+    global: { stubs: { ChatPanel: ChatPanelStub } },
+  });
   return mounted;
 }
 
@@ -51,17 +67,87 @@ function chips(wrapper: VueWrapper) {
 }
 
 beforeEach(() => {
+  installStorage();
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 
 afterEach(() => {
   mounted?.unmount();
+  document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.location.hash = "";
 });
 
 describe("App", () => {
+  it("shows a first-load notice until the assistant is opened", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const button = wrapper.find('button[aria-label="Abrir el asistente"]');
+    expect(button.exists()).toBe(true);
+    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
+    await button.trigger("click");
+    expect(wrapper.find('[aria-label="1 aviso"]').exists()).toBe(false);
+    expect(window.localStorage.getItem("xray.chat.seen")).toBe("true");
+  });
+
+  it("hides the assistant until its bubble is clicked and focuses the chat", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(wrapper.find(".chat-stub").text()).toContain("COMP_A financiero");
+    expect(document.activeElement).toBe(wrapper.find("#chat-input").element);
+  });
+
+  it("keeps the assistant mounted when Escape closes it", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const button = wrapper.find('button[aria-label="Abrir el asistente"]');
+    await button.trigger("click");
+    await wrapper.find("#chat-input").setValue("Compara A y B");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await flushPromises();
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
+    await button.trigger("click");
+    expect(wrapper.find<HTMLInputElement>("#chat-input").element.value).toBe(
+      "Compara A y B",
+    );
+  });
+
+  it("keeps the first-load notice when browser storage is blocked", async () => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: () => {
+          throw new Error("blocked");
+        },
+        setItem: () => {
+          throw new Error("blocked");
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+  });
+
   it("renders the financiero toolbar without legacy header metadata", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
@@ -263,6 +349,9 @@ describe("App", () => {
     const wrapper = mounted;
     await flushPromises();
     await flushPromises();
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
     await wrapper.find("#chat-input").setValue("Compara B y C");
     await wrapper.find(".chat form").trigger("submit");
     await vi.waitFor(() =>

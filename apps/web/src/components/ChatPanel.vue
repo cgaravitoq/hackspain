@@ -17,6 +17,7 @@ const props = defineProps<{ companyId: string; alerts: Alert[]; role: Role }>();
 type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
 
 const emit = defineEmits<{
+  close: [];
   compare: [companyIds: string[]];
   report: [result: ReportResult];
 }>();
@@ -168,7 +169,12 @@ function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
 
 <template>
   <section class="panel chat">
-    <h2 class="panel-title">Agente · X Ray sobre Workers AI</h2>
+    <header class="chat-header">
+      <h2>Asistente</h2>
+      <button type="button" aria-label="Cerrar el asistente" @click="emit('close')">
+        ×
+      </button>
+    </header>
     <div ref="list" class="messages">
       <article class="message assistant">
         <p>{{ intro }}</p>
@@ -223,6 +229,37 @@ function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.chat-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.chat-header button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.chat-header button:hover {
+  background: var(--chip-bg);
 }
 
 .messages {
