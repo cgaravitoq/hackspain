@@ -620,14 +620,42 @@ def test_a_stale_company_reports_not_evaluable_as_its_latest_state(tmp_path: Pat
     assert stale["last_observed_month"] == "2026-07"
     assert stale["stale"] is True
     assert stale["latest"]["state"] == "not_evaluable"
+    assert stale["latest"]["confidence"] == "none"
     assert stale["latest"]["level"] is not None
     assert json.loads((tmp_path / "stale-out" / "alerts.json").read_text()) == []
     series = json.loads((tmp_path / "stale-out" / "scores" / "C1.json").read_text())["series"]
     assert [entry["state"] for entry in series][-2:] == ["slipping", "slipping"]
+    assert series[-1]["confidence"] == "medium"
+    assert series[-1]["score"] == stale["latest"]["score"]
     fresh = json.loads((tmp_path / "fresh-out" / "companies.json").read_text())[0]
     assert fresh["last_observed_month"] == "2026-08"
     assert fresh["stale"] is False
     assert fresh["latest"]["state"] == "falling"
+
+
+def test_missing_recent_months_clear_confidence_without_rewriting_valid_history(tmp_path: Path):
+    dataset = read(seed_dataset(tmp_path / "data"))
+    rows = [
+        (f"{year}-{month:02d}", amount, category)
+        for year, months in ((2025, range(1, 13)), (2026, range(1, 9)))
+        for month in months if (year, month) != (2026, 7)
+        for amount, category in ((300.0, "collection"), (-100.0, "payment"))
+    ]
+    out = tmp_path / "out"
+    build(replace(dataset, transactions=transactions(rows)), out, seed=42)
+    detail = json.loads((out / "scores" / "C1.json").read_text())
+    series = {entry["month"]: entry for entry in detail["series"]}
+
+    assert detail["months_observed"] == 19
+    assert detail["stale"] is False
+    assert series["2026-06"]["score"] == 75.0
+    assert series["2026-06"]["confidence"] == "high"
+    for month in ("2026-07", "2026-08"):
+        assert series[month]["score"] is None
+        assert series[month]["confidence"] == "none"
+    assert detail["latest"]["confidence"] == "none"
+    assert json.loads((out / "companies.json").read_text())[0]["latest"] == detail["latest"]
+    assert json.loads((out / "groups.json").read_text())[0]["members"][0]["confidence"] == "none"
 
 
 def test_meta_gap_counts_match_the_fixture(tmp_path: Path):
