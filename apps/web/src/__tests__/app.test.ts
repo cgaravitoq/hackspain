@@ -141,20 +141,25 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("shows a first-load notice until the assistant is opened", async () => {
+  it("shows a new insight in the sidebar footer until TellMe is opened", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    const button = wrapper.find('button[aria-label="Abrir el asistente"]');
-    expect(button.exists()).toBe(true);
-    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
-    await button.trigger("click");
-    expect(wrapper.find('[aria-label="1 aviso"]').exists()).toBe(false);
+    const footer = wrapper.find('[data-sidebar="footer"]');
+    const button = footer.find('button[aria-label="Abrir el asistente"]');
+    expect(button.text()).toBe("TellMe");
+    expect(footer.find(".insight").text()).toBe("1 nuevo insight");
+    expect(footer.find('[aria-label="Rol: Financiero"]').exists()).toBe(false);
+    expect(footer.text()).not.toContain("Ajustes");
+    await footer.find(".insight").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(footer.find(".insight").exists()).toBe(false);
     expect(window.localStorage.getItem("xray.chat.seen")).toBe("true");
   });
 
-  it("toggles the assistant from its bubble and focuses the chat", async () => {
+  it("toggles the assistant from the TellMe entry and focuses the chat", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
@@ -209,11 +214,12 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find('[aria-label="1 aviso"]').text()).toBe("1");
+    expect(wrapper.find(".insight").text()).toBe("1 nuevo insight");
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
     expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(wrapper.find(".insight").exists()).toBe(false);
   });
 
   it("renders the financiero selector without legacy header metadata", async () => {
@@ -354,7 +360,6 @@ describe("App", () => {
     expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
-    expect(wrapper.find('[aria-label="Rol: Tesorero"]').text()).toBe("TE");
   });
 
   it("keeps the treasurer on its company when the hash changes", async () => {
@@ -767,12 +772,17 @@ describe("App", () => {
     expect(wrapper.find(".layout").exists()).toBe(false);
     expect(seen).toContain("/api/graph");
     expect(seen).not.toContain("/api/companies/COMP_A");
+    const tellMe = wrapper.find('button[aria-label="Abrir el asistente"]');
+    expect(tellMe.attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".insight").exists()).toBe(false);
     window.location.hash = "COMP_B";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(tellMe.attributes("disabled")).toBeUndefined();
+    expect(wrapper.find(".insight").text()).toBe("1 nuevo insight");
   });
 
   it("points the browser at the graph route from the header", async () => {
@@ -784,7 +794,7 @@ describe("App", () => {
     expect(window.location.hash).toBe("#graph");
   });
 
-  it("shows the entered role on the avatar without a menu to change it", async () => {
+  it("keeps the entered role without an avatar or a menu to change it", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp({ initialRole: "ventas" });
     await flushPromises();
@@ -792,9 +802,7 @@ describe("App", () => {
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Radiografía");
-    const avatar = wrapper.find('[aria-label="Rol: Ventas"]');
-    expect(avatar.text()).toBe("VE");
-    expect(avatar.element.tagName).not.toBe("BUTTON");
+    expect(wrapper.find('[aria-label="Rol: Ventas"]').exists()).toBe(false);
     expect(wrapper.find('[aria-label="Cambiar rol"]').exists()).toBe(false);
     const footer = wrapper.find('[data-sidebar="footer"]');
     expect(footer.findAll('[data-sidebar="menu-button"]')).toHaveLength(1);
@@ -885,7 +893,6 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     const hash = window.location.hash;
-    const role = wrapper.find('[aria-label="Rol: Financiero"]').text();
     const placeholders = wrapper
       .find('[aria-label="Pantalla"]')
       .findAll(":scope > li > [data-sidebar='menu-button']")
@@ -900,7 +907,7 @@ describe("App", () => {
       await placeholder.trigger("click");
     }
     expect(window.location.hash).toBe(hash);
-    expect(wrapper.find('[aria-label="Rol: Financiero"]').text()).toBe(role);
+    expect(wrapper.find(".chat-stub").text()).toContain("financiero");
   });
 
   it("opens a company from the graph alone instead of adding it to the comparison", async () => {

@@ -12,7 +12,7 @@ import type {
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AppSidebar from "./components/AppSidebar.vue";
-import ChatBubble from "./components/ChatBubble.vue";
+import ChatPopover from "./components/ChatPopover.vue";
 import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
@@ -30,6 +30,7 @@ const props = defineProps<{ initialRole?: Role }>();
 const TREASURER_COMPANY = "COMP_0176";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
+const CHAT_SEEN_KEY = "xray.chat.seen";
 const role = ref<Role>(props.initialRole ?? "financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
@@ -47,8 +48,23 @@ const company = ref<CompanyDetail | null>(null);
 const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
+const chatOpen = ref(false);
+const chatSeen = ref(false);
 let compareRequest = 0;
 let companyRequest = 0;
+
+function toggleChat() {
+  chatOpen.value = !chatOpen.value;
+  if (!chatOpen.value) {
+    return;
+  }
+  chatSeen.value = true;
+  try {
+    window.localStorage.setItem(CHAT_SEEN_KEY, "true");
+  } catch {
+    chatSeen.value = true;
+  }
+}
 
 watch(role, (nextRole) => {
   if (nextRole === "tesorero" && onGraph.value) {
@@ -202,6 +218,11 @@ watch(compareIds, async (ids) => {
 
 onMounted(async () => {
   try {
+    chatSeen.value = window.localStorage.getItem(CHAT_SEEN_KEY) === "true";
+  } catch {
+    chatSeen.value = false;
+  }
+  try {
     [meta.value, alerts.value, companies.value] = await Promise.all([
       api.meta(),
       api.alerts(),
@@ -230,7 +251,11 @@ onUnmounted(() => {
     <AppSidebar
       :view="onGraph ? 'graph' : 'radiography'"
       :role="role"
+      :chat-open="chatOpen"
+      :chat-unread="!chatSeen"
+      :chat-disabled="!selected"
       @view="selectView"
+      @chat="toggleChat"
     />
     <SidebarInset>
       <header class="topbar">
@@ -271,12 +296,14 @@ onUnmounted(() => {
         </div>
       </div>
     </SidebarInset>
-    <ChatBubble
+    <ChatPopover
       v-if="selected"
+      :open="chatOpen"
       :company-id="selected"
       :compare-ids="compareIds"
       :alerts="alerts"
       :role="role"
+      @close="chatOpen = false"
       @compare="replaceComparison"
       @report="openReport"
     />
