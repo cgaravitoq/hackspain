@@ -13,6 +13,11 @@ const ChatPanelStub = {
     "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
 };
 
+const RelationGraphStub = {
+  emits: ["analyze"],
+  template: "<div class='graph-stub' />",
+};
+
 function sse(chunks: object[]): Response {
   const body = [
     ...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}`),
@@ -986,6 +991,40 @@ describe("App", () => {
     }
     expect(window.location.hash).toBe(hash);
     expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
+  });
+
+  it("opens a company from the graph alone instead of adding it to the comparison", async () => {
+    const compared: string[][] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      if (url.pathname === "/api/compare") {
+        compared.push(url.searchParams.get("ids")?.split(",") ?? []);
+      }
+      return base(input);
+    });
+    mounted = mount(App, {
+      attachTo: document.body,
+      global: {
+        stubs: { ChatPanel: ChatPanelStub, RelationGraph: RelationGraphStub },
+      },
+    });
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-stub").exists()).toBe(true);
+    wrapper.findComponent(RelationGraphStub).vm.$emit("analyze", "COMP_C");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-stub").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_C");
+    expect(window.location.hash).toBe("#COMP_C");
+    expect(compared.at(-1)).toEqual(["COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
   });
 
   it("returns from the graph to the company that was on screen", async () => {

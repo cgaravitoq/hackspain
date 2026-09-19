@@ -143,7 +143,7 @@ function openGraph() {
 
 function analyzeFromGraph(companyId: string) {
   onGraph.value = false;
-  select(companyId);
+  openCompany(companyId);
 }
 
 function openRadiography() {
