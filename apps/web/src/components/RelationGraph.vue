@@ -9,7 +9,7 @@ import {
   STATE_LABELS,
   type State,
 } from "@hackspain/shared";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "../api.ts";
 import { money, STATE_COLORS } from "../format.ts";
 import {
@@ -92,6 +92,14 @@ const HUB_LABEL_DEGREE = 25;
 const ISOLATED_ALPHA = 0.45;
 const LABEL_HEIGHT = 16;
 const LABEL_PADDING = 4;
+const VIEW_MIN_SCALE = 0.15;
+const VIEW_MAX_SCALE = 8;
+const ZOOM_SPEED = 0.0015;
+const DRAG_THRESHOLD = 3;
+// Kept in sync with the .graph-panel width below: the panel flips to the
+// node's left once it would no longer fit on the right of the viewport.
+const PANEL_WIDTH = 240;
+const PANEL_GAP = 14;
 
 type Palette = {
   card: string;
@@ -136,7 +144,27 @@ const hover = ref<
 >(null);
 const pointer = ref({ x: 0, y: 0 });
 const canvas = ref<HTMLCanvasElement | null>(null);
+const frame = ref<HTMLDivElement | null>(null);
+const box = ref({ width: LAYOUT_WIDTH, height: LAYOUT_HEIGHT });
+const view = ref({ scale: 1, x: 0, y: 0 });
+const isPanning = ref(false);
+const selectedNode = ref<RelationNode | null>(null);
 let graphRequest = 0;
+let dragMoved = false;
+let hasMeasuredBox = false;
+let resizeObserver: ResizeObserver | undefined;
+let panStart = { clientX: 0, clientY: 0, viewX: 0, viewY: 0 };
+
+const emit = defineEmits<{
+  analyze: [companyId: string];
+}>();
+
+const cursorStyle = computed(() => {
+  if (isPanning.value) {
+    return "grabbing";
+  }
+  return hover.value?.kind === "node" ? "pointer" : "grab";
+});
 
 const visible = computed<{ nodes: RelationNode[]; edges: RelationEdge[] }>(
   () => {
@@ -188,10 +216,56 @@ const tooltip = computed(() => {
   };
 });
 
+const selectedEdges = computed(() => {
+  const node = selectedNode.value;
+  if (!node) {
+    return [];
+  }
+  return visible.value.edges.filter(
+    (edge) =>
+      edge.source === node.company_id || edge.target === node.company_id,
+  );
+});
+
 const tooltipStyle = computed(() => ({
-  left: `${(pointer.value.x / LAYOUT_WIDTH) * 100}%`,
-  top: `${(pointer.value.y / LAYOUT_HEIGHT) * 100}%`,
+  left: `${(pointer.value.x / box.value.width) * 100}%`,
+  top: `${(pointer.value.y / box.value.height) * 100}%`,
 }));
+
+const panelPlacement = computed(() => {
+  const node = selectedNode.value;
+  if (!node) {
+    return null;
+  }
+  const position = layout.value.positions.get(node.company_id);
+  if (!position) {
+    return null;
+  }
+  const x = position.x * view.value.scale + view.value.x;
+  const y = position.y * view.value.scale + view.value.y;
+  const side: "left" | "right" =
+    x + PANEL_GAP + PANEL_WIDTH > box.value.width ? "left" : "right";
+  return { x, y, side };
+});
+
+const panelStyle = computed(() => {
+  const placement = panelPlacement.value;
+  if (!placement) {
+    return {};
+  }
+  const top = Math.min(Math.max(placement.y, 12), box.value.height - 12);
+  return placement.side === "right"
+    ? {
+        top: `${top}px`,
+        left: `${placement.x + PANEL_GAP}px`,
+        transform: "translateY(-50%)",
+      }
+    : {
+        top: `${top}px`,
+        left: `${placement.x - PANEL_GAP}px`,
+        transform: "translate(-100%, -50%)",
+      };
+});
 
 function readPalette(): Palette {
   const style = getComputedStyle(document.documentElement);
@@ -264,15 +338,19 @@ function paint() {
     return;
   }
   const ratio = window.devicePixelRatio || 1;
-  if (element.width !== LAYOUT_WIDTH * ratio) {
-    element.width = LAYOUT_WIDTH * ratio;
-    element.height = LAYOUT_HEIGHT * ratio;
+  const { width, height } = box.value;
+  if (element.width !== width * ratio || element.height !== height * ratio) {
+    element.width = width * ratio;
+    element.height = height * ratio;
   }
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   const palette = readPalette();
-  context.clearRect(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT);
+  context.clearRect(0, 0, width, height);
   context.fillStyle = palette.card;
-  context.fillRect(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT);
+  context.fillRect(0, 0, width, height);
+  context.save();
+  context.translate(view.value.x, view.value.y);
+  context.scale(view.value.scale, view.value.scale);
   context.lineWidth = 1.2;
   for (const link of layout.value.links) {
     const hovered =
@@ -287,22 +365,37 @@ function paint() {
   }
   context.globalAlpha = 1;
   const hubs: NodePosition[] = [];
+  const groupColors = new Map<string | null, string>();
+  const colorForGroup = (group: string | null) => {
+    let color = groupColors.get(group);
+    if (!color) {
+      color = bandColor(palette, group);
+      groupColors.set(group, color);
+    }
+    return color;
+  };
   for (const position of layout.value.positions.values()) {
     const { node, x, y, radius } = position;
-    context.beginPath();
-    context.arc(x, y, radius + 1.5, 0, Math.PI * 2);
-    context.strokeStyle = bandColor(palette, node.group_id);
-    context.lineWidth = node.role === "group_treasury_hub" ? 2 : 1;
-    context.stroke();
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
     const hovered = hover.value?.kind === "node" && hover.value.node === node;
-    context.globalAlpha = node.role === "isolated" ? ISOLATED_ALPHA : 1;
+    const isHub = node.role === "group_treasury_hub";
+    const baseAlpha = node.role === "isolated" ? ISOLATED_ALPHA : 1;
     const fill = palette.states.get(node.state) ?? palette.ink;
+    const drawRadius = hovered ? radius * 1.15 : radius;
+
+    context.beginPath();
+    context.arc(x, y, radius + 2.5, 0, Math.PI * 2);
+    context.strokeStyle = colorForGroup(node.group_id);
+    context.globalAlpha = baseAlpha * (isHub ? 0.9 : 0.45);
+    context.lineWidth = isHub ? 2 : 1;
+    context.stroke();
+    context.globalAlpha = baseAlpha;
+
+    context.beginPath();
+    context.arc(x, y, drawRadius, 0, Math.PI * 2);
     context.fillStyle = fill;
     context.fill();
     context.strokeStyle = hovered ? palette.ink : fill;
-    context.lineWidth = hovered ? 2 : 1.4;
+    context.lineWidth = hovered ? 2.2 : 1.4;
     context.stroke();
     context.globalAlpha = 1;
     if (node.degree >= HUB_LABEL_DEGREE) {
@@ -311,9 +404,10 @@ function paint() {
   }
   hubs.sort((left, right) => right.node.degree - left.node.degree);
   paintLabels(context, palette, hubs);
+  context.restore();
 }
 
-function canvasPoint(event: MouseEvent) {
+function rawPoint(event: MouseEvent | WheelEvent) {
   const element = canvas.value;
   if (!element) {
     return { x: 0, y: 0 };
@@ -321,17 +415,80 @@ function canvasPoint(event: MouseEvent) {
   const rect = element.getBoundingClientRect();
   return {
     x:
-      ((event.clientX - rect.left) / (rect.width || LAYOUT_WIDTH)) *
-      LAYOUT_WIDTH,
+      ((event.clientX - rect.left) / (rect.width || box.value.width)) *
+      box.value.width,
     y:
-      ((event.clientY - rect.top) / (rect.height || LAYOUT_HEIGHT)) *
-      LAYOUT_HEIGHT,
+      ((event.clientY - rect.top) / (rect.height || box.value.height)) *
+      box.value.height,
   };
 }
 
+function toLayoutPoint(x: number, y: number) {
+  return {
+    x: (x - view.value.x) / view.value.scale,
+    y: (y - view.value.y) / view.value.scale,
+  };
+}
+
+function canvasPoint(event: MouseEvent) {
+  const raw = rawPoint(event);
+  return toLayoutPoint(raw.x, raw.y);
+}
+
+function clampScale(value: number) {
+  return Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, value));
+}
+
+function zoomAt(x: number, y: number, factor: number) {
+  const nextScale = clampScale(view.value.scale * factor);
+  const applied = nextScale / view.value.scale;
+  view.value = {
+    scale: nextScale,
+    x: x - (x - view.value.x) * applied,
+    y: y - (y - view.value.y) * applied,
+  };
+}
+
+function resetView() {
+  const scale = clampScale(
+    Math.min(
+      box.value.width / LAYOUT_WIDTH,
+      box.value.height / LAYOUT_HEIGHT,
+    ) || 1,
+  );
+  view.value = {
+    scale,
+    x: (box.value.width - LAYOUT_WIDTH * scale) / 2,
+    y: (box.value.height - LAYOUT_HEIGHT * scale) / 2,
+  };
+}
+
+function applyBoxSize(width: number, height: number) {
+  if (!hasMeasuredBox) {
+    hasMeasuredBox = true;
+    box.value = { width, height };
+    resetView();
+    return;
+  }
+  const centre = toLayoutPoint(box.value.width / 2, box.value.height / 2);
+  box.value = { width, height };
+  view.value = {
+    ...view.value,
+    x: width / 2 - centre.x * view.value.scale,
+    y: height / 2 - centre.y * view.value.scale,
+  };
+}
+
+function onWheel(event: WheelEvent) {
+  const point = rawPoint(event);
+  const factor = Math.exp(-event.deltaY * ZOOM_SPEED);
+  zoomAt(point.x, point.y, factor);
+}
+
 function onMove(event: MouseEvent) {
-  const point = canvasPoint(event);
-  pointer.value = point;
+  const raw = rawPoint(event);
+  pointer.value = raw;
+  const point = toLayoutPoint(raw.x, raw.y);
   const node = nodeAt(layout.value, point.x, point.y);
   if (node) {
     hover.value = { kind: "node", node };
@@ -341,11 +498,67 @@ function onMove(event: MouseEvent) {
   hover.value = edge ? { kind: "edge", edge } : null;
 }
 
+function onPointerDown(event: MouseEvent) {
+  if (event.button !== 0) {
+    return;
+  }
+  isPanning.value = true;
+  dragMoved = false;
+  panStart = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    viewX: view.value.x,
+    viewY: view.value.y,
+  };
+}
+
+function onPointerMove(event: MouseEvent) {
+  if (!isPanning.value) {
+    onMove(event);
+    return;
+  }
+  const element = canvas.value;
+  const rect = element?.getBoundingClientRect();
+  const scaleX = LAYOUT_WIDTH / (rect?.width || LAYOUT_WIDTH);
+  const scaleY = LAYOUT_HEIGHT / (rect?.height || LAYOUT_HEIGHT);
+  const dx = event.clientX - panStart.clientX;
+  const dy = event.clientY - panStart.clientY;
+  if (Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+    dragMoved = true;
+  }
+  hover.value = null;
+  view.value = {
+    ...view.value,
+    x: panStart.viewX + dx * scaleX,
+    y: panStart.viewY + dy * scaleY,
+  };
+}
+
+function onPointerUp() {
+  isPanning.value = false;
+}
+
+function onLeave() {
+  isPanning.value = false;
+  hover.value = null;
+}
+
 function onClick(event: MouseEvent) {
+  if (dragMoved) {
+    dragMoved = false;
+    return;
+  }
   const point = canvasPoint(event);
-  const node = nodeAt(layout.value, point.x, point.y);
-  if (node) {
-    window.location.hash = node.company_id;
+  selectedNode.value = nodeAt(layout.value, point.x, point.y) ?? null;
+}
+
+function closePanel() {
+  selectedNode.value = null;
+}
+
+function analyzeSelected() {
+  if (selectedNode.value) {
+    emit("analyze", selectedNode.value.company_id);
   }
 }
 
@@ -365,6 +578,8 @@ async function load() {
     }
     graph.value = result;
     hover.value = null;
+    selectedNode.value = null;
+    resetView();
     knownGroups.value = [
       ...new Set([
         ...knownGroups.value,
@@ -382,9 +597,38 @@ watch([relationType, minConfidence, scope, groupId, includeIsolated], () =>
   load(),
 );
 
-watch([layout, hover], paint, { flush: "post" });
+let paintScheduled = false;
+function schedulePaint() {
+  if (paintScheduled) {
+    return;
+  }
+  paintScheduled = true;
+  requestAnimationFrame(() => {
+    paintScheduled = false;
+    paint();
+  });
+}
 
-onMounted(load);
+watch([layout, hover, view], schedulePaint, { flush: "post" });
+
+onMounted(() => {
+  load();
+  if (frame.value && typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        applyBoxSize(width, height);
+      }
+    });
+    resizeObserver.observe(frame.value);
+  }
+});
+
+onUnmounted(() => resizeObserver?.disconnect());
 </script>
 
 <template>
@@ -451,19 +695,96 @@ onMounted(load);
     </div>
     <p v-if="error" class="error panel">{{ error }}</p>
     <div class="graph-stage panel">
-      <div class="graph-frame">
+      <div ref="frame" class="graph-frame">
         <canvas
           ref="canvas"
           class="graph-canvas"
-          :width="LAYOUT_WIDTH"
-          :height="LAYOUT_HEIGHT"
-          @mousemove="onMove"
-          @mouseleave="hover = null"
+          :style="{ cursor: cursorStyle }"
+          @mousedown="onPointerDown"
+          @mousemove="onPointerMove"
+          @mouseup="onPointerUp"
+          @mouseleave="onLeave"
           @click="onClick"
+          @wheel.prevent="onWheel"
         />
+        <div class="graph-controls">
+          <button
+            type="button"
+            title="Acercar"
+            aria-label="Acercar"
+            @click="zoomAt(box.width / 2, box.height / 2, 1.3)"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            title="Alejar"
+            aria-label="Alejar"
+            @click="zoomAt(box.width / 2, box.height / 2, 1 / 1.3)"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            title="Restablecer vista"
+            aria-label="Restablecer vista"
+            @click="resetView"
+          >
+            ⟲
+          </button>
+        </div>
         <div v-if="tooltip" class="graph-tooltip" role="tooltip" :style="tooltipStyle">
           <strong>{{ tooltip.title }}</strong>
           <span v-for="line in tooltip.lines" :key="line">{{ line }}</span>
+        </div>
+        <div
+          v-if="selectedNode && panelPlacement"
+          class="graph-panel"
+          role="dialog"
+          aria-label="Detalle de empresa"
+          :style="panelStyle"
+        >
+          <header class="graph-panel-header">
+            <strong>{{ selectedNode.company_id }}</strong>
+            <button type="button" class="graph-panel-close" aria-label="Cerrar" @click="closePanel">
+              ×
+            </button>
+          </header>
+          <p class="graph-panel-meta">
+            Grupo {{ selectedNode.group_id ?? "sin grupo" }} ·
+            {{ selectedNode.degree }}
+            {{ selectedNode.degree === 1 ? "relación" : "relaciones" }}
+          </p>
+          <p class="graph-panel-meta">
+            Score {{ selectedNode.score === null ? "–" : selectedNode.score }} ·
+            {{ STATE_LABELS[selectedNode.state] }}
+          </p>
+          <div class="graph-panel-edges">
+            <p v-if="selectedEdges.length === 0" class="graph-panel-empty">
+              Sin relaciones visibles con los filtros actuales.
+            </p>
+            <ul v-else>
+              <li
+                v-for="edge in selectedEdges"
+                :key="`${edge.source}-${edge.target}-${edge.relation_type}`"
+              >
+                <span class="graph-panel-arc">
+                  {{ edge.source === selectedNode.company_id ? "→" : "←" }}
+                  {{
+                    edge.source === selectedNode.company_id
+                      ? edge.target
+                      : edge.source
+                  }}
+                </span>
+                <span class="graph-panel-type">{{ TYPE_LABELS[edge.relation_type] }}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="graph-panel-actions">
+            <button type="button" class="graph-panel-primary" @click="analyzeSelected">
+              Ver gráfico
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -486,6 +807,7 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
   min-height: 0;
 }
 
@@ -535,20 +857,54 @@ onMounted(load);
 }
 
 .graph-stage {
-  min-height: 0;
+  display: flex;
+  flex: 1;
+  min-height: 320px;
   padding: 8px;
 }
 
 .graph-frame {
   position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .graph-canvas {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   border-radius: 6px;
+  touch-action: none;
+}
+
+.graph-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+
+.graph-controls button {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 10%);
+}
+
+.graph-controls button:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
 }
 
 .graph-tooltip {
@@ -570,6 +926,105 @@ onMounted(load);
 
 .graph-tooltip strong {
   color: var(--ink);
+}
+
+.graph-panel {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 240px;
+  max-height: min(70%, 360px);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+  font-size: 12px;
+  color: var(--ink-soft);
+  pointer-events: auto;
+}
+
+.graph-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.graph-panel-close {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.graph-panel-close:hover {
+  background: var(--line);
+}
+
+.graph-panel-meta {
+  margin: 0;
+}
+
+.graph-panel-edges {
+  overflow-y: auto;
+  max-height: 160px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+.graph-panel-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.graph-panel-edges ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-panel-edges li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.graph-panel-arc {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.graph-panel-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.graph-panel-actions button {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.graph-panel-primary {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
 }
 
 .graph-legend {

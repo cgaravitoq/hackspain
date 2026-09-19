@@ -131,6 +131,11 @@ function openGraph() {
   window.location.hash = GRAPH_ROUTE;
 }
 
+function analyzeFromGraph(companyId: string) {
+  onGraph.value = false;
+  select(companyId);
+}
+
 function openRadiography() {
   onGraph.value = false;
   select(
@@ -283,7 +288,7 @@ onUnmounted(() => {
         />
       </header>
       <div v-if="onGraph" class="graph-layout">
-        <RelationGraph />
+        <RelationGraph @analyze="analyzeFromGraph" />
       </div>
       <div v-else class="layout">
         <div class="center">
@@ -353,7 +358,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   padding: 16px 20px 24px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .open-commitment {
