@@ -166,21 +166,26 @@ describe("App", () => {
     expect(window.localStorage.getItem("xray.chat.seen")).toBe("true");
   });
 
-  it("hides the assistant until its bubble is clicked and focuses the chat", async () => {
+  it("toggles the assistant from its bubble and focuses the chat", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(false);
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
+    expect(wrapper.find('[data-slot="sheet-content"]').exists()).toBe(false);
     expect(wrapper.find(".topbar").attributes("aria-hidden")).toBeUndefined();
     expect(wrapper.find("main").attributes("aria-hidden")).toBeUndefined();
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
     await flushPromises();
-    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(true);
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
     expect(wrapper.find(".chat-stub").text()).toContain("COMP_A financiero");
     expect(document.activeElement).toBe(wrapper.find("#chat-input").element);
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
   });
 
   it("keeps the assistant mounted when Escape closes it", async () => {
@@ -193,7 +198,7 @@ describe("App", () => {
     await wrapper.find("#chat-input").setValue("Compara A y B");
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await flushPromises();
-    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(false);
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
     await button.trigger("click");
     expect(wrapper.find<HTMLInputElement>("#chat-input").element.value).toBe(
       "Compara A y B",
@@ -220,7 +225,7 @@ describe("App", () => {
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
-    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(true);
+    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
   });
 
   it("renders the financiero selector without legacy header metadata", async () => {
