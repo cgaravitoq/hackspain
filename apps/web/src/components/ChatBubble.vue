@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Alert, Report, Role } from "@hackspain/shared";
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, ref } from "vue";
 import ChatPanel from "./ChatPanel.vue";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "./ui/sheet";
 
 const SEEN_KEY = "xray.chat.seen";
 
@@ -24,12 +25,6 @@ const panel = ref<HTMLElement | null>(null);
 
 function close() {
   open.value = false;
-}
-
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") {
-    close();
-  }
 }
 
 async function openChat() {
@@ -58,29 +53,33 @@ onMounted(() => {
   } catch {
     seen.value = false;
   }
-  window.addEventListener("keydown", handleKeydown);
 });
-
-onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
 </script>
 
 <template>
-  <div
-    ref="panel"
-    v-show="open"
-    class="chat-popover"
-    role="dialog"
-    aria-label="Asistente"
-  >
-    <ChatPanel
-      :company-id="props.companyId"
-      :alerts="props.alerts"
-      :role="props.role"
-      @close="close"
-      @compare="emit('compare', $event)"
-      @report="emit('report', $event)"
-    />
-  </div>
+  <Sheet v-model:open="open">
+    <SheetContent
+      :force-mount="true"
+      class="w-full gap-0 p-0 data-[state=closed]:invisible sm:max-w-[420px]"
+      :portal-disabled="true"
+      side="right"
+    >
+      <SheetTitle class="sr-only">Asistente</SheetTitle>
+      <SheetDescription class="sr-only">
+        Consulta y compara la salud financiera de las empresas.
+      </SheetDescription>
+      <div ref="panel" v-show="open" class="chat-sheet-body">
+        <ChatPanel
+          :company-id="props.companyId"
+          :alerts="props.alerts"
+          :role="props.role"
+          @close="close"
+          @compare="emit('compare', $event)"
+          @report="emit('report', $event)"
+        />
+      </div>
+    </SheetContent>
+  </Sheet>
   <button
     type="button"
     class="chat-bubble"
@@ -99,19 +98,15 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
 </template>
 
 <style scoped>
-.chat-popover {
-  position: fixed;
-  right: 24px;
-  bottom: 88px;
-  z-index: 30;
-  width: 380px;
-  height: min(560px, calc(100dvh - 112px));
+.chat-sheet-body,
+.chat-sheet-body :deep(.chat) {
+  height: 100%;
 }
 
-.chat-popover :deep(.chat) {
-  height: 100%;
+.chat-sheet-body :deep(.chat) {
   overflow: hidden;
-  box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
+  border: 0;
+  border-radius: 0;
 }
 
 .chat-bubble {
@@ -159,13 +154,6 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
 }
 
 @media (max-width: 1100px) {
-  .chat-popover {
-    right: 8px;
-    bottom: 84px;
-    width: calc(100vw - 16px);
-    height: 70vh;
-  }
-
   .chat-bubble {
     right: 16px;
     bottom: 16px;

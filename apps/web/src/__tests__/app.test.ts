@@ -107,12 +107,12 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
+    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(false);
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
     await flushPromises();
-    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(true);
     expect(wrapper.find(".chat-stub").text()).toContain("COMP_A financiero");
     expect(document.activeElement).toBe(wrapper.find("#chat-input").element);
   });
@@ -127,7 +127,7 @@ describe("App", () => {
     await wrapper.find("#chat-input").setValue("Compara A y B");
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await flushPromises();
-    expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
+    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(false);
     await button.trigger("click");
     expect(wrapper.find<HTMLInputElement>("#chat-input").element.value).toBe(
       "Compara A y B",
@@ -154,7 +154,7 @@ describe("App", () => {
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");
-    expect(wrapper.find(".chat-popover").isVisible()).toBe(true);
+    expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(true);
   });
 
   it("renders the financiero toolbar without legacy header metadata", async () => {
