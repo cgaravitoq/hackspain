@@ -146,6 +146,8 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     expect(wrapper.find(".chat-sheet-body").isVisible()).toBe(false);
+    expect(wrapper.find(".topbar").attributes("aria-hidden")).toBeUndefined();
+    expect(wrapper.find("main").attributes("aria-hidden")).toBeUndefined();
     await wrapper
       .find('button[aria-label="Abrir el asistente"]')
       .trigger("click");

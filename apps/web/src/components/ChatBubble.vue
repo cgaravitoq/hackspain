@@ -57,7 +57,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <Sheet v-model:open="open">
+  <Sheet v-model:open="open" :modal="false">
     <SheetContent
       :force-mount="true"
       class="w-full gap-0 p-0 data-[state=closed]:invisible sm:max-w-[420px]"
