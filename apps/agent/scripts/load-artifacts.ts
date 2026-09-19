@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
   type Alert,
@@ -19,13 +19,21 @@ import { z } from "zod";
 
 const { values } = parseArgs({
   options: {
-    artifacts: { type: "string", default: "../../pipeline/artifacts" },
+    artifacts: {
+      type: "string",
+      default: join(import.meta.dirname, "../../../pipeline/artifacts"),
+    },
     env: { type: "string" },
     local: { type: "boolean", default: false },
   },
 });
 
-const artifacts = values.artifacts;
+if (values.local && values.env) {
+  console.error("Use --local or --env, not both");
+  process.exit(1);
+}
+
+const artifacts = resolve(values.artifacts);
 const target = values.local
   ? ["--local"]
   : ["--remote", ...(values.env ? ["--env", values.env] : [])];
@@ -56,6 +64,7 @@ function companyRow(detail: CompanyDetail): string {
 }
 
 const statements = [
+  "BEGIN TRANSACTION;",
   "DELETE FROM companies;",
   "DELETE FROM alerts;",
   "DELETE FROM groups;",
@@ -90,6 +99,7 @@ for (const group of read("groups.json", z.array(groupSchema))) {
 statements.push(
   `INSERT INTO documents (name, payload) VALUES ('backtest', ${json(read("backtest.json", backtestSchema))});`,
   `INSERT INTO documents (name, payload) VALUES ('meta', ${json(read("meta.json", metaSchema))});`,
+  "COMMIT;",
 );
 
 const sqlPath = join(artifacts, "xray.sql");
