@@ -259,6 +259,12 @@ function paint() {
   if (!context) {
     return;
   }
+  const ratio = window.devicePixelRatio || 1;
+  if (element.width !== LAYOUT_WIDTH * ratio) {
+    element.width = LAYOUT_WIDTH * ratio;
+    element.height = LAYOUT_HEIGHT * ratio;
+  }
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
   const palette = readPalette();
   context.clearRect(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT);
   context.fillStyle = palette.card;
