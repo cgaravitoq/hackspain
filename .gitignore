@@ -18,3 +18,8 @@ pipeline/artifacts/
 pipeline/.venv/
 **/__pycache__/
 **/.pytest_cache/
+credit-scoring/.venv/
+credit-scoring/.ruff_cache/
+credit-scoring/results*/
+credit-scoring/**/*.pdf
+credit-scoring/**/*.py[cod]
