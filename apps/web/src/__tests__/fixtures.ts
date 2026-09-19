@@ -355,7 +355,16 @@ export const graph: Graph = {
       matches: 1,
       amount_minor: 0,
     },
-    graphEdge("COMP_D", "COMP_A", "INFERRED_PAYMENT_TO", "intergroup", "low"),
+    {
+      ...graphEdge(
+        "COMP_D",
+        "COMP_A",
+        "INFERRED_PAYMENT_TO",
+        "intergroup",
+        "low",
+      ),
+      currency: "GBP",
+    },
     graphEdge(
       "COMP_A",
       "COMP_D",

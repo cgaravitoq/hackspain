@@ -1,9 +1,15 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import RelationGraph from "../components/RelationGraph.vue";
-import { euro } from "../format.ts";
+import { euro, money } from "../format.ts";
 import { layoutGraph, type NodePosition } from "../graph-layout.ts";
-import { fakeApi, filterGraph } from "./fixtures.ts";
+import {
+  fakeApi,
+  filterGraph,
+  graph,
+  graphEdge,
+  graphNode,
+} from "./fixtures.ts";
 
 let mounted: VueWrapper | undefined;
 let lastGraphRequest = "/api/graph?";
@@ -88,10 +94,12 @@ describe("RelationGraph", () => {
   });
 
   it("keeps only the relations of the chosen type", async () => {
-    const wrapper = await mountGraph();
+    const requests: string[] = [];
+    const wrapper = await mountGraph(requests);
     await wrapper.find("#graph-type").setValue("OPEN_OBLIGATION_TO");
     await flushPromises();
     await flushPromises();
+    expect(requests.at(-1)).toContain("type=OPEN_OBLIGATION_TO");
     expect(relations(wrapper)).toBe("1 relación");
     await wrapper.find("#graph-type").setValue("all");
     await flushPromises();
@@ -107,6 +115,22 @@ describe("RelationGraph", () => {
     await flushPromises();
     expect(requests.at(-1)).toContain("confidence=medium");
     expect(relations(wrapper)).toBe("3 relaciones");
+  });
+
+  it("asks for high confidence when the option labelled alta is chosen", async () => {
+    const requests: string[] = [];
+    const wrapper = await mountGraph(requests);
+    const option = wrapper
+      .find("#graph-confidence")
+      .findAll("option")
+      .find((candidate) => candidate.text() === "alta");
+    await wrapper
+      .find("#graph-confidence")
+      .setValue(option?.attributes("value") ?? "");
+    await flushPromises();
+    await flushPromises();
+    expect(requests.at(-1)).toContain("confidence=high");
+    expect(relations(wrapper)).toBe("1 relación");
   });
 
   it("keeps only the relations of the chosen scope", async () => {
@@ -151,7 +175,7 @@ describe("RelationGraph", () => {
     const requests: string[] = [];
     const wrapper = await mountGraph(requests);
     const before = requests.length;
-    await wrapper.find("#graph-search").setValue("COMP_C");
+    await wrapper.find("#graph-search").setValue("mp_c");
     await flushPromises();
     expect(text(wrapper, ".graph-counter")).toBe("1 empresa, 0 relaciones");
     expect(requests).toHaveLength(before);
@@ -178,6 +202,84 @@ describe("RelationGraph", () => {
     expect(tooltip).toContain("inferida");
     await wrapper.find("canvas").trigger("mouseleave");
     expect(wrapper.find(".graph-tooltip").exists()).toBe(false);
+  });
+
+  it("formats the amount of a relation in its own currency", async () => {
+    const wrapper = await mountGraph();
+    const { edge, x, y } = edgeMidpoint("COMP_D", "COMP_A");
+    expect(edge.currency).toBe("GBP");
+    await wrapper
+      .find("canvas")
+      .trigger("mousemove", { clientX: x, clientY: y });
+    const tooltip = text(wrapper, ".graph-tooltip");
+    expect(tooltip).toContain("COMP_D → COMP_A");
+    expect(tooltip).toContain(money(edge.amount_minor / 100, "GBP"));
+    expect(tooltip).not.toContain("€");
+    expect(tooltip).toContain(
+      "inferida, identidad del proveedor sin confirmar",
+    );
+  });
+
+  it("drops the tooltip when a filter reloads the graph", async () => {
+    const wrapper = await mountGraph();
+    const { x, y } = edgeMidpoint("COMP_A", "COMP_B");
+    await wrapper
+      .find("canvas")
+      .trigger("mousemove", { clientX: x, clientY: y });
+    expect(wrapper.find(".graph-tooltip").exists()).toBe(true);
+    await wrapper.find("#graph-scope").setValue("intergroup");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-tooltip").exists()).toBe(false);
+  });
+
+  it("reads one relación on a company with a single relation", async () => {
+    const pair = {
+      ...graph,
+      nodes: [
+        graphNode("COMP_S", "GROUP_1", "healthy", 1),
+        graphNode("COMP_T", "GROUP_1", "stable", 1),
+      ],
+      edges: [
+        graphEdge(
+          "COMP_S",
+          "COMP_T",
+          "INFERRED_PAYMENT_TO",
+          "intragroup",
+          "high",
+        ),
+      ],
+    };
+    vi.stubGlobal("fetch", () => Promise.resolve(Response.json(pair)));
+    mounted = mount(RelationGraph);
+    await flushPromises();
+    await flushPromises();
+    const position = layoutGraph(pair.nodes, pair.edges).positions.get(
+      "COMP_S",
+    );
+    await mounted.find("canvas").trigger("mousemove", {
+      clientX: position?.x ?? 0,
+      clientY: position?.y ?? 0,
+    });
+    expect(text(mounted, ".graph-tooltip")).toContain(
+      "Grupo GROUP_1 · 1 relación",
+    );
+  });
+
+  it("maps the pointer through the canvas box on screen", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_C");
+    vi.spyOn(
+      HTMLCanvasElement.prototype,
+      "getBoundingClientRect",
+    ).mockReturnValue(
+      DOMRect.fromRect({ x: 100, y: 50, width: 2000, height: 1280 }),
+    );
+    await wrapper.find("canvas").trigger("mousemove", {
+      clientX: 100 + position.x * 2,
+      clientY: 50 + position.y * 2,
+    });
+    expect(text(wrapper, ".graph-tooltip")).toContain("COMP_C");
   });
 
   it("shows the id, group, score and state of the company under the pointer", async () => {
