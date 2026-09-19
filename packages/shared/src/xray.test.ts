@@ -9,6 +9,7 @@ import {
   explainSchema,
   metaSchema,
   monthEntrySchema,
+  ROLE_LABELS,
   reportSchema,
   roleSchema,
   stateSchema,
@@ -285,6 +286,19 @@ describe("xray contracts", () => {
     for (const role of ["tesorero", "financiero", "ventas"]) {
       expect(roleSchema.parse(role)).toBe(role);
     }
+  });
+
+  it("admits exactly the three product roles, in order", () => {
+    expect(roleSchema.options).toEqual(["tesorero", "financiero", "ventas"]);
+    expect(roleSchema.safeParse("admin").success).toBe(false);
+  });
+
+  it("labels each product role with its capitalised Spanish name", () => {
+    expect(ROLE_LABELS).toEqual({
+      tesorero: "Tesorero",
+      financiero: "Financiero",
+      ventas: "Ventas",
+    });
   });
 
   it("accepts a report and defaults missing figures to an empty list", () => {
