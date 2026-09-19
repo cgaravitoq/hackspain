@@ -1,3 +1,5 @@
+from typing import Any
+
 import polars as pl
 
 RULE_VERSION = "xray-score/0.1"
@@ -12,6 +14,25 @@ PERSISTENCE_MONTHS = 3
 
 NOT_EVALUABLE = "not_evaluable"
 DOWN_STATES = ("slipping", "falling")
+
+
+def policy() -> dict[str, Any]:
+    return {
+        "rule_version": RULE_VERSION,
+        "parameters": {
+            "lambda": LAMBDA,
+            "adjustment_cap": ADJUSTMENT_CAP,
+            "momentum_threshold": MOMENTUM_THRESHOLD,
+            "volatility_factor": VOLATILITY_FACTOR,
+            "exit_factor": EXIT_FACTOR,
+            "penalty_cap": PENALTY_CAP,
+            "healthy_level": HEALTHY_LEVEL,
+            "persistence_months": PERSISTENCE_MONTHS,
+            "window_months": 3,
+            "min_months": 3,
+            "momentum_min_months": 6,
+        },
+    }
 
 
 def score_panel(panel: pl.DataFrame) -> pl.DataFrame:
