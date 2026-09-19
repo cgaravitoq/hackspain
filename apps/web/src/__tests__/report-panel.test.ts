@@ -27,6 +27,25 @@ describe("ReportPanel", () => {
     expect(wrapper.find(".report-summary").text()).toBe(report.summary);
   });
 
+  it("renders list lines as items and never shows emphasis markers", async () => {
+    const section = { ...report.sections[0], body: "- uno\n\n**dos**" };
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(Response.json({ ...report, sections: [section] })),
+    );
+    const wrapper = mount(ReportPanel, {
+      props: { companyId: "COMP_A", role: "financiero" },
+    });
+    await flushPromises();
+    expect(
+      wrapper.findAll(".report-body li").map((item) => item.text()),
+    ).toEqual(["uno"]);
+    expect(
+      wrapper.findAll(".report-body p").map((item) => item.text()),
+    ).toEqual(["dos"]);
+    expect(wrapper.text()).not.toContain("**");
+    expect(wrapper.text()).not.toContain("- uno");
+  });
+
   it("tells the reader in Spanish that the report could not be generated", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(new Response("down", { status: 500 })),

@@ -15,11 +15,26 @@ const exportUrl = computed(
     `/api/companies/${props.companyId}/report.pdf?${new URLSearchParams({ role: props.role })}`,
 );
 
-function paragraphs(body: string): string[] {
+type Block = { source: string; items: string[] | null; text: string };
+
+function plain(markdown: string): string {
+  return markdown.replaceAll("**", "");
+}
+
+function blocks(body: string): Block[] {
   return body
     .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const lines = chunk.split("\n").map((line) => line.trim());
+      const isList = lines.every((line) => line.startsWith("- "));
+      return {
+        source: chunk,
+        items: isList ? lines.map((line) => plain(line.slice(2))) : null,
+        text: plain(chunk),
+      };
+    });
 }
 
 function figureValue(value: number): string {
@@ -75,9 +90,12 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
       <article v-for="section in report.sections" :key="section.code" class="report-section">
         <h3>{{ section.title }}</h3>
         <div class="report-body">
-          <p v-for="paragraph in paragraphs(section.body)" :key="paragraph">
-            {{ paragraph }}
-          </p>
+          <template v-for="block in blocks(section.body)" :key="block.source">
+            <ul v-if="block.items">
+              <li v-for="item in block.items" :key="item">{{ item }}</li>
+            </ul>
+            <p v-else>{{ block.text }}</p>
+          </template>
         </div>
         <table v-if="section.figures.length">
           <tbody>
@@ -137,12 +155,17 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
   font-size: 14px;
 }
 
-.report-body p {
+.report-body p,
+.report-body ul {
   margin: 0 0 8px;
   color: var(--ink-soft);
 }
 
-.report-body p:last-child {
+.report-body ul {
+  padding-left: 20px;
+}
+
+.report-body :last-child {
   margin-bottom: 0;
 }
 
