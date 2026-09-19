@@ -2,7 +2,7 @@
 import { Chat } from "@ai-sdk/vue";
 import type { Alert } from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 const props = defineProps<{ companyId: string; alerts: Alert[] }>();
 
@@ -14,6 +14,17 @@ const chat = new Chat({
 });
 
 const draft = ref("");
+const list = ref<HTMLElement | null>(null);
+
+watch(
+  () => chat.messages.flatMap((message) => message.parts).length,
+  async () => {
+    await nextTick();
+    if (list.value) {
+      list.value.scrollTop = list.value.scrollHeight;
+    }
+  },
+);
 
 const intro = computed(() => {
   const month = props.alerts[0]?.month ?? "este mes";
@@ -56,7 +67,7 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
 <template>
   <section class="panel chat">
     <h2 class="panel-title">Agente · X Ray sobre Workers AI</h2>
-    <div class="messages">
+    <div ref="list" class="messages">
       <article class="message assistant">
         <p>{{ intro }}</p>
       </article>
@@ -105,6 +116,7 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
 
 .messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 14px;
   display: flex;
