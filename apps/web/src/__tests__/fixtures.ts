@@ -1,6 +1,10 @@
 import {
   type Alert,
+  COMMITMENT_LABEL,
+  type CommitmentEvaluation,
+  type CommitmentRequest,
   type CompanyDetail,
+  commitmentRequestSchema,
   type Explain,
   type Graph,
   type GroupMap,
@@ -249,6 +253,129 @@ export const report: Report = {
   ],
   export_url: "/companies/COMP_A/report.pdf?role=financiero",
 };
+
+export const commitmentAssumptions = commitmentRequestSchema.parse({
+  opening_minor: 4_000_000,
+  floor_minor: 2_000_000,
+  revenue_minor: 10_000_000,
+  advance_date: "2026-09-02",
+  final_date: "2026-09-30",
+  advance_bps: [0, 2000, 4000, 6000],
+  costs: [
+    {
+      label: "Producción",
+      date: "2026-09-10",
+      amount_minor: 6_000_000,
+    },
+  ],
+  other_flows: [],
+});
+
+export function compactCommitmentOutput(
+  companyId: string,
+  assumptions: CommitmentRequest = commitmentAssumptions,
+) {
+  return {
+    company_id: companyId,
+    currency: "EUR",
+    as_of: "2026-09-01",
+    horizon_end: "2027-03-01",
+    observed_months: 24,
+    basis: "USER_ASSUMPTION",
+    readiness: "SIMULATION_ONLY",
+    opening_verified: false,
+    coverage_verified: false,
+    is_financial_authorization: false,
+    label: COMMITMENT_LABEL,
+    search_kind: "ENUMERATED_GRID",
+    minimum_tested_feasible_bps: 4000,
+    assumptions,
+    alternatives: [
+      {
+        advance_bps: 4000,
+        advance_minor: 4_000_000,
+        final_minor: 6_000_000,
+        status: "COMPATIBLE_UNDER_ASSUMPTIONS",
+        min_cash_minor: 123_456,
+        closing_minor: 6_123_456,
+        shortfall_minor: 0,
+        first_breach: null,
+      },
+    ],
+  };
+}
+
+export function commitmentEvaluation(
+  request: CommitmentRequest,
+  companyId = "COMP_A",
+): CommitmentEvaluation {
+  return {
+    company_id: companyId,
+    currency: "EUR",
+    as_of: "2026-09-01",
+    horizon_end: "2027-03-01",
+    observed_months: 24,
+    basis: "USER_ASSUMPTION",
+    readiness: "SIMULATION_ONLY",
+    opening_verified: false,
+    coverage_verified: false,
+    is_financial_authorization: false,
+    label: COMMITMENT_LABEL,
+    search_kind: "ENUMERATED_GRID",
+    minimum_tested_feasible_bps: 4000,
+    assumptions: request,
+    alternatives: [
+      {
+        advance_bps: 0,
+        advance_minor: 0,
+        final_minor: request.revenue_minor,
+        status: "INCOMPATIBLE",
+        min_cash_minor: -100_000,
+        closing_minor: 500_000,
+        shortfall_minor: 100_000,
+        first_breach: {
+          date: "2026-09-10",
+          phase: "DEBITS",
+          cash_minor: -100_000,
+        },
+        path: [{ date: "2026-09-10", phase: "DEBITS", cash_minor: -100_000 }],
+      },
+      {
+        advance_bps: 2000,
+        advance_minor: 2_000_000,
+        final_minor: 8_000_000,
+        status: "INSUFFICIENT_EVIDENCE",
+        min_cash_minor: null,
+        closing_minor: null,
+        shortfall_minor: null,
+        first_breach: null,
+        path: [],
+      },
+      {
+        advance_bps: 4000,
+        advance_minor: 4_000_000,
+        final_minor: 6_000_000,
+        status: "COMPATIBLE_UNDER_ASSUMPTIONS",
+        min_cash_minor: 123_456,
+        closing_minor: 6_123_456,
+        shortfall_minor: 0,
+        first_breach: null,
+        path: [{ date: "2026-09-10", phase: "DEBITS", cash_minor: 123_456 }],
+      },
+      {
+        advance_bps: 6000,
+        advance_minor: 6_000_000,
+        final_minor: 4_000_000,
+        status: "OUTSIDE_HORIZON",
+        min_cash_minor: null,
+        closing_minor: null,
+        shortfall_minor: null,
+        first_breach: null,
+        path: [],
+      },
+    ],
+  };
+}
 
 export const group: GroupMap = {
   group_id: "GROUP_1",

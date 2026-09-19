@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { CompanyDetail, Explain, GroupMap, Role } from "@hackspain/shared";
-import { computed, ref } from "vue";
+import type {
+  CommitmentRequest,
+  CompanyDetail,
+  Explain,
+  GroupMap,
+  Role,
+} from "@hackspain/shared";
+import { computed, ref, watch } from "vue";
 import {
   COMPONENT_CODES,
   componentLabel,
@@ -8,6 +14,7 @@ import {
   eventLabel,
   points,
 } from "../format.ts";
+import CommitmentPanel from "./CommitmentPanel.vue";
 import GroupStrip from "./GroupStrip.vue";
 import ReportPanel from "./ReportPanel.vue";
 
@@ -17,6 +24,10 @@ const props = defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  commitmentLaunch?: {
+    token: number;
+    assumptions: CommitmentRequest;
+  } | null;
 }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
 
@@ -25,6 +36,7 @@ const TABS = [
   { id: "why", label: "Por qué" },
   { id: "changed", label: "Qué cambió" },
   { id: "report", label: "Informe" },
+  { id: "commitment", label: "Compromiso" },
   { id: "group", label: "Grupo" },
 ] as const;
 
@@ -33,15 +45,36 @@ type TabId = (typeof TABS)[number]["id"];
 const active = ref<TabId>("action");
 
 const tabs = computed(() =>
-  TABS.filter((tab) => tab.id !== "group" || props.group !== null),
+  TABS.filter((tab) => {
+    if (tab.id === "group") {
+      return props.group !== null;
+    }
+    if (tab.id === "commitment") {
+      return props.role === "tesorero" || props.role === "financiero";
+    }
+    return true;
+  }),
 );
 
 const current = computed<TabId>(() =>
-  active.value === "group" && props.group === null ? "action" : active.value,
+  tabs.value.some((tab) => tab.id === active.value) ? active.value : "action",
 );
 
 const framed = computed(
-  () => current.value !== "report" && current.value !== "group",
+  () =>
+    current.value !== "report" &&
+    current.value !== "group" &&
+    current.value !== "commitment",
+);
+
+watch(
+  () => props.commitmentLaunch?.token,
+  (token) => {
+    if (token !== undefined) {
+      active.value = "commitment";
+    }
+  },
+  { immediate: true },
 );
 
 const mainDrivers = computed(() =>
@@ -128,6 +161,14 @@ const sources = computed(() =>
       </template>
 
       <ReportPanel v-else-if="current === 'report'" :company-id="selected" :role="role" />
+
+      <CommitmentPanel
+        v-else-if="current === 'commitment'"
+        :company-id="selected"
+        :role="role"
+        :seed-token="commitmentLaunch?.token"
+        :seed-assumptions="commitmentLaunch?.assumptions"
+      />
 
       <GroupStrip
         v-else-if="group"

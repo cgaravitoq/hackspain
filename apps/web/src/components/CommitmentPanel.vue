@@ -11,7 +11,12 @@ import { ref, watch } from "vue";
 import { api } from "../api.ts";
 import { euroMinor } from "../format.ts";
 
-const props = defineProps<{ companyId: string; role: Role }>();
+const props = defineProps<{
+  companyId: string;
+  role: Role;
+  seedToken?: number;
+  seedAssumptions?: CommitmentRequest;
+}>();
 
 type CostRow = { id: number; label: string; date: string; amount: string };
 
@@ -38,11 +43,37 @@ const advanceDate = ref("");
 const finalDate = ref("");
 const advancePercents = ref("0, 20, 40, 60");
 const costs = ref<CostRow[]>([{ id: 1, label: "", date: "", amount: "" }]);
+const otherFlows = ref<CommitmentRequest["other_flows"]>([]);
 const result = ref<CommitmentEvaluation | null>(null);
 const error = ref("");
 const loading = ref(false);
 let nextCostId = 2;
 let requestId = 0;
+
+function minorInput(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  const absolute = Math.abs(value);
+  return `${sign}${Math.trunc(absolute / 100)},${String(absolute % 100).padStart(2, "0")}`;
+}
+
+function applyAssumptions(request: CommitmentRequest) {
+  opening.value = minorInput(request.opening_minor);
+  floor.value = minorInput(request.floor_minor);
+  revenue.value = minorInput(request.revenue_minor);
+  advanceDate.value = request.advance_date;
+  finalDate.value = request.final_date;
+  advancePercents.value = request.advance_bps
+    .map((bps) => String(bps / 100))
+    .join(", ");
+  costs.value = request.costs.map((cost, index) => ({
+    id: index + 1,
+    label: cost.label,
+    date: cost.date,
+    amount: minorInput(cost.amount_minor),
+  }));
+  nextCostId = request.costs.length + 1;
+  otherFlows.value = request.other_flows;
+}
 
 function parseMoney(value: string): number | null {
   const compact = value.trim().replaceAll(" ", "");
@@ -64,7 +95,11 @@ function parseMoney(value: string): number | null {
 function parsePercents(value: string): number[] {
   return value.split(",").map((part) => {
     const trimmed = part.trim();
-    return /^\d+$/.test(trimmed) ? Number(trimmed) * 100 : Number.NaN;
+    const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed);
+    if (!match) {
+      return Number.NaN;
+    }
+    return Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
   });
 }
 
@@ -101,7 +136,7 @@ async function submit() {
       date: cost.date,
       amount_minor: parseMoney(cost.amount) ?? Number.NaN,
     })),
-    other_flows: [],
+    other_flows: otherFlows.value,
   };
   const parsed = commitmentRequestSchema.safeParse(candidate);
   result.value = null;
@@ -132,12 +167,27 @@ async function submit() {
   }
 }
 
-watch([() => props.companyId, () => props.role], () => {
-  requestId += 1;
-  result.value = null;
-  error.value = "";
-  loading.value = false;
-});
+watch(
+  () => [props.companyId, props.role, props.seedToken] as const,
+  (current, previous) => {
+    const token = current[2];
+    if (
+      token !== undefined &&
+      token !== previous?.[2] &&
+      props.seedAssumptions
+    ) {
+      applyAssumptions(props.seedAssumptions);
+      void submit();
+      return;
+    }
+    requestId += 1;
+    result.value = null;
+    error.value = "";
+    loading.value = false;
+    otherFlows.value = [];
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
