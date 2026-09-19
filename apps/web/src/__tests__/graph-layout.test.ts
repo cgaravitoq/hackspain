@@ -3,10 +3,13 @@ import {
   edgeAt,
   LAYOUT_HEIGHT,
   LAYOUT_WIDTH,
+  LINK_GAP,
   layoutGraph,
+  NODE_GAP,
   nodeAt,
+  nodeRadius,
 } from "../graph-layout.ts";
-import { filterGraph } from "./fixtures.ts";
+import { filterGraph, starGraph } from "./fixtures.ts";
 
 const connected = filterGraph(
   new URL("https://web.test/api/graph?include_isolated=false"),
@@ -21,6 +24,13 @@ function positions() {
   ]);
 }
 
+function crowded() {
+  const { nodes, edges } = starGraph(60, 4);
+  const layout = layoutGraph(nodes, edges);
+  const leaf = layout.positions.get("HUB_000_0");
+  return { layout, scale: (leaf?.radius ?? 0) / nodeRadius(1) };
+}
+
 describe("graph layout", () => {
   it("lays the same graph out at the same positions twice", () => {
     expect(positions()).toEqual(positions());
@@ -29,6 +39,20 @@ describe("graph layout", () => {
       expect(x).toBeLessThanOrEqual(LAYOUT_WIDTH);
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThanOrEqual(LAYOUT_HEIGHT);
+    }
+  });
+
+  it("leaves a visible gap on every relation between its two companies", () => {
+    const { layout, scale } = crowded();
+    expect(layout.links).toHaveLength(240);
+    for (const link of layout.links) {
+      const distance = Math.hypot(
+        link.target.x - link.source.x,
+        link.target.y - link.source.y,
+      );
+      const gap = distance - link.source.radius - link.target.radius;
+      expect(gap).toBeGreaterThanOrEqual((LINK_GAP - 6) * scale);
+      expect(gap).toBeGreaterThan(2 * NODE_GAP * scale);
     }
   });
 

@@ -366,6 +366,26 @@ export const graph: Graph = {
   ],
 };
 
+export function starGraph(stars: number, leaves: number): Graph {
+  const nodes: RelationNode[] = [];
+  const edges: RelationEdge[] = [];
+  for (let star = 0; star < stars; star += 1) {
+    const hub = `HUB_${String(star).padStart(3, "0")}`;
+    nodes.push({
+      ...graphNode(hub, `GROUP_${star}`, "stable", leaves),
+      role: "group_treasury_hub",
+    });
+    for (let leaf = 0; leaf < leaves; leaf += 1) {
+      const id = `${hub}_${leaf}`;
+      nodes.push(graphNode(id, `GROUP_${star}`, "healthy", 1));
+      edges.push(
+        graphEdge(hub, id, "INFERRED_PAYMENT_TO", "intragroup", "high"),
+      );
+    }
+  }
+  return { meta: graph.meta, nodes, edges };
+}
+
 const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
 
 function optionalParam<Schema extends z.ZodType>(
