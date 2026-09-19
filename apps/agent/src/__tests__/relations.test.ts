@@ -103,13 +103,20 @@ describe("GET /graph", () => {
 
   it("omits isolated companies unless include_isolated is true", async () => {
     const withoutIsolated = await graph();
-    expect(withoutIsolated.nodes.map((node) => node.company_id)).not.toContain(
-      "COMP_E",
-    );
+    expect(withoutIsolated.nodes.map((node) => node.company_id)).toEqual([
+      "COMP_A",
+      "COMP_B",
+      "COMP_D",
+    ]);
     const withIsolated = await graph("?include_isolated=true");
-    expect(withIsolated.nodes.map((node) => node.company_id)).toContain(
+    expect(withIsolated.nodes.map((node) => node.company_id)).toEqual([
+      "COMP_A",
+      "COMP_B",
+      "COMP_D",
       "COMP_E",
-    );
+    ]);
+    expect(withIsolated.edges).toHaveLength(3);
+    expect(withIsolated.edges).toEqual(withoutIsolated.edges);
     expect(
       withIsolated.nodes.find((node) => node.company_id === "COMP_E"),
     ).toMatchObject({
