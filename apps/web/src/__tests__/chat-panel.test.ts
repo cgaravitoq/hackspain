@@ -1,7 +1,8 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ALERTS_LIMIT } from "../api.ts";
 import ChatPanel from "../components/ChatPanel.vue";
-import { alerts } from "./fixtures.ts";
+import { alert, alerts } from "./fixtures.ts";
 
 function sse(chunks: object[]): Response {
   const body = [
@@ -16,6 +17,16 @@ function sse(chunks: object[]): Response {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ChatPanel", () => {
+  it("marks the alert count as truncated when the list reaches the fetch limit", () => {
+    const capped = Array.from({ length: ALERTS_LIMIT }, (_, index) =>
+      alert(`COMP_${index}`),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts: capped },
+    });
+    expect(wrapper.text()).toContain(`${ALERTS_LIMIT}+ alertas`);
+  });
+
   it("sends the question with the company on screen and renders the streamed answer and tool calls", async () => {
     const requests: { url: string; body: string }[] = [];
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {

@@ -3,6 +3,7 @@ import { Chat } from "@ai-sdk/vue";
 import type { Alert } from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
 import { computed, nextTick, ref, watch } from "vue";
+import { ALERTS_LIMIT } from "../api.ts";
 
 const props = defineProps<{ companyId: string; alerts: Alert[] }>();
 
@@ -39,7 +40,8 @@ const intro = computed(() => {
   const recovered = props.alerts.filter(
     (alert) => alert.kind === "recovered",
   ).length;
-  return `${month}: ${props.alerts.length} alertas, ${down} empresas empeoran y ${recovered} se recuperan. Pregunta por ${props.companyId} o por cualquier otra empresa o grupo.`;
+  const total = `${props.alerts.length}${props.alerts.length >= ALERTS_LIMIT ? "+" : ""}`;
+  return `${month}: ${total} alertas, ${down} empresas empeoran y ${recovered} se recuperan. Pregunta por ${props.companyId} o por cualquier otra empresa o grupo.`;
 });
 
 const suggestions = [
