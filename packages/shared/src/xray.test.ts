@@ -434,6 +434,20 @@ describe("xray contracts", () => {
     ]);
   });
 
+  it("accepts a staged block that never evaluated a rate", () => {
+    const empty = {
+      ...demoAlertStats,
+      false_alarm_rate: null,
+      revert_rate: null,
+    };
+    const backtest = backtestSchema.parse({
+      ...demoBacktest,
+      alerts_by_stage: { candidate: empty, confirmed: empty },
+    });
+    expect(backtest.alerts_by_stage.candidate.revert_rate).toBeNull();
+    expect(backtest.alerts_by_stage.confirmed.false_alarm_rate).toBeNull();
+  });
+
   it("rejects a company summary without the last observed month", () => {
     const { last_observed_month: _lastObserved, ...company } =
       demoCompanySummary;

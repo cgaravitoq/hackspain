@@ -216,9 +216,9 @@ export type GroupMap = z.infer<typeof groupMapSchema>;
 const alertStatsSchema = z.object({
   evaluated: z.number(),
   false_alarms: z.number(),
-  false_alarm_rate: z.number(),
+  false_alarm_rate: z.number().nullable(),
   reverted_within_3_months: z.number(),
-  revert_rate: z.number(),
+  revert_rate: z.number().nullable(),
   censored: z.number(),
 });
 
