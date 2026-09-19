@@ -590,3 +590,60 @@ def test_evidence_ids_keep_the_twenty_earliest_matches(tmp_path: Path):
     edge = edges_of(payload, "bank_mirror")[0]
     assert edge["matches"] == 25
     assert edge["evidence_ids"] == [f"TX_{index}_out" for index in range(100, 120)]
+
+
+def test_a_bank_movement_with_two_same_cents_candidates_pairs_with_neither(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[(f"C{index}", "G1") for index in range(1, 9)],
+        transactions=[
+            transaction("TX_OUT_1", "C1", "2026-01-10", -100.0),
+            transaction("TX_IN_1A", "C2", "2026-01-10", 100.0),
+            transaction("TX_IN_1B", "C3", "2026-01-11", 100.0),
+            transaction("TX_OUT_2", "C1", "2026-01-20", -200.0),
+            transaction("TX_IN_2A", "C2", "2026-01-20", 200.0),
+            transaction("TX_IN_2B", "C3", "2026-01-21", 200.0),
+            transaction("TX_IN_3", "C4", "2026-02-10", 300.0),
+            transaction("TX_OUT_3A", "C5", "2026-02-10", -300.0),
+            transaction("TX_OUT_3B", "C6", "2026-02-11", -300.0),
+            transaction("TX_IN_4", "C4", "2026-02-20", 400.0),
+            transaction("TX_OUT_4A", "C5", "2026-02-20", -400.0),
+            transaction("TX_OUT_4B", "C6", "2026-02-21", -400.0),
+            *bank_pair(5, "C7", "C8", 500.0, "2026-03-10", "2026-03-10"),
+            *bank_pair(6, "C7", "C8", 600.0, "2026-03-20", "2026-03-20"),
+        ],
+    )
+    edges = edges_of(payload, "bank_mirror")
+    assert [(edge["source"], edge["target"], edge["matches"]) for edge in edges] == [("C7", "C8", 2)]
+
+
+def test_an_invoice_with_two_same_cents_candidates_pairs_with_neither(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[(f"C{index}", "G1") for index in range(1, 9)],
+        invoices=[
+            invoice("INV_SALE_1", "C1", "2026-01-10", 100.0),
+            invoice("INV_BUY_1A", "C2", "2026-01-10", -100.0),
+            invoice("INV_BUY_1B", "C3", "2026-01-12", -100.0),
+            invoice("INV_SALE_2", "C1", "2026-02-10", 200.0),
+            invoice("INV_BUY_2A", "C2", "2026-02-10", -200.0),
+            invoice("INV_BUY_2B", "C3", "2026-02-12", -200.0),
+            invoice("INV_SALE_3", "C1", "2026-03-10", 300.0),
+            invoice("INV_BUY_3A", "C2", "2026-03-10", -300.0),
+            invoice("INV_BUY_3B", "C3", "2026-03-12", -300.0),
+            invoice("INV_BUY_4", "C4", "2026-04-10", -400.0),
+            invoice("INV_SALE_4A", "C5", "2026-04-10", 400.0),
+            invoice("INV_SALE_4B", "C6", "2026-04-12", 400.0),
+            invoice("INV_BUY_5", "C4", "2026-05-10", -500.0),
+            invoice("INV_SALE_5A", "C5", "2026-05-10", 500.0),
+            invoice("INV_SALE_5B", "C6", "2026-05-12", 500.0),
+            invoice("INV_BUY_6", "C4", "2026-06-10", -600.0),
+            invoice("INV_SALE_6A", "C5", "2026-06-10", 600.0),
+            invoice("INV_SALE_6B", "C6", "2026-06-12", 600.0),
+            *invoice_pair(7, "C7", "C8", 700.0, "2026-07-10", "2026-07-10"),
+            *invoice_pair(8, "C7", "C8", 800.0, "2026-08-10", "2026-08-10"),
+            *invoice_pair(9, "C7", "C8", 900.0, "2026-09-10", "2026-09-10"),
+        ],
+    )
+    edges = edges_of(payload, "invoice_mirror")
+    assert [(edge["source"], edge["target"], edge["matches"]) for edge in edges] == [("C8", "C7", 3)]
