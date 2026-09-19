@@ -5,7 +5,7 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
-import { seed } from "./fixtures.ts";
+import { company, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
@@ -61,6 +61,69 @@ const pdfBytes = new TextEncoder().encode(
 );
 
 describe("GET /companies/:id/report.pdf", () => {
+  it("keeps renderer errors out of the cache and provides printable HTML without another model call", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const quickAction = vi.fn(() =>
+      Promise.resolve(new Response("quota exhausted", { status: 429 })),
+    );
+    const app = createApp({ model: () => model, browser: { quickAction } });
+    const response = await app.request(
+      "/companies/COMP_A/report.pdf?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(502);
+    const row = await env.DB.prepare(
+      "SELECT pdf FROM reports WHERE company_id = 'COMP_A'",
+    ).first<{ pdf: number[] | null }>();
+    expect(row?.pdf).toBeNull();
+    const fallback = await app.request(
+      "/companies/COMP_A/report.html?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(fallback.status).toBe(200);
+    expect(fallback.headers.get("content-type")).toContain("text/html");
+    expect(await fallback.text()).toContain("@media print");
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(quickAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("escapes model HTML and removes executable links and external images before rendering", async () => {
+    const unsafe = {
+      ...narrative,
+      summary: '<script>alert("unsafe")</script>',
+      sections: narrative.sections.map((section) => ({
+        ...section,
+        title: "<img src=x onerror=alert()>",
+        body: '[click](javascript:alert()) ![image](https://untrusted.example/image.png) <iframe src="https://untrusted.example"></iframe>',
+      })),
+    };
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(unsafe)),
+    });
+    const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
+      expect(action).toBe("pdf");
+      const { html } = pdfRequest.parse(input);
+      expect(html).not.toMatch(/<script|<img|<iframe|href="javascript:/);
+      expect(html).toContain("&lt;script&gt;");
+      expect(html).toContain("default-src 'none'");
+      return Promise.resolve(
+        new Response(pdfBytes, {
+          headers: { "content-type": "application/pdf" },
+        }),
+      );
+    });
+    const response = await createApp({
+      model: () => model,
+      browser: { quickAction },
+    }).request("/companies/COMP_A/report.pdf?role=tesorero", undefined, env);
+    expect(response.status).toBe(200);
+    expect(quickAction).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the role sections and disclaimer once and caches PDF bytes in D1", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
@@ -298,6 +361,264 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
+  it("reserves the output budget for narrative rather than model reasoning", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) =>
+        options.reasoning === "none"
+          ? reply(JSON.stringify(narrative))
+          : {
+              ...reply(""),
+              finishReason: { unified: "length", raw: "length" },
+            },
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_A/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(model.doGenerateCalls[0]?.reasoning).toBe("none");
+  });
+
+  it.each([
+    {
+      role: "financiero",
+      titles: [
+        "Cartera a revisar",
+        "Trayectoria del cliente",
+        "Atribución verificable",
+        "Hechos pendientes de contraste",
+        "Contexto del grupo",
+        "Cobertura y reproducibilidad",
+        "Seguimiento humano",
+      ],
+      codes: [
+        "resumen",
+        "por_que",
+        "por_que",
+        "que_hacer",
+        "grupo",
+        "datos_y_limites",
+        "que_hacer",
+      ],
+    },
+    {
+      role: "ventas",
+      titles: [
+        "Contexto de conversación",
+        "Hechos relevantes",
+        "Preguntas de descubrimiento",
+        "Alcance del grupo",
+        "Capacidades pertinentes",
+        "Qué sabemos y qué falta",
+      ],
+      codes: [
+        "resumen",
+        "por_que",
+        "que_hacer",
+        "grupo",
+        "que_hacer",
+        "datos_y_limites",
+      ],
+    },
+  ])(
+    "uses the $role editorial structure without accepting model figures",
+    async ({ role, titles, codes }) => {
+      const output = {
+        summary: narrative.summary,
+        sections: titles.map((title, index) => ({
+          code: codes[index],
+          title,
+          body: "Verificar con las personas autorizadas.",
+        })),
+      };
+      const model = new MockLanguageModelV4({
+        doGenerate: reply(JSON.stringify(output)),
+      });
+      const response = await createApp({ model: () => model }).request(
+        `/companies/COMP_A/report?role=${role}`,
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(200);
+      const report = reportSchema.parse(await response.json());
+      expect(report.role).toBe(role);
+      expect(report.sections.map((section) => section.code)).toEqual(codes);
+      const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
+      for (const title of titles) {
+        expect(prompt).toContain(title);
+      }
+      expect(prompt).toContain(role);
+      expect(
+        report.sections.flatMap((section) => section.figures),
+      ).toContainEqual({
+        label: "balance.value · 2026-08 a 2026-08 · explain.drivers",
+        value: 0.4,
+        unit: "ratio",
+      });
+    },
+  );
+
+  it.each(["report", "report.pdf", "report.html"])(
+    "rejects invalid roles and unknown companies at the %s boundary without remote calls",
+    async (route) => {
+      const model = new MockLanguageModelV4();
+      const quickAction = vi.fn(() => Promise.resolve(new Response(pdfBytes)));
+      const app = createApp({ model: () => model, browser: { quickAction } });
+      for (const query of ["", "?role=ceo"]) {
+        const response = await app.request(
+          `/companies/COMP_A/${route}${query}`,
+          undefined,
+          env,
+        );
+        expect(response.status).toBe(400);
+      }
+      const response = await app.request(
+        `/companies/MISSING/${route}?role=tesorero`,
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(404);
+      expect(model.doGenerateCalls).toHaveLength(0);
+      expect(quickAction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retries invalid model figures once and stores only deterministic figures", async () => {
+    const invented = {
+      ...narrative,
+      sections: narrative.sections.map((section) => ({
+        ...section,
+        figures: [{ label: "invented", value: 999999, unit: "EUR" }],
+      })),
+    };
+    const model = new MockLanguageModelV4({
+      doGenerate: [
+        reply(JSON.stringify(invented)),
+        reply(JSON.stringify(narrative)),
+      ],
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_A/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(200);
+    const report = reportSchema.parse(await response.json());
+    expect(JSON.stringify(report)).not.toContain("999999");
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain(
+      "respuesta anterior",
+    );
+    const cached = await env.DB.prepare(
+      "SELECT body FROM reports WHERE company_id = 'COMP_A'",
+    ).first<{ body: string }>();
+    expect(JSON.parse(cached?.body ?? "null")).toEqual(report);
+  });
+
+  it.each([
+    JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
+    JSON.stringify({
+      ...narrative,
+      sections: [{ code: "decision", title: "Forbidden", body: "Forbidden" }],
+    }),
+    JSON.stringify({ ...narrative, sections: narrative.sections.slice(0, 2) }),
+    "not JSON",
+  ])(
+    "returns 502 after two invalid outputs and leaves no cached report",
+    async (text) => {
+      const model = new MockLanguageModelV4({ doGenerate: reply(text) });
+      const response = await createApp({ model: () => model }).request(
+        "/companies/COMP_A/report?role=tesorero",
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(502);
+      expect(model.doGenerateCalls).toHaveLength(2);
+      const row = await env.DB.prepare(
+        "SELECT count(*) AS count FROM reports",
+      ).first<{ count: number }>();
+      expect(row?.count).toBe(0);
+    },
+  );
+
+  it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
+    const detail = company("COMP_GAP", "GROUP_1", [
+      { month: "2026-07", score: 60, state: "healthy" },
+      { month: "2026-08", score: null, state: "not_evaluable" },
+    ]);
+    detail.invoice_facts = {};
+    detail.group_id = null;
+    await env.DB.prepare(
+      "INSERT INTO companies SELECT ?, NULL, 0, '2026-08', NULL, 'not_evaluable', ?, ? FROM companies WHERE company_id = 'COMP_A'",
+    )
+      .bind(detail.company_id, JSON.stringify(detail), JSON.stringify(detail))
+      .run();
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_GAP/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(200);
+    const report = reportSchema.parse(await response.json());
+    expect(report.month).toBe("2026-08");
+    expect(report.sections[0]?.figures).toEqual([]);
+    expect(report.sections[3]?.figures).toEqual([]);
+    expect(report.sections[4]?.figures).toEqual([]);
+    const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
+    expect(prompt).toContain("not_evaluable");
+    expect(prompt).toContain("none");
+    expect(prompt).toContain("insuficiencia de datos");
+  });
+
+  it("separates cached reports by role, rule version and month", async () => {
+    await env.DB.prepare(
+      "INSERT INTO companies SELECT 'COMP_CACHE', group_id, scorable, month, score, state, json_set(summary, '$.company_id', 'COMP_CACHE'), json_set(detail, '$.company_id', 'COMP_CACHE') FROM companies WHERE company_id = 'COMP_A'",
+    ).run();
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const app = createApp({ model: () => model });
+    for (const role of ["tesorero", "financiero"]) {
+      const response = await app.request(
+        `/companies/COMP_CACHE/report?role=${role}`,
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(200);
+      expect(reportSchema.parse(await response.json()).role).toBe(role);
+    }
+    await env.DB.prepare(
+      "UPDATE companies SET detail = json_set(detail, '$.series[#-1].evidence.rule_version', 'xray-score/0.2') WHERE company_id = 'COMP_CACHE'",
+    ).run();
+    const updatedRules = await app.request(
+      "/companies/COMP_CACHE/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(reportSchema.parse(await updatedRules.json()).rule_version).toBe(
+      "xray-score/0.2",
+    );
+    await env.DB.prepare(
+      "UPDATE companies SET detail = json_set(detail, '$.series[#-1].month', '2026-09') WHERE company_id = 'COMP_CACHE'",
+    ).run();
+    const updatedMonth = await app.request(
+      "/companies/COMP_CACHE/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(reportSchema.parse(await updatedMonth.json()).month).toBe("2026-09");
+    expect(model.doGenerateCalls).toHaveLength(4);
+    const row = await env.DB.prepare(
+      "SELECT count(*) AS count FROM reports WHERE company_id = 'COMP_CACHE'",
+    ).first<{ count: number }>();
+    expect(row?.count).toBe(4);
+  });
+
   it("grounds the role sections and figures in D1 and reuses the stored report", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),

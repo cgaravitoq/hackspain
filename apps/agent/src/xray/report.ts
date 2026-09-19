@@ -218,6 +218,7 @@ async function narrate(
     try {
       const { output } = await generateText({
         model,
+        reasoning: "none",
         maxRetries: 0,
         maxOutputTokens: 6000,
         output: Output.object({ schema: narrativeSchema }),
