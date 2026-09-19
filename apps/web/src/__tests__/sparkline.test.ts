@@ -1,4 +1,4 @@
-import { type DOMWrapper, mount } from "@vue/test-utils";
+import { type DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import Sparkline from "../components/Sparkline.vue";
 import { company, month } from "./fixtures.ts";
@@ -10,11 +10,52 @@ function withMonths(id: string, months: string[]) {
   };
 }
 
+function withScores(id: string, scores: number[], momentum: number | null) {
+  const series = scores.map((score, index) =>
+    month(`2026-${String(index + 1).padStart(2, "0")}`, score, "stable"),
+  );
+  const last = series.at(-1);
+  if (last) {
+    last.momentum = momentum;
+  }
+  return { ...company(id, "GROUP_1"), series };
+}
+
+function twoYears() {
+  return [
+    "2024-12",
+    ...[2025, 2026].flatMap((year) =>
+      Array.from(
+        { length: 12 },
+        (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`,
+      ),
+    ),
+  ];
+}
+
 function pointX(circles: DOMWrapper<Element>[], id: string, name: string) {
   const circle = circles.find((candidate) =>
     candidate.find("title").text().includes(`${id} · ${name}`),
   );
   return Number(circle?.attributes("cx"));
+}
+
+function coordinates(wrapper: Pick<DOMWrapper<Element>, "attributes">) {
+  return (wrapper.attributes("points") ?? "")
+    .split(" ")
+    .map((point) => point.split(",").map(Number));
+}
+
+function score(y: number) {
+  return 100 * (1 - (y - 24) / 264);
+}
+
+function segments(path: Pick<DOMWrapper<Element>, "attributes">) {
+  return (path.attributes("d") ?? "").split("C").length - 1;
+}
+
+function hover(wrapper: VueWrapper, index: number) {
+  return wrapper.findAll("rect.hit")[index]?.trigger("pointerenter");
 }
 
 describe("Sparkline", () => {
@@ -29,7 +70,7 @@ describe("Sparkline", () => {
     });
     const marker = wrapper.get("line.today-marker");
     const lastX = pointX(wrapper.findAll("circle"), "COMP_B", "2026-12");
-    expect(Number(marker.attributes("x1"))).toBeCloseTo(213.6);
+    expect(Number(marker.attributes("x1"))).toBeCloseTo(400.8);
     expect(Number(marker.attributes("x1"))).toBe(lastX);
     expect(Number(marker.attributes("x2"))).toBe(lastX);
     expect(marker.attributes("stroke-dasharray")).toBe("1 3");
@@ -41,36 +82,115 @@ describe("Sparkline", () => {
     );
     const shade = wrapper.get("rect.projection-area");
     expect(Number(shade.attributes("x"))).toBe(lastX);
-    expect(Number(shade.attributes("width"))).toBeCloseTo(278.4);
+    expect(Number(shade.attributes("width"))).toBeCloseTo(535.2);
     expect(wrapper.findAll("text.month").map((item) => item.text())).toEqual([
-      "2026-10",
-      "2027-03",
+      "dic 26",
+      "mar 27",
     ]);
-    expect(wrapper.findAll("circle")).toHaveLength(5);
+    expect(wrapper.findAll("circle")).toHaveLength(2);
   });
 
   it("retains 24 observed months before adding the three future months", () => {
-    const names = [
-      "2024-12",
-      ...[2025, 2026].flatMap((year) =>
-        Array.from(
-          { length: 12 },
-          (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`,
-        ),
-      ),
-    ];
     const wrapper = mount(Sparkline, {
-      props: { companies: [withMonths("COMP_A", names)] },
+      props: { companies: [withMonths("COMP_A", twoYears())] },
     });
     expect(wrapper.findAll("text.month").map((item) => item.text())).toEqual([
-      "2025-01",
-      "2025-07",
-      "2026-01",
-      "2026-07",
-      "2027-03",
+      "mar 25",
+      "jun 25",
+      "sep 25",
+      "dic 25",
+      "mar 26",
+      "jun 26",
+      "sep 26",
+      "dic 26",
+      "mar 27",
     ]);
-    expect(wrapper.findAll("circle")).toHaveLength(24);
-    expect(wrapper.find("circle title").text()).toContain("2025-01");
+    expect(segments(wrapper.get("path.series-line"))).toBe(23);
+    expect(wrapper.get("path.series-line").attributes("d")).toMatch(/^M44,/);
+    expect(wrapper.findAll("circle")).toHaveLength(1);
+    expect(wrapper.get("circle title").text()).toContain("2026-12");
+  });
+
+  it("draws a soft grid at every quarter of the score range", () => {
+    const wrapper = mount(Sparkline, {
+      props: { companies: [company("COMP_A", "GROUP_1")] },
+    });
+    expect(
+      wrapper.findAll("line.grid").map((line) => Number(line.attributes("y1"))),
+    ).toEqual([288, 222, 156, 90, 24]);
+    expect(
+      wrapper
+        .findAll("text.axis")
+        .slice(0, 5)
+        .map((t) => t.text()),
+    ).toEqual(["0", "25", "50", "75", "100"]);
+  });
+
+  it("fills a gradient area under each observed series down to the baseline", () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          withScores("COMP_A", [30, 60, 45], null),
+          withScores("COMP_B", [80, 70, 75], null),
+        ],
+      },
+    });
+    const areas = wrapper.findAll("path.series-area");
+    expect(areas).toHaveLength(2);
+    const lines = wrapper.findAll("path.series-line");
+    areas.forEach((area, index) => {
+      const line = lines[index]?.attributes("d") ?? "";
+      expect(area.attributes("d")).toBe(`${line} L400.8,288 L44,288 Z`);
+      const fill = area.attributes("fill") ?? "";
+      const id = fill.slice("url(#".length, -1);
+      const stops = wrapper.findAll(`linearGradient[id="${id}"] stop`);
+      expect(stops.map((stop) => stop.attributes("stop-opacity"))).toEqual([
+        "0.35",
+        "0",
+      ]);
+      expect(stops[0]?.attributes("stop-color")).toBe(
+        lines[index]?.attributes("stroke"),
+      );
+    });
+  });
+
+  it("joins observed points with monotone cubic segments that respect the data", () => {
+    const wrapper = mount(Sparkline, {
+      props: { companies: [withScores("COMP_A", [20, 60, 60, 90], null)] },
+    });
+    const line = wrapper.get("path.series-line");
+    expect(segments(line)).toBe(3);
+    const commands = (line.attributes("d") ?? "").split(" ");
+    expect(commands[0]).toBe(`M44,${24 + 0.8 * 264}`);
+    const plateau = commands.slice(4, 7).map((c) => c.replace("C", ""));
+    const ys = plateau.map((c) => Number(c.split(",")[1]));
+    expect(ys).toEqual([24 + 0.4 * 264, 24 + 0.4 * 264, 24 + 0.4 * 264]);
+  });
+
+  it("marks only the last observed point and the E1 months with a circle", () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          {
+            ...company("COMP_A", "GROUP_1"),
+            series: [
+              month("2026-09", 70, "healthy"),
+              month("2026-10", 40, "falling"),
+              month("2026-11", 50, "stable"),
+              month("2026-12", 60, "stable"),
+            ],
+          },
+        ],
+      },
+    });
+    const titles = wrapper.findAll("circle title").map((title) => title.text());
+    expect(titles).toEqual([
+      expect.stringContaining("2026-10"),
+      expect.stringContaining("2026-12"),
+    ]);
+    expect(wrapper.findAll("circle")[0]?.attributes("fill")).toBe(
+      "var(--falling)",
+    );
   });
 
   it.each([
@@ -80,7 +200,7 @@ describe("Sparkline", () => {
     { score: 50, momentum: 0, values: [50, 50, 50, 50] },
   ])(
     "projects three months from score $score with momentum $momentum",
-    ({ score, momentum, values }) => {
+    ({ score: last, momentum, values }) => {
       const wrapper = mount(Sparkline, {
         props: {
           companies: [
@@ -88,30 +208,26 @@ describe("Sparkline", () => {
               ...company("COMP_A", "GROUP_1"),
               series: [
                 month("2026-11", 50, "stable"),
-                { ...month("2026-12", score, "stable"), momentum },
+                { ...month("2026-12", last, "stable"), momentum },
               ],
             },
           ],
         },
       });
       const projection = wrapper.get("polyline.projection-line");
-      const coordinates = (projection.attributes("points") ?? "")
-        .split(" ")
-        .map((point) => point.split(",").map(Number));
-      expect(coordinates).toHaveLength(4);
-      expect(coordinates.map(([x]) => x)).toEqual([144, 260, 376, 492]);
-      coordinates.forEach(([, y], index) => {
-        expect(100 * (1 - (Number(y) - 14) / 112)).toBeCloseTo(
-          values[index] ?? 0,
-        );
+      const points = coordinates(projection);
+      expect(points).toHaveLength(4);
+      expect(points.map(([x]) => x)).toEqual([267, 490, 713, 936]);
+      points.forEach(([, y], index) => {
+        expect(score(Number(y))).toBeCloseTo(values[index] ?? 0);
       });
-      expect(projection.attributes("stroke-dasharray")).toBe("5 4");
+      expect(projection.attributes("stroke-dasharray")).toBe("6 5");
       expect(Number(projection.attributes("opacity"))).toBeGreaterThan(0);
       expect(Number(projection.attributes("opacity"))).toBeLessThan(1);
       expect(projection.attributes("stroke")).toBe(
         wrapper.get(".series-line").attributes("stroke"),
       );
-      expect(wrapper.findAll("circle")).toHaveLength(2);
+      expect(wrapper.findAll("circle")).toHaveLength(1);
     },
   );
 
@@ -147,29 +263,174 @@ describe("Sparkline", () => {
     expect(projection.attributes("stroke")).toBe(
       wrapper.findAll(".series-line")[1]?.attributes("stroke"),
     );
-    const coordinates = (projection.attributes("points") ?? "")
-      .split(" ")
-      .map((point) => point.split(",").map(Number));
-    expect(coordinates[0]?.[0]).toBe(
+    const points = coordinates(projection);
+    expect(points[0]?.[0]).toBe(
       pointX(wrapper.findAll("circle"), "COMP_B", "2026-11"),
     );
-    expect(coordinates[1]?.[0]).toBeCloseTo(306.4);
-    expect(coordinates[3]?.[0]).toBe(492);
-    expect(coordinates[3]?.[1]).toBeCloseTo(92.4);
-    expect(wrapper.findAll("circle")).toHaveLength(4);
+    expect(points[1]?.[0]).toBeCloseTo(579.2);
+    expect(points[3]?.[0]).toBe(936);
+    expect(points[3]?.[1]).toBeCloseTo(208.8);
+    expect(wrapper.findAll("circle")).toHaveLength(2);
   });
 
-  it("names the trend projection in the legend and accessible chart label", () => {
+  it("shades a trend band around the projection that widens with the square root of the horizon", () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          withScores("COMP_A", [10, 20, 40, 70], 0),
+          withScores("COMP_B", [10, 20, 40, 70], null),
+        ],
+      },
+    });
+    const bands = wrapper.findAll("polygon.projection-band");
+    expect(bands).toHaveLength(1);
+    const band = bands[0];
+    expect(band?.attributes("fill")).toBe(
+      wrapper.get(".series-line").attributes("stroke"),
+    );
+    expect(band?.attributes("fill-opacity")).toBe("0.12");
+    const points = band ? coordinates(band) : [];
+    expect(points).toHaveLength(7);
+    expect(points[0]).toEqual([
+      Number(wrapper.get("circle").attributes("cx")),
+      Number(wrapper.get("circle").attributes("cy")),
+    ]);
+    const upper = points.slice(1, 4);
+    const lower = points.slice(4).reverse();
+    [1, 2, 3].forEach((step) => {
+      const top = upper[step - 1] ?? [];
+      const bottom = lower[step - 1] ?? [];
+      expect(top[0]).toBe(bottom[0]);
+      expect(top[0]).toBeCloseTo(44 + ((3 + step) / 6) * 892);
+      expect(score(Number(top[1])) - score(Number(bottom[1]))).toBeCloseTo(
+        20 * Math.sqrt(step),
+      );
+      expect(score(Number(top[1])) + score(Number(bottom[1]))).toBeCloseTo(140);
+    });
+  });
+
+  it("collapses the band to the projection when fewer than three changes are observed", () => {
+    const wrapper = mount(Sparkline, {
+      props: { companies: [withScores("COMP_A", [40, 60, 50], 12)] },
+    });
+    const points = coordinates(wrapper.get("polygon.projection-band"));
+    const projection = coordinates(wrapper.get("polyline.projection-line"));
+    expect(points.slice(1, 4)).toEqual(projection.slice(1));
+    expect(points.slice(4).reverse()).toEqual(projection.slice(1));
+  });
+
+  it("clips the band to the score range", () => {
+    const wrapper = mount(Sparkline, {
+      props: { companies: [withScores("COMP_A", [35, 45, 65, 95], 0)] },
+    });
+    const points = coordinates(wrapper.get("polygon.projection-band"));
+    expect(points.slice(1, 4).map(([, y]) => score(Number(y)))).toEqual([
+      100, 100, 100,
+    ]);
+    expect(score(Number(points[6]?.[1]))).toBeCloseTo(85);
+  });
+
+  it("cuts the observed window to six months when 6M is pressed while the projection stays", async () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          {
+            ...company("COMP_A", "GROUP_1"),
+            series: twoYears().map((name, index) => ({
+              ...month(name, 40 + (index % 5), "stable"),
+              momentum: index === 24 ? 9 : null,
+            })),
+          },
+        ],
+      },
+    });
+    const buttons = wrapper.findAll(".range button");
+    expect(buttons.map((button) => button.text())).toEqual([
+      "6M",
+      "12M",
+      "24M",
+    ]);
+    expect(buttons.map((button) => button.attributes("aria-pressed"))).toEqual([
+      "false",
+      "false",
+      "true",
+    ]);
+    expect(segments(wrapper.get("path.series-line"))).toBe(23);
+    await buttons[0]?.trigger("click");
+    expect(buttons.map((button) => button.attributes("aria-pressed"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(segments(wrapper.get("path.series-line"))).toBe(5);
+    expect(wrapper.get("path.series-line").attributes("d")).toMatch(/^M44,/);
+    expect(Number(wrapper.get("line.today-marker").attributes("x1"))).toBe(
+      601.5,
+    );
+    expect(wrapper.findAll("text.month").map((item) => item.text())).toEqual([
+      "sep 26",
+      "dic 26",
+      "mar 27",
+    ]);
+    expect(coordinates(wrapper.get("polyline.projection-line"))).toHaveLength(
+      4,
+    );
+    expect(wrapper.get("svg").attributes("aria-label")).toBe(
+      "Evolución del score en 6 meses y proyección por tendencia a 3 meses",
+    );
+  });
+
+  it("shows the hovered month with each score, the projected value on future months, and hides on leave", async () => {
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          {
+            ...company("COMP_A", "GROUP_1"),
+            series: [
+              month("2026-11", 30, "stable"),
+              { ...month("2026-12", 40, "stable"), momentum: 15 },
+            ],
+          },
+          withMonths("COMP_B", ["2026-12"]),
+        ],
+      },
+    });
+    expect(wrapper.find(".tooltip").exists()).toBe(false);
+    expect(wrapper.findAll("rect.hit")).toHaveLength(5);
+    await hover(wrapper, 0);
+    let tooltip = wrapper.get(".tooltip");
+    expect(tooltip.get("strong").text()).toBe("noviembre de 2026");
+    expect(tooltip.findAll("span").map((row) => row.text())).toEqual([
+      "COMP_A 30",
+      "COMP_B –",
+    ]);
+    expect(Number(wrapper.get("line.hover-line").attributes("x1"))).toBe(44);
+    await hover(wrapper, 2);
+    tooltip = wrapper.get(".tooltip");
+    expect(tooltip.get("strong").text()).toBe("enero de 2027");
+    expect(tooltip.findAll("span").map((row) => row.text())).toEqual([
+      "COMP_A proyección 45",
+    ]);
+    expect(Number(wrapper.get("line.hover-line").attributes("x1"))).toBe(490);
+    await wrapper.get("svg").trigger("pointerleave");
+    expect(wrapper.find(".tooltip").exists()).toBe(false);
+    expect(wrapper.find("line.hover-line").exists()).toBe(false);
+  });
+
+  it("names the trend projection and band in the legend and accessible chart label", () => {
     const wrapper = mount(Sparkline, {
       props: { companies: [company("COMP_A", "GROUP_1")] },
     });
     expect(wrapper.get("svg").attributes("aria-label")).toBe(
       "Evolución del score en 24 meses y proyección por tendencia a 3 meses",
     );
+    expect(wrapper.get(".chart-head h2").text()).toBe("Evolución del score");
     expect(wrapper.get(".legend").text()).toContain(
       "proyección por tendencia (3 meses)",
     );
+    expect(wrapper.get(".legend").text()).toContain("rango por tendencia");
     expect(wrapper.find(".legend .projection-sample").exists()).toBe(true);
+    expect(wrapper.find(".legend .band-sample").exists()).toBe(true);
   });
 
   it("draws a month that only the second company holds", () => {
@@ -185,7 +446,9 @@ describe("Sparkline", () => {
     expect(titles.filter((text) => text.includes("2026-08"))).toEqual([
       expect.stringContaining("COMP_B · 2026-08"),
     ]);
-    expect(wrapper.findAll("circle")).toHaveLength(5);
+    const lines = wrapper.findAll("path.series-line");
+    expect(lines[0]?.attributes("d")).toMatch(/ L222.4,\d+(\.\d+)?$/);
+    expect(lines[1]?.attributes("d")).toMatch(/ 400.8,\d+(\.\d+)?$/);
   });
 
   it("orders the axis by month whatever order the companies report", () => {
@@ -198,12 +461,13 @@ describe("Sparkline", () => {
       },
     });
     expect(wrapper.findAll("text.month").map((label) => label.text())).toEqual([
-      "2026-05",
-      "2026-11",
+      "may 26",
+      "ago 26",
+      "nov 26",
     ]);
     const circles = wrapper.findAll("circle");
     expect(pointX(circles, "COMP_B", "2026-06")).toBeLessThan(
-      pointX(circles, "COMP_A", "2026-07"),
+      pointX(circles, "COMP_A", "2026-08"),
     );
   });
 
@@ -220,6 +484,7 @@ describe("Sparkline", () => {
       "Talleres Ribera",
       "COMP_A",
       "proyección por tendencia (3 meses)",
+      "rango por tendencia",
     ]);
   });
 });
