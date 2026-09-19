@@ -15,9 +15,14 @@ export default defineConfig(async () => {
         wrangler: { configPath: "./wrangler.jsonc" },
         // The AI binding would otherwise open a remote session; the chat tests inject a mock model.
         remoteBindings: false,
-        // .dev.vars would otherwise override the vars a developer runs the tests with
+        // .dev.vars would otherwise override the vars a developer runs the tests with,
+        // and a TYPESAFE_API_KEY there would send the default judge to the network.
         miniflare: {
-          bindings: { ENVIRONMENT: "production", TEST_MIGRATIONS: migrations },
+          bindings: {
+            ENVIRONMENT: "production",
+            TYPESAFE_API_KEY: "",
+            TEST_MIGRATIONS: migrations,
+          },
         },
       }),
     ],

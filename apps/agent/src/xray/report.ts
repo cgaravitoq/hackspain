@@ -9,6 +9,7 @@ import {
 import { generateText, type LanguageModel, Output } from "ai";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { type Judge, RED_LINES, type RedLine } from "./report-judge.ts";
 import { ROLE_SECTIONS, reportInstructions } from "./report-policy.ts";
 import { createStore } from "./store.ts";
 import { createTools } from "./tools.ts";
@@ -207,13 +208,23 @@ function sectionFigures(sources: ReportSources) {
   };
 }
 
+const FORMAT_RETRY =
+  "La respuesta anterior no cumplió el formato. Respeta las secciones y no escribas cifras en la narrativa.";
+
+function redLinesRetry(failed: RedLine[]): string {
+  const lines = failed.map((line) => RED_LINES[line].retry).join("; ");
+  return `La respuesta anterior incumplió las líneas rojas del informe: ${lines}. Reescribe la narrativa sin esas afirmaciones y con el mismo formato.`;
+}
+
 async function narrate(
   model: LanguageModel,
+  judge: Judge,
   role: Role,
   sources: ReportSources,
 ): Promise<Report> {
   const sections = ROLE_SECTIONS[role];
   const figures = sectionFigures(sources);
+  let retry: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { output } = await generateText({
@@ -230,9 +241,7 @@ async function narrate(
             figures: figures[section.source],
           })),
           sources,
-          retry: attempt
-            ? "La respuesta anterior no cumplió el formato. Respeta las secciones y no escribas cifras en la narrativa."
-            : undefined,
+          retry,
         }),
       });
       if (
@@ -241,6 +250,12 @@ async function narrate(
           (section, index) => section.code !== sections[index]?.code,
         )
       ) {
+        retry = FORMAT_RETRY;
+        continue;
+      }
+      const verdict = await judge(output);
+      if (verdict.verdict === "rejected") {
+        retry = redLinesRetry(verdict.failed);
         continue;
       }
       return reportSchema.parse({
@@ -257,11 +272,7 @@ async function narrate(
         export_url: `/api/companies/${encodeURIComponent(sources.explanation.company_id)}/report.pdf?role=${role}`,
       });
     } catch {
-      if (attempt === 1) {
-        throw new HTTPException(502, {
-          message: "Report generation failed validation",
-        });
-      }
+      retry = FORMAT_RETRY;
     }
   }
   throw new HTTPException(502, {
@@ -272,6 +283,7 @@ async function narrate(
 export async function loadReport(
   db: D1Database,
   model: () => LanguageModel,
+  judge: Judge,
   companyId: string,
   role: Role,
 ): Promise<Report> {
@@ -286,7 +298,7 @@ export async function loadReport(
   if (cached) {
     return reportSchema.parse(JSON.parse(cached.body));
   }
-  const report = await narrate(model(), role, sources);
+  const report = await narrate(model(), judge, role, sources);
   await db
     .prepare(
       "INSERT INTO reports (company_id, month, role, rule_version, body, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
