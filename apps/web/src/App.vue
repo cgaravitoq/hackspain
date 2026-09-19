@@ -75,16 +75,13 @@ function openGraph() {
 
 function openRadiography() {
   onGraph.value = false;
-  const companyId =
+  select(
     selected.value ||
-    alerts.value[0]?.company_id ||
-    companies.value[0]?.company_id ||
-    "";
-  if (companyId) {
-    select(companyId);
-    return;
-  }
-  window.location.hash = "";
+      alerts.value[0]?.company_id ||
+      companies.value[0]?.company_id ||
+      "",
+  );
+  window.location.hash = selected.value;
 }
 
 function addComparison(companyId: string) {
