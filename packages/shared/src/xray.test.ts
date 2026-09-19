@@ -8,6 +8,7 @@ import {
   DEMO_COMPANY_NAMES,
   driverSchema,
   explainSchema,
+  graphMetaSchema,
   graphSchema,
   metaSchema,
   monthEntrySchema,
@@ -15,6 +16,7 @@ import {
   relationArtifactNodeSchema,
   relationEdgeSchema,
   relationNodeSchema,
+  relationScopeSchema,
   relationsArtifactSchema,
   relationTypeSchema,
   reportFigureSchema,
@@ -684,6 +686,11 @@ describe("relation contracts", () => {
     ]);
   });
 
+  it("admits exactly the two relation scopes, in order", () => {
+    expect(relationScopeSchema.options).toEqual(["intragroup", "intergroup"]);
+    expect(relationScopeSchema.safeParse("both").success).toBe(false);
+  });
+
   it("accepts an edge with every field of the relation contract", () => {
     expect(relationEdgeSchema.parse(relationEdge)).toEqual(relationEdge);
   });
@@ -816,6 +823,39 @@ describe("relation contracts", () => {
       edges: [relationEdge],
     });
     expect(graph.nodes[0]?.state).toBe("stable");
+  });
+
+  it("serves a count for every relation type, zero when the artifact omits it", () => {
+    expect(Object.keys(graphMetaSchema.shape.counts.shape)).toEqual(
+      relationTypeSchema.options,
+    );
+    const meta = graphMetaSchema.parse({
+      ...relationsArtifact.meta,
+      counts: {},
+    });
+    expect(meta.counts).toEqual({
+      INFERRED_PAYMENT_TO: 0,
+      OPEN_OBLIGATION_TO: 0,
+      SHARES_COUNTERPARTY_WITH: 0,
+    });
+    expect(
+      relationsArtifactSchema.parse(relationsArtifact).meta.counts,
+    ).toEqual({
+      INFERRED_PAYMENT_TO: 1731,
+      OPEN_OBLIGATION_TO: 6,
+      SHARES_COUNTERPARTY_WITH: 0,
+    });
+  });
+
+  it("rejects a graph whose meta count is negative", () => {
+    const result = graphMetaSchema.safeParse({
+      ...relationsArtifact.meta,
+      counts: { INFERRED_PAYMENT_TO: -1 },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["counts", "INFERRED_PAYMENT_TO"],
+    ]);
   });
 
   it("rejects a graph whose meta counts use a key that is not a relation type", () => {
