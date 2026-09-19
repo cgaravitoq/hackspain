@@ -19,7 +19,8 @@ class Dataset:
 
 
 def _to_date(column: str) -> pl.Expr:
-    return pl.col(column).str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False)
+    # Unparsable values used to become null and vanish in `date < CUTOFF`.
+    return pl.col(column).str.slice(0, 10).str.to_date("%Y-%m-%d")
 
 
 def read(data_dir: Path) -> Dataset:
