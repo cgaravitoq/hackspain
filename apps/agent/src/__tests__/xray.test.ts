@@ -10,7 +10,7 @@ import {
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { seed } from "./fixtures.ts";
+import { meta, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 
@@ -93,11 +93,9 @@ describe("GET /meta", () => {
   it("returns the dataset labels and latest month stored in D1", async () => {
     const response = await SELF.fetch("https://agent.test/meta");
     expect(response.status).toBe(200);
-    expect(metaSchema.parse(await response.json())).toEqual({
-      state_labels: STATE_LABELS,
-      latest_month: "2026-08",
-      holdout_groups: [],
-    });
+    const body = metaSchema.parse(await response.json());
+    expect(body).toEqual(meta);
+    expect(body.state_labels.falling).not.toBe(STATE_LABELS.falling);
   });
 });
 

@@ -2,6 +2,7 @@ import {
   type Alert,
   type CompanyDetail,
   type Group,
+  type Meta,
   type MonthEntry,
   STATE_LABELS,
   type State,
@@ -162,6 +163,12 @@ export const alerts: Alert[] = [
   },
 ];
 
+export const meta: Meta = {
+  state_labels: { ...STATE_LABELS, falling: "en caída" },
+  latest_month: "2026-08",
+  holdout_groups: [],
+};
+
 export async function seed(db: D1Database): Promise<void> {
   const statements = [falling, healthy, slipping].map((detail) => {
     const { series: _series, ...summary } = detail;
@@ -199,14 +206,9 @@ export async function seed(db: D1Database): Promise<void> {
           JSON.stringify(alert),
         ),
     ),
-    db.prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)").bind(
-      "meta",
-      JSON.stringify({
-        state_labels: STATE_LABELS,
-        latest_month: "2026-08",
-        holdout_groups: [],
-      }),
-    ),
+    db
+      .prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)")
+      .bind("meta", JSON.stringify(meta)),
   );
   await db.batch(statements);
 }
