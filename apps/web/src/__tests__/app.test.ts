@@ -90,6 +90,22 @@ describe("App", () => {
     expect(window.location.hash).toBe("#COMP_B");
   });
 
+  it("keeps the company on screen when the search is submitted empty", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    await wrapper.find("#company-search").setValue("  ");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(seen).not.toContain("/api/companies/COMP_B");
+    expect(window.location.hash).toBe("#COMP_A");
+  });
+
   it("shows the failing endpoint when the bootstrap requests fail", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(new Response("down", { status: 500 })),

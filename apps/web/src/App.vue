@@ -52,6 +52,9 @@ function syncHash() {
 
 function search() {
   const text = query.value.trim().toUpperCase();
+  if (!text) {
+    return;
+  }
   const hit =
     companies.value.find((item) => item.company_id === text) ??
     companies.value.find((item) => item.company_id.startsWith(text));
