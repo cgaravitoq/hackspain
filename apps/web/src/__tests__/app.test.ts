@@ -45,6 +45,24 @@ describe("App", () => {
     expect(wrapper.find(".chat-stub").text()).toBe("COMP_A");
   });
 
+  it("pins the treasurer to its company without search or alerts", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const tab = wrapper
+      .findAll(".role-tabs button")
+      .find((button) => button.text() === "Tesorero");
+    await tab?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find(".search").exists()).toBe(false);
+    expect(wrapper.find(".alerts").exists()).toBe(false);
+  });
+
   it("opens the company named in the URL hash", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import type {
-  Alert,
-  CompanyDetail,
-  CompanySummary,
-  Explain,
-  GroupMap,
-  Meta,
+import {
+  type Alert,
+  type CompanyDetail,
+  type CompanySummary,
+  type Explain,
+  type GroupMap,
+  type Meta,
+  ROLE_LABELS,
+  type Role,
 } from "@hackspain/shared";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
@@ -15,6 +17,12 @@ import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
 import { monthLabel } from "./format.ts";
 
+const roles = [
+  { value: "tesorero", label: ROLE_LABELS.tesorero },
+  { value: "financiero", label: ROLE_LABELS.financiero },
+  { value: "ventas", label: ROLE_LABELS.ventas },
+] satisfies { value: Role; label: string }[];
+const role = ref<Role>("financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
@@ -44,8 +52,16 @@ function select(companyId: string) {
   selected.value = companyId;
 }
 
+function selectRole(nextRole: Role) {
+  role.value = nextRole;
+  if (nextRole === "tesorero") {
+    select("COMP_0176");
+  }
+}
+
 function syncHash() {
-  selected.value = window.location.hash.slice(1);
+  selected.value =
+    role.value === "tesorero" ? "COMP_0176" : window.location.hash.slice(1);
 }
 
 function search() {
@@ -99,8 +115,20 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       X Ray
       <small>salud financiera de cada empresa, cada mes</small>
     </div>
+    <nav class="role-tabs" aria-label="Perfil">
+      <button
+        v-for="item in roles"
+        :key="item.value"
+        type="button"
+        :class="{ active: role === item.value }"
+        :aria-pressed="role === item.value"
+        @click="selectRole(item.value)"
+      >
+        {{ item.label }}
+      </button>
+    </nav>
     <span v-if="meta" class="month">datos hasta {{ monthLabel(meta.latest_month) }}</span>
-    <form class="search" @submit.prevent="search">
+    <form v-if="role !== 'tesorero'" class="search" @submit.prevent="search">
       <input
         id="company-search"
         v-model="query"
@@ -113,8 +141,13 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       <button type="submit">Abrir</button>
     </form>
   </header>
-  <main class="layout">
-    <AlertList :alerts="alerts" :selected="selected" @select="select" />
+  <main class="layout" :class="{ 'without-alerts': role === 'tesorero' }">
+    <AlertList
+      v-if="role !== 'tesorero'"
+      :alerts="alerts"
+      :selected="selected"
+      @select="select"
+    />
     <div class="center">
       <p v-if="error" class="error panel">{{ error }}</p>
       <template v-if="company && explanation">
@@ -128,6 +161,33 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 </template>
 
 <style scoped>
+.role-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--chip-bg);
+}
+
+.role-tabs button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.role-tabs button.active {
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.without-alerts {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
 .month {
   font-size: 13px;
   color: var(--ink-soft);
