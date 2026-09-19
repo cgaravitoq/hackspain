@@ -4,7 +4,6 @@ import {
   Bell,
   ChartNoAxesCombined,
   FlaskConical,
-  MessageSquareText,
   Network,
   ScanSearch,
   Settings,
@@ -12,7 +11,6 @@ import {
   UserRound,
   WalletCards,
 } from "@lucide/vue";
-import { onMounted, ref } from "vue";
 import { Button } from "./ui/button";
 import {
   Sidebar,
@@ -28,39 +26,17 @@ import {
   SidebarRail,
 } from "./ui/sidebar";
 
-const SEEN_KEY = "xray.chat.seen";
-
 type View = "radiography" | "graph";
 
 defineProps<{ view: View; role: Role }>();
 
 const emit = defineEmits<{
-  chat: [];
   role: [role: Role];
   view: [view: View];
 }>();
 
 // SAFETY: ROLE_LABELS is declared as Record<Role, string> at the shared boundary.
 const roles = Object.entries(ROLE_LABELS) as [Role, string][];
-const seen = ref(false);
-
-function openChat() {
-  seen.value = true;
-  try {
-    window.localStorage.setItem(SEEN_KEY, "true");
-  } catch {
-    seen.value = true;
-  }
-  emit("chat");
-}
-
-onMounted(() => {
-  try {
-    seen.value = window.localStorage.getItem(SEEN_KEY) === "true";
-  } catch {
-    seen.value = false;
-  }
-});
 </script>
 
 <template>
@@ -79,23 +55,9 @@ onMounted(() => {
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
-      <div class="flex gap-2 group-data-[collapsible=icon]:flex-col">
-        <SidebarMenuButton
-          class="relative bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-          tooltip="Preguntar al agente"
-          aria-label="Abrir el asistente"
-          @click="openChat"
-        >
-          <MessageSquareText />
-          <span>Preguntar al agente</span>
-          <span
-            v-if="!seen"
-            class="absolute top-0 right-0 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] text-white"
-            aria-label="1 aviso"
-          >1</span>
-        </SidebarMenuButton>
+      <div class="flex justify-end">
         <Button
-          class="shrink-0 group-data-[collapsible=icon]:size-8"
+          class="shrink-0"
           variant="outline"
           size="icon"
           type="button"

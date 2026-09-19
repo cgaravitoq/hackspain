@@ -12,7 +12,7 @@ import type {
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AppSidebar from "./components/AppSidebar.vue";
-import ChatSheet from "./components/ChatSheet.vue";
+import ChatBubble from "./components/ChatBubble.vue";
 import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
@@ -33,7 +33,6 @@ const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
 const onGraph = ref(window.location.hash === `#${GRAPH_ROUTE}`);
-const chatOpen = ref(false);
 const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
 const compareIds = ref<string[]>([]);
 const comparison = ref<CompanyDetail[]>([]);
@@ -191,7 +190,6 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
     <AppSidebar
       :view="onGraph ? 'graph' : 'radiography'"
       :role="role"
-      @chat="chatOpen = true"
       @role="selectRole"
       @view="selectView"
     />
@@ -232,9 +230,8 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         </div>
       </div>
     </SidebarInset>
-    <ChatSheet
+    <ChatBubble
       v-if="selected"
-      v-model:open="chatOpen"
       :company-id="selected"
       :alerts="alerts"
       :role="role"
