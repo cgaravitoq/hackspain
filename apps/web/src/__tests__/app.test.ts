@@ -685,4 +685,16 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_C");
     expect(window.location.hash).toBe("#COMP_C");
   });
+
+  it("shows commitment simulation only to treasury and finance roles", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".commitment").exists()).toBe(true);
+    await selectRole(wrapper, "Tesorero");
+    expect(wrapper.find(".commitment").exists()).toBe(true);
+    await selectRole(wrapper, "Ventas");
+    expect(wrapper.find(".commitment").exists()).toBe(false);
+  });
 });
