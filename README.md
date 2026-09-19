@@ -34,7 +34,7 @@ From `pipeline/`, `uv run xray score --data <dir> --out artifacts` reads six Emb
 `uv run pytest` runs the pipeline tests; `pipeline/data` and `pipeline/artifacts` are gitignored.
 
 The agent serves the artifacts from the D1 binding `DB` (migrations in `apps/agent/migrations/`, one row per company with the summary and the whole series as JSON).
-`bun --filter @hackspain/agent load -- --local` validates the artifacts with the shared schemas, writes `artifacts/xray.sql`, applies the migrations and loads the local database; `-- --env staging` targets staging.
+`bun --filter @hackspain/agent load -- --local` validates the artifacts with the shared schemas, writes `artifacts/xray.sql`, applies the migrations and loads the local database; `-- --artifacts <dir>` reads and writes another folder (default `../../pipeline/artifacts`, relative to `apps/agent`) and `-- --env staging` targets staging.
 
 ## API
 
