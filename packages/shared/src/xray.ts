@@ -376,10 +376,16 @@ export const relationNodeSchema = relationArtifactNodeSchema.extend({
 
 export type RelationNode = z.infer<typeof relationNodeSchema>;
 
+const relationCountSchema = z.number().int().nonnegative().default(0);
+
 export const graphMetaSchema = z.object({
   rule_version: z.string(),
   generated_at: z.iso.datetime({ offset: true }),
-  counts: z.partialRecord(relationTypeSchema, z.number().int().nonnegative()),
+  counts: z.strictObject({
+    INFERRED_PAYMENT_TO: relationCountSchema,
+    OPEN_OBLIGATION_TO: relationCountSchema,
+    SHARES_COUNTERPARTY_WITH: relationCountSchema,
+  }),
 });
 
 export type GraphMeta = z.infer<typeof graphMetaSchema>;
