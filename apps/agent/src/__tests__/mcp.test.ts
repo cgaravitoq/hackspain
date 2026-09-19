@@ -83,6 +83,7 @@ describe("POST /mcp", () => {
       "group_map",
       "compare",
       "alerts",
+      "simulate",
       "report",
       "relations",
     ]);
