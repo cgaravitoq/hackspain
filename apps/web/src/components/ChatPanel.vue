@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { Chat } from "@ai-sdk/vue";
-import type { Alert } from "@hackspain/shared";
+import type { Alert, Role } from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
 import { computed, nextTick, ref, watch } from "vue";
 import { z } from "zod";
 import { ALERTS_LIMIT } from "../api.ts";
 
-const props = defineProps<{ companyId: string; alerts: Alert[] }>();
+const props = defineProps<{ companyId: string; alerts: Alert[]; role: Role }>();
 
 const chat = new Chat({
   transport: new DefaultChatTransport({
     api: "/api/chat",
-    body: () => ({ company_id: props.companyId }),
+    body: () => ({ company_id: props.companyId, role: props.role }),
   }),
 });
 

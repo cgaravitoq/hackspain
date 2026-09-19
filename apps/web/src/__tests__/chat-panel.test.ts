@@ -22,7 +22,7 @@ describe("ChatPanel", () => {
       alert(`COMP_${index}`),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts: capped },
+      props: { companyId: "COMP_A", alerts: capped, role: "ventas" },
     });
     expect(wrapper.text()).toContain(`${ALERTS_LIMIT}+ alertas`);
   });
@@ -57,7 +57,7 @@ describe("ChatPanel", () => {
       );
     });
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts },
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
     });
     expect(wrapper.text()).toContain(
       "2 alertas, 1 empresas empeoran y 1 se recuperan",
@@ -71,6 +71,7 @@ describe("ChatPanel", () => {
     expect(requests[0]?.url).toBe("/api/chat");
     const body = JSON.parse(requests[0]?.body ?? "{}");
     expect(body.company_id).toBe("COMP_A");
+    expect(body.role).toBe("ventas");
     expect(body.messages[0].parts[0].text).toBe("¿Cómo está COMP_B?");
     expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
@@ -103,7 +104,7 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts },
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
     });
     await wrapper.find("input").setValue("¿Cómo está el grupo?");
     await wrapper.find("form").trigger("submit");
@@ -131,7 +132,7 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts },
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
     });
     const list = wrapper.find(".messages").element;
     let height = 0;

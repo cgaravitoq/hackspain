@@ -4,8 +4,8 @@ import App from "../App.vue";
 import { fakeApi } from "./fixtures.ts";
 
 const ChatPanelStub = {
-  props: ["companyId", "alerts"],
-  template: "<div class='chat-stub'>{{ companyId }}</div>",
+  props: ["companyId", "alerts", "role"],
+  template: "<div class='chat-stub'>{{ companyId }} {{ role }}</div>",
 };
 
 function mountApp() {
@@ -42,7 +42,7 @@ describe("App", () => {
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
     expect(wrapper.findAll("svg circle")).toHaveLength(3);
-    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A");
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A financiero");
   });
 
   it("pins the treasurer to its company without search or alerts", async () => {
@@ -160,6 +160,7 @@ describe("App", () => {
     expect(wrapper.find(".report-export").attributes("href")).toBe(
       "/api/companies/COMP_A/report.pdf?role=ventas",
     );
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A ventas");
   });
 
   it("keeps the radiography visible when its report fails", async () => {

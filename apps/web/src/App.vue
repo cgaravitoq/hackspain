@@ -214,7 +214,13 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       </template>
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
     </div>
-    <ChatPanel v-if="selected" :key="selected" :company-id="selected" :alerts="alerts" />
+    <ChatPanel
+      v-if="selected"
+      :key="selected"
+      :company-id="selected"
+      :alerts="alerts"
+      :role="role"
+    />
   </main>
 </template>
 
