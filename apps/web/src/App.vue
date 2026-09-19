@@ -27,7 +27,7 @@ type View = "radiography" | "graph";
 
 const props = defineProps<{ initialRole?: Role }>();
 
-const TREASURER_COMPANY = "COMP_0176";
+const DEFAULT_COMPANY = "COMP_0077";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
 const CHAT_SEEN_KEY = "xray.chat.seen";
@@ -40,8 +40,8 @@ const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
 const compareIds = ref<string[]>([]);
 if (role.value === "tesorero") {
   onGraph.value = false;
-  selected.value = TREASURER_COMPANY;
-  compareIds.value = [TREASURER_COMPANY];
+  selected.value = DEFAULT_COMPANY;
+  compareIds.value = [DEFAULT_COMPANY];
 }
 const comparison = ref<CompanyDetail[]>([]);
 const company = ref<CompanyDetail | null>(null);
@@ -96,10 +96,19 @@ function select(companyId: string) {
     return;
   }
   if (role.value === "tesorero") {
-    window.location.hash = TREASURER_COMPANY;
+    window.location.hash = DEFAULT_COMPANY;
     return;
   }
   selected.value = companyId;
+}
+
+function defaultCompany() {
+  return (
+    companies.value.find(({ company_id }) => company_id === DEFAULT_COMPANY)
+      ?.company_id ??
+    companies.value[0]?.company_id ??
+    ""
+  );
 }
 
 function openGraph() {
@@ -118,12 +127,7 @@ function analyzeFromGraph(companyId: string) {
 
 function openRadiography() {
   onGraph.value = false;
-  select(
-    selected.value ||
-      alerts.value[0]?.company_id ||
-      companies.value[0]?.company_id ||
-      "",
-  );
+  select(selected.value || defaultCompany());
   window.location.hash = selected.value;
 }
 
@@ -233,8 +237,7 @@ onMounted(async () => {
     return;
   }
   if (!selected.value && !onGraph.value) {
-    selected.value =
-      alerts.value[0]?.company_id ?? companies.value[0]?.company_id ?? "";
+    selected.value = defaultCompany();
   }
   window.addEventListener("hashchange", syncHash);
 });
