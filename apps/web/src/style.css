@@ -99,14 +99,6 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
-.brand {
-  flex: none;
-  white-space: nowrap;
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.02em;
-}
-
 .layout {
   flex: 1;
   min-height: 0;
