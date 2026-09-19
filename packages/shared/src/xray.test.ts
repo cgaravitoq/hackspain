@@ -283,6 +283,16 @@ describe("xray contracts", () => {
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([["role"]]);
   });
 
+  it("accepts a chat request carrying a product role and keeps it", () => {
+    const request = chatRequestSchema.parse({
+      role: "tesorero",
+      messages: [
+        { id: "m1", role: "user", parts: [{ type: "text", text: "Hola" }] },
+      ],
+    });
+    expect(request.role).toBe("tesorero");
+  });
+
   it("accepts each of the three product roles", () => {
     for (const role of ["tesorero", "financiero", "ventas"]) {
       expect(roleSchema.parse(role)).toBe(role);
