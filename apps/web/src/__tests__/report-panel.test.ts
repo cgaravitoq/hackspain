@@ -26,4 +26,20 @@ describe("ReportPanel", () => {
     expect(wrapper.find(".loading").exists()).toBe(false);
     expect(wrapper.find(".report-summary").text()).toBe(report.summary);
   });
+
+  it("tells the reader in Spanish that the report could not be generated", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response("down", { status: 500 })),
+    );
+    const wrapper = mount(ReportPanel, {
+      props: { companyId: "COMP_A", role: "financiero" },
+    });
+    await flushPromises();
+    const failure = wrapper.find(".error");
+    expect(failure.find("p").text()).toBe("No se pudo generar el informe");
+    expect(failure.find("small").text()).toBe(
+      "/companies/COMP_A/report?role=financiero answered 500",
+    );
+    expect(wrapper.find(".report-summary").exists()).toBe(false);
+  });
 });

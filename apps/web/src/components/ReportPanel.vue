@@ -66,7 +66,10 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
       </a>
     </header>
     <p v-if="loading" class="loading">Generando informe…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+    <div v-else-if="error" class="error">
+      <p>No se pudo generar el informe</p>
+      <small>{{ error }}</small>
+    </div>
     <div v-else-if="report" class="report-content">
       <p class="report-summary">{{ report.summary }}</p>
       <article v-for="section in report.sections" :key="section.code" class="report-section">
@@ -166,6 +169,19 @@ th {
 .loading {
   margin: 0;
   padding: 16px 20px;
+  color: var(--ink-soft);
+}
+
+.error {
+  padding: 16px 20px;
+}
+
+.error p {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.error small {
   color: var(--ink-soft);
 }
 </style>

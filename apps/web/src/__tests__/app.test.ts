@@ -347,7 +347,10 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_A");
-    expect(wrapper.find(".report .error").text()).toBe(
+    expect(wrapper.find(".report .error p").text()).toBe(
+      "No se pudo generar el informe",
+    );
+    expect(wrapper.find(".report .error small").text()).toBe(
       "/companies/COMP_A/report?role=financiero answered 500",
     );
   });
