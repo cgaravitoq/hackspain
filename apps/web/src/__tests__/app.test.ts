@@ -24,6 +24,15 @@ async function selectRole(wrapper: VueWrapper, label: string) {
   await flushPromises();
 }
 
+async function openRoute(wrapper: VueWrapper, label: string) {
+  const tab = wrapper
+    .findAll(".route-tabs button")
+    .find((button) => button.text() === label);
+  await tab?.trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
 function chips(wrapper: VueWrapper) {
   return wrapper
     .findAll(".compare-chip")
@@ -415,11 +424,21 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    const graphTab = wrapper
-      .findAll(".route-tabs button")
-      .find((button) => button.text() === "Grafo");
-    await graphTab?.trigger("click");
+    await openRoute(wrapper, "Grafo");
     expect(window.location.hash).toBe("#graph");
+  });
+
+  it("returns from the graph to the company that was on screen", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    window.location.hash = "COMP_B";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    await openRoute(wrapper, "Radiografía");
+    expect(window.location.hash).toBe("#COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
   it("shows the failing endpoint when the bootstrap requests fail", async () => {
