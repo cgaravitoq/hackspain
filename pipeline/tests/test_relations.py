@@ -647,3 +647,25 @@ def test_an_invoice_with_two_same_cents_candidates_pairs_with_neither(tmp_path: 
     )
     edges = edges_of(payload, "invoice_mirror")
     assert [(edge["source"], edge["target"], edge["matches"]) for edge in edges] == [("C8", "C7", 3)]
+
+
+def test_cross_group_flows_need_an_amount_seen_at_most_four_times(tmp_path: Path):
+    def filler(amount: float, copies: int) -> list[dict[str, Any]]:
+        return [transaction(f"TX_FILLER_{amount}_{index}", "C9", "2024-01-01", amount) for index in range(copies)]
+
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G3"), ("C4", "G3"), ("C9", "G9")],
+        transactions=[
+            *bank_pair(1, "C1", "C3", 100.0, "2026-01-10", "2026-01-10"),
+            *bank_pair(2, "C1", "C3", 200.0, "2026-01-20", "2026-01-20"),
+            *filler(100.0, 3),
+            *filler(200.0, 3),
+            *bank_pair(3, "C2", "C4", 300.0, "2026-02-10", "2026-02-10"),
+            *bank_pair(4, "C2", "C4", 400.0, "2026-02-20", "2026-02-20"),
+            *filler(300.0, 2),
+            *filler(400.0, 2),
+        ],
+    )
+    edges = edges_of(payload, "bank_mirror")
+    assert [(edge["source"], edge["target"], edge["scope"]) for edge in edges] == [("C2", "C4", "intergroup")]
