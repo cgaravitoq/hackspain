@@ -1,12 +1,25 @@
 <script setup lang="ts">
 import { Chat } from "@ai-sdk/vue";
-import type { Alert, Role } from "@hackspain/shared";
+import {
+  type Alert,
+  compareSchema,
+  type Report,
+  type Role,
+  reportSchema,
+} from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
 import { computed, nextTick, ref, watch } from "vue";
 import { z } from "zod";
 import { ALERTS_LIMIT } from "../api.ts";
 
 const props = defineProps<{ companyId: string; alerts: Alert[]; role: Role }>();
+
+type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
+
+const emit = defineEmits<{
+  compare: [companyIds: string[]];
+  report: [result: ReportResult];
+}>();
 
 const chat = new Chat({
   transport: new DefaultChatTransport({
@@ -18,16 +31,61 @@ const chat = new Chat({
 const draft = ref("");
 const list = ref<HTMLElement | null>(null);
 
+const reportResultSchema = reportSchema.pick({
+  company_id: true,
+  role: true,
+  export_url: true,
+});
+const handledTools = new Set<string>();
+
+function handleFinishedTools() {
+  for (const message of chat.messages) {
+    for (const part of message.parts) {
+      if (
+        !isToolUIPart(part) ||
+        part.state !== "output-available" ||
+        handledTools.has(part.toolCallId)
+      ) {
+        continue;
+      }
+      if (part.type === "tool-compare") {
+        const comparison = compareSchema.safeParse(part.output);
+        if (comparison.success) {
+          handledTools.add(part.toolCallId);
+          emit(
+            "compare",
+            comparison.data.companies.map((company) => company.company_id),
+          );
+        }
+      } else if (part.type === "tool-report") {
+        const report = reportResultSchema.safeParse(part.output);
+        if (report.success) {
+          handledTools.add(part.toolCallId);
+          emit("report", report.data);
+        }
+      }
+    }
+  }
+}
+
 watch(
   () =>
     chat.messages
       .map((message) =>
         message.parts
-          .map((part) => (part.type === "text" ? part.text : part.type))
+          .map((part) => {
+            if (part.type === "text") {
+              return part.text;
+            }
+            return isToolUIPart(part) && part.state === "output-available"
+              ? `${part.type}:${part.toolCallId}:${JSON.stringify(part.output)}`
+              : part.type;
+          })
           .join(""),
       )
       .join(""),
   async () => {
+    handleFinishedTools();
     await nextTick();
     if (list.value) {
       list.value.scrollTop = list.value.scrollHeight;
@@ -45,11 +103,25 @@ const intro = computed(() => {
   return `${month}: ${total} alertas, ${down} empresas empeoran y ${recovered} se recuperan. Pregunta por ${props.companyId} o por cualquier otra empresa o grupo.`;
 });
 
-const suggestions = [
-  "¿Por qué está así?",
-  "¿Qué cambió este mes?",
-  "¿Cómo está su grupo?",
-];
+const roleSuggestions: Record<Role, string[]> = {
+  tesorero: [
+    "¿Por qué está así?",
+    "¿Qué cambió este mes?",
+    "Exporta mi informe",
+  ],
+  financiero: [
+    "Compara Talleres Ribera y Bodegas Altamira",
+    "¿Qué empresas han empeorado este mes?",
+    "Exporta el informe de Talleres Ribera",
+  ],
+  ventas: [
+    "¿Qué empresas se han recuperado este mes?",
+    "¿Cómo está el grupo de Talleres Ribera?",
+    "Exporta el informe de Talleres Ribera",
+  ],
+};
+
+const suggestions = computed(() => roleSuggestions[props.role]);
 
 const busy = computed(
   () => chat.status === "submitted" || chat.status === "streaming",
@@ -80,6 +152,18 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
     : undefined;
   return target ? `${name} ${target}` : name;
 }
+
+function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
+  if (
+    !isToolUIPart(part) ||
+    part.type !== "tool-report" ||
+    part.state !== "output-available"
+  ) {
+    return null;
+  }
+  const report = reportResultSchema.safeParse(part.output);
+  return report.success ? report.data : null;
+}
 </script>
 
 <template>
@@ -97,6 +181,15 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
       >
         <template v-for="(part, index) in message.parts" :key="index">
           <p v-if="part.type === 'text'">{{ part.text }}</p>
+          <a
+            v-else-if="reportOutput(part)"
+            class="file"
+            :href="reportOutput(part)?.export_url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Informe listo: descargar PDF
+          </a>
           <span v-else-if="toolLabel(part)" class="tool">{{ toolLabel(part) }}</span>
         </template>
       </article>
@@ -185,6 +278,18 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   color: var(--ink-soft);
+}
+
+.file {
+  display: inline-block;
+  margin: 0 4px 6px 0;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .suggestions {
