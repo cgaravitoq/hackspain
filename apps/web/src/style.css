@@ -22,6 +22,22 @@
   --group-3: #3fa87a;
   --group-4: #c264a0;
   --group-5: #7a86d8;
+  --embat-navy: #050b2c;
+  --embat-navy-soft: #232845;
+  --embat-blue: #3878f6;
+  --embat-blue-hover: #0338bb;
+  --embat-gray: #f3f4f6;
+  --embat-gray-soft: #fbfbfc;
+  --embat-line: #e8e8ed;
+  --embat-muted: #6e707c;
+  --embat-gradient: linear-gradient(
+    275deg,
+    #c357ec 4.22%,
+    #9d4bdd 50%,
+    #415de6 95.78%
+  );
+  --embat-shadow-1: 0 1px 4px rgba(0, 0, 0, 0.09);
+  --embat-shadow-3: 0 8px 16px rgba(0, 0, 0, 0.09);
   color-scheme: light;
   --radius: 0.625rem;
   --background: var(--paper);
@@ -78,6 +94,11 @@ body {
   height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+#app:has(> .marketing) {
+  height: auto;
+  min-height: 100dvh;
 }
 
 button,
