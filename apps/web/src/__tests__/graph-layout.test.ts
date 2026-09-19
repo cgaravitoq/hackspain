@@ -5,12 +5,13 @@ import {
   LAYOUT_WIDTH,
   LINK_GAP,
   layoutGraph,
+  MAX_RADIUS,
   NODE_GAP,
   nodeAt,
   nodeRadius,
   PADDING,
 } from "../graph-layout.ts";
-import { filterGraph, starGraph } from "./fixtures.ts";
+import { filterGraph, graphEdge, graphNode, starGraph } from "./fixtures.ts";
 
 const connected = filterGraph(
   new URL("https://web.test/api/graph?include_isolated=false"),
@@ -70,6 +71,65 @@ describe("graph layout", () => {
         LAYOUT_HEIGHT - PADDING,
       );
     }
+  });
+
+  it("draws a company with more relations as a bigger circle", () => {
+    expect(nodeRadius(4)).toBeGreaterThan(nodeRadius(1));
+    const { layout } = crowded();
+    const hub = layout.positions.get("HUB_000")?.radius ?? 0;
+    const leaf = layout.positions.get("HUB_000_0")?.radius ?? 0;
+    expect(hub).toBeGreaterThan(leaf);
+  });
+
+  it("draws two disconnected components apart", () => {
+    const { nodes, edges } = starGraph(2, 3);
+    const layout = layoutGraph(nodes, edges);
+    const box = (hub: string) => {
+      const members = [...layout.positions.values()].filter((position) =>
+        position.node.company_id.startsWith(hub),
+      );
+      expect(members).toHaveLength(4);
+      return {
+        left: Math.min(...members.map((member) => member.x - member.radius)),
+        right: Math.max(...members.map((member) => member.x + member.radius)),
+        top: Math.min(...members.map((member) => member.y - member.radius)),
+        bottom: Math.max(...members.map((member) => member.y + member.radius)),
+      };
+    };
+    const first = box("HUB_000");
+    const second = box("HUB_001");
+    const apart =
+      first.right < second.left ||
+      second.right < first.left ||
+      first.bottom < second.top ||
+      second.bottom < first.top;
+    expect(apart).toBe(true);
+  });
+
+  it("spreads a two-company graph across the canvas", () => {
+    const nodes = [
+      graphNode("COMP_X", "GROUP_1", "healthy", 1),
+      graphNode("COMP_Y", "GROUP_1", "falling", 1),
+    ];
+    const edges = [
+      graphEdge(
+        "COMP_X",
+        "COMP_Y",
+        "INFERRED_PAYMENT_TO",
+        "intragroup",
+        "high",
+      ),
+    ];
+    const layout = layoutGraph(nodes, edges);
+    const [first, second] = [...layout.positions.values()];
+    expect(
+      Math.hypot(
+        (first?.x ?? 0) - (second?.x ?? 0),
+        (first?.y ?? 0) - (second?.y ?? 0),
+      ),
+    ).toBeGreaterThan(LAYOUT_WIDTH / 5);
+    expect(first?.radius).toBe(MAX_RADIUS);
+    expect(second?.radius).toBe(MAX_RADIUS);
   });
 
   it("hits the company drawn under the pointer and nothing in the margin", () => {
