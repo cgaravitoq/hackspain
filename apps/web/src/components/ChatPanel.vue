@@ -111,7 +111,7 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
 .chat {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 110px);
+  min-height: 0;
 }
 
 .messages {

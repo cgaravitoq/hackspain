@@ -132,6 +132,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .loading {

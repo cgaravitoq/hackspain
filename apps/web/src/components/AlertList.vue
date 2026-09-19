@@ -33,7 +33,7 @@ const KIND_LABELS = { down: "empeora", recovered: "se recupera", up: "mejora" };
 .alerts {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 110px);
+  min-height: 0;
 }
 
 ul {
