@@ -75,6 +75,21 @@ describe("App", () => {
     expect(wrapper.text()).not.toContain("grupo en tensión");
   });
 
+  it("opens the first company matching a typed id prefix", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("comp_");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(window.location.hash).toBe("#COMP_B");
+  });
+
   it("loads another company when an alert is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));

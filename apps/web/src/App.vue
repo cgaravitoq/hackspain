@@ -47,9 +47,12 @@ function select(companyId: string) {
 }
 
 function search() {
-  const id = query.value.trim().toUpperCase();
-  if (companies.value.some((item) => item.company_id === id)) {
-    select(id);
+  const text = query.value.trim().toUpperCase();
+  const hit =
+    companies.value.find((item) => item.company_id === text) ??
+    companies.value.find((item) => item.company_id.startsWith(text));
+  if (hit) {
+    select(hit.company_id);
   }
 }
 

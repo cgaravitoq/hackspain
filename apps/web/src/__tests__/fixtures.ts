@@ -165,6 +165,11 @@ export function explain(id: string, groupId: string): Explain {
   };
 }
 
+export const companies = ["COMP_B", "COMP_A"].map((id) => {
+  const { series: _series, ...summary } = company(id, "GROUP_1");
+  return summary;
+});
+
 export const group: GroupMap = {
   group_id: "GROUP_1",
   holdout: false,
@@ -207,7 +212,7 @@ type Route = { pattern: RegExp; body: (match: RegExpMatchArray) => object };
 const routes: Route[] = [
   { pattern: /^\/api\/meta$/, body: () => meta },
   { pattern: /^\/api\/alerts/, body: () => ({ alerts }) },
-  { pattern: /^\/api\/companies$/, body: () => ({ companies: [] }) },
+  { pattern: /^\/api\/companies$/, body: () => ({ companies }) },
   {
     pattern: /^\/api\/companies\/(\w+)\/explain$/,
     body: (match) => explain(match[1] ?? "", "GROUP_1"),
