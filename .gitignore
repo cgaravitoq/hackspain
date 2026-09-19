@@ -11,3 +11,10 @@ dist/
 .claude/settings.local.json
 .claude/worktrees/
 .DS_Store
+
+# pipeline (Python, uv)
+pipeline/data/
+pipeline/artifacts/
+pipeline/.venv/
+**/__pycache__/
+**/.pytest_cache/
