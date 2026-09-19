@@ -60,6 +60,15 @@ async function openRoute(wrapper: VueWrapper, label: string) {
   await flushPromises();
 }
 
+async function openTab(wrapper: VueWrapper, label: string) {
+  const tab = wrapper
+    .findAll('[role="tab"]')
+    .find((button) => button.text() === label);
+  await tab?.trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
 function chips(wrapper: VueWrapper) {
   return wrapper
     .findAll(".compare-chip")
@@ -182,9 +191,13 @@ describe("App", () => {
     expect(wrapper.find(".score").text()).toBe("12.3");
     expect(wrapper.find(".chip").text()).toBe("cayendo");
     expect(wrapper.text()).toContain("▼ -27,9 vs mes anterior");
-    expect(wrapper.text()).toContain(
+    expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
+      "Acción",
+    );
+    expect(wrapper.find('[role="tabpanel"]').text()).toBe(
       "Reclamar las 2 facturas vencidas desde Cuentas por cobrar",
     );
+    await openTab(wrapper, "Grupo");
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
     expect(wrapper.findAll("svg circle")).toHaveLength(1);
@@ -228,6 +241,8 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     await selectRole(wrapper, "Tesorero");
+    await openTab(wrapper, "Grupo");
+    expect(wrapper.findAll(".group button")).toHaveLength(2);
     await wrapper.findAll(".group button")[1]?.trigger("click");
     await flushPromises();
     await flushPromises();
@@ -374,6 +389,7 @@ describe("App", () => {
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_B");
     expect(wrapper.find(".chat-stub").text()).toBe("COMP_B ventas");
+    await openTab(wrapper, "Informe");
     expect(wrapper.find(".report-export").attributes("href")).toBe(
       "/api/companies/COMP_B/report.pdf?role=ventas",
     );
@@ -503,6 +519,10 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
+    expect(requested).not.toContain(
+      "/api/companies/COMP_A/report?role=financiero",
+    );
+    await openTab(wrapper, "Informe");
     expect(wrapper.find(".report-summary").text()).toBe(
       "La tesorería necesita atención inmediata.",
     );
@@ -544,6 +564,7 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
+    await openTab(wrapper, "Informe");
     expect(wrapper.find("h1").text()).toBe("COMP_A");
     expect(wrapper.find(".report .error p").text()).toBe(
       "No se pudo generar el informe",
@@ -655,6 +676,7 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
+    await openTab(wrapper, "Informe");
     await wrapper.findAll(".alerts button")[1]?.trigger("click");
     await flushPromises();
     await flushPromises();

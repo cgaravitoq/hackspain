@@ -1,34 +1,26 @@
 <script setup lang="ts">
-import type { Alert, CompanyDetail, Explain } from "@hackspain/shared";
-import { computed } from "vue";
-import {
-  COMPONENT_CODES,
-  CONFIDENCE_LABELS,
-  componentLabel,
-  euro,
-  eventLabel,
-  monthLabel,
-  points,
-} from "../format.ts";
+import type {
+  Alert,
+  CompanyDetail,
+  Explain,
+  GroupMap,
+  Role,
+} from "@hackspain/shared";
+import { CONFIDENCE_LABELS, monthLabel } from "../format.ts";
+import DetailTabs from "./DetailTabs.vue";
 import KpiCards from "./KpiCards.vue";
 import Sparkline from "./Sparkline.vue";
 
-const props = defineProps<{
+defineProps<{
   company: CompanyDetail;
   explanation: Explain;
   comparison: CompanyDetail[];
   alerts: Alert[];
+  group: GroupMap | null;
+  selected: string;
+  role: Role;
 }>();
-
-const mainDrivers = computed(() =>
-  props.explanation.drivers.filter((driver) => driver.contribution !== 0),
-);
-
-const contextDrivers = computed(() =>
-  props.explanation.drivers.filter(
-    (driver) => driver.contribution === 0 && !COMPONENT_CODES.has(driver.code),
-  ),
-);
+const emit = defineEmits<{ select: [companyId: string] }>();
 </script>
 
 <template>
@@ -48,52 +40,14 @@ const contextDrivers = computed(() =>
       <Sparkline :companies="comparison" />
     </div>
 
-    <div class="panel details">
-    <div class="columns">
-      <div>
-        <h3>Por qué</h3>
-        <ul class="drivers">
-          <li v-for="driver in mainDrivers" :key="driver.code">
-            <span class="contribution" :class="{ negative: driver.contribution < 0, positive: driver.contribution > 0 }">
-              {{ points(driver.contribution) }}
-            </span>
-            <span>{{ driver.text }}</span>
-          </li>
-          <li v-for="driver in contextDrivers" :key="driver.code" class="context">
-            <span class="contribution">ctx</span>
-            <span>{{ driver.text }}</span>
-          </li>
-        </ul>
-        <ul v-if="explanation.events.length" class="events">
-          <li v-for="event in explanation.events" :key="event">
-            <strong>{{ event }}</strong> {{ eventLabel(event) }}
-          </li>
-        </ul>
-      </div>
-      <div>
-        <h3>Qué cambió</h3>
-        <ul v-if="explanation.changed.length" class="changed">
-          <li v-for="item in explanation.changed" :key="item.code">
-            <span class="contribution" :class="{ negative: item.delta < 0, positive: item.delta > 0 }">{{ points(item.delta) }}</span>
-            <span>{{ componentLabel(item.code) }}</span>
-          </li>
-        </ul>
-        <p v-else class="quiet">Sin cambios frente al mes anterior.</p>
-        <h3>Acción</h3>
-        <p class="action">{{ explanation.action }}</p>
-      </div>
-    </div>
-
-    <dl class="evidence">
-      <div><dt>Ventana</dt><dd>{{ explanation.evidence.window ?? "–" }}</dd></div>
-      <div><dt>Transacciones</dt><dd>{{ explanation.evidence.transactions_in_window }}</dd></div>
-      <div><dt>Sin categoría</dt><dd>{{ Math.round(explanation.evidence.share_uncategorised * 100) }} %</dd></div>
-      <div><dt>Fuentes</dt><dd>{{ Object.entries(explanation.evidence.sources).filter(([, on]) => on).map(([name]) => name).join(", ") }}</dd></div>
-      <div v-if="company.debt_outstanding > 0"><dt>Deuda viva</dt><dd>{{ euro(company.debt_outstanding) }}</dd></div>
-      <div v-if="explanation.invoice_facts.overdue_count"><dt>Facturas vencidas</dt><dd>{{ explanation.invoice_facts.overdue_count }} · {{ euro(explanation.invoice_facts.overdue_amount ?? 0) }}</dd></div>
-      <div><dt>Regla</dt><dd>{{ explanation.evidence.rule_version }}</dd></div>
-    </dl>
-    </div>
+    <DetailTabs
+      :company="company"
+      :explanation="explanation"
+      :group="group"
+      :selected="selected"
+      :role="role"
+      @select="emit('select', $event)"
+    />
   </section>
 </template>
 
@@ -111,13 +65,6 @@ const contextDrivers = computed(() =>
 .chart-card {
   background: var(--card);
   border-radius: 10px;
-}
-
-.details {
-  padding: 18px 20px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 h1 {
@@ -139,104 +86,5 @@ h1 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 24px;
-}
-
-@media (max-width: 700px) {
-  .columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-h3 {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-ul {
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.drivers li,
-.changed li {
-  display: grid;
-  grid-template-columns: 52px 1fr;
-  gap: 10px;
-  align-items: baseline;
-}
-
-.context {
-  color: var(--ink-soft);
-}
-
-.contribution {
-  font-weight: 600;
-  text-align: right;
-  color: var(--ink-soft);
-}
-
-.contribution.negative {
-  color: var(--falling);
-}
-
-.contribution.positive {
-  color: var(--healthy);
-}
-
-.events li {
-  font-size: 13px;
-  color: var(--falling);
-}
-
-.quiet {
-  margin: 0 0 14px;
-  color: var(--ink-soft);
-}
-
-.action {
-  margin: 0;
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent);
-  background: var(--chip-bg);
-  border-radius: 0 6px 6px 0;
-  font-weight: 500;
-}
-
-.evidence {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-}
-
-.evidence div {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-}
-
-dt {
-  color: var(--ink-soft);
-}
-
-dd {
-  margin: 0;
-  font-weight: 600;
 }
 </style>

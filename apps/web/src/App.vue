@@ -14,10 +14,8 @@ import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AlertList from "./components/AlertList.vue";
 import ChatBubble from "./components/ChatBubble.vue";
-import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
-import ReportPanel from "./components/ReportPanel.vue";
 
 const roles = [
   { value: "tesorero", label: ROLE_LABELS.tesorero },
@@ -266,16 +264,17 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         @select="select"
       />
       <p v-if="error" class="error panel">{{ error }}</p>
-      <template v-if="company && explanation">
-        <Radiography
-          :company="company"
-          :explanation="explanation"
-          :comparison="comparison.length ? comparison : [company]"
-          :alerts="alerts"
-        />
-        <ReportPanel :company-id="selected" :role="role" />
-        <GroupStrip v-if="group" :group="group" :selected="selected" @select="select" />
-      </template>
+      <Radiography
+        v-if="company && explanation"
+        :company="company"
+        :explanation="explanation"
+        :comparison="comparison.length ? comparison : [company]"
+        :alerts="alerts"
+        :group="group"
+        :selected="selected"
+        :role="role"
+        @select="select"
+      />
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
     </div>
   </main>

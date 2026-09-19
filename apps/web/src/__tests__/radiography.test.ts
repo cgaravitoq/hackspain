@@ -1,11 +1,15 @@
-import { mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Radiography from "../components/Radiography.vue";
-import { alerts, company, explain } from "./fixtures.ts";
+import { alerts, company, explain, fakeApi, group } from "./fixtures.ts";
 
 const detail = company("COMP_A", "GROUP_1");
+const ACTION = "Reclamar las 2 facturas vencidas desde Cuentas por cobrar";
 
-function mountRadiography(overrides: Partial<typeof detail> = {}) {
+function mountRadiography(
+  overrides: Partial<typeof detail> = {},
+  withGroup = true,
+) {
   const current = { ...detail, ...overrides };
   return mount(Radiography, {
     props: {
@@ -13,8 +17,25 @@ function mountRadiography(overrides: Partial<typeof detail> = {}) {
       explanation: explain("COMP_A", "GROUP_1"),
       comparison: [current],
       alerts,
+      group: withGroup ? group : null,
+      selected: "COMP_A",
+      role: "financiero",
     },
   });
+}
+
+function tabs(wrapper: ReturnType<typeof mountRadiography>) {
+  return wrapper.findAll('[role="tablist"] [role="tab"]');
+}
+
+async function openTab(
+  wrapper: ReturnType<typeof mountRadiography>,
+  label: string,
+) {
+  await tabs(wrapper)
+    .find((tab) => tab.text() === label)
+    ?.trigger("click");
+  await flushPromises();
 }
 
 function kpi(wrapper: ReturnType<typeof mountRadiography>, label: string) {
@@ -29,6 +50,12 @@ function kpi(wrapper: ReturnType<typeof mountRadiography>, label: string) {
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  vi.stubGlobal("fetch", fakeApi([]));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("Radiography", () => {
@@ -57,5 +84,58 @@ describe("Radiography", () => {
     );
     expect(kpi(wrapper, "Δ 3 meses").find(".kpi-value").text()).toBe("–");
     expect(kpi(wrapper, "Δ 6 meses").find(".kpi-value").text()).toBe("–");
+  });
+
+  it("opens on the Acción tab with the single action sentence", () => {
+    const wrapper = mountRadiography();
+    expect(tabs(wrapper).map((tab) => tab.text())).toEqual([
+      "Acción",
+      "Por qué",
+      "Qué cambió",
+      "Informe",
+      "Grupo",
+    ]);
+    expect(tabs(wrapper).map((tab) => tab.attributes("aria-selected"))).toEqual(
+      ["true", "false", "false", "false", "false"],
+    );
+    expect(wrapper.find('[role="tabpanel"] .action').text()).toBe(ACTION);
+    expect(wrapper.find(".drivers").exists()).toBe(false);
+    expect(wrapper.find(".report").exists()).toBe(false);
+    expect(wrapper.find(".group").exists()).toBe(false);
+  });
+
+  it("shows drivers and evidence under Por qué and component deltas under Qué cambió", async () => {
+    const wrapper = mountRadiography();
+    await openTab(wrapper, "Por qué");
+    expect(wrapper.find(".drivers").text()).toContain("cobertura 0.40");
+    expect(wrapper.find(".evidence").text()).toContain("2026-06 a 2026-08");
+    expect(wrapper.find(".action").exists()).toBe(false);
+    await openTab(wrapper, "Qué cambió");
+    expect(wrapper.find(".changed").text()).toContain("Cobros frente a pagos");
+    expect(wrapper.find(".drivers").exists()).toBe(false);
+  });
+
+  it("mounts the report under Informe and hides the action", async () => {
+    const wrapper = mountRadiography();
+    await openTab(wrapper, "Informe");
+    expect(wrapper.find(".report .report-summary").text()).toBe(
+      "La tesorería necesita atención inmediata.",
+    );
+    expect(wrapper.find(".action").exists()).toBe(false);
+    expect(
+      tabs(wrapper)
+        .find((tab) => tab.text() === "Informe")
+        ?.attributes("aria-selected"),
+    ).toBe("true");
+  });
+
+  it("mounts the group strip under Grupo and hides the tab without a group", async () => {
+    const wrapper = mountRadiography();
+    await openTab(wrapper, "Grupo");
+    expect(wrapper.find(".group").text()).toContain("grupo en tensión");
+    await wrapper.findAll(".group button")[1]?.trigger("click");
+    expect(wrapper.emitted("select")).toEqual([["COMP_B"]]);
+    const alone = mountRadiography({}, false);
+    expect(tabs(alone).map((tab) => tab.text())).not.toContain("Grupo");
   });
 });
