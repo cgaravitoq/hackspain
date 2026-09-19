@@ -3,7 +3,11 @@ name = "xray-pipeline"
 version = "0.1.0"
 description = "Scores every company and month from the Embat CSVs and exports the X Ray artifacts"
 requires-python = ">=3.13"
-dependencies = ["polars==1.40.0"]
+dependencies = [
+    "numpy==2.5.3",
+    "pandas==3.0.6",
+    "polars==1.40.0",
+]
 
 [project.scripts]
 xray = "xray.cli:main"
