@@ -144,8 +144,7 @@ export const companySummarySchema = z.object({
     oldest_overdue_days: z.number().optional(),
     top3_share_of_pending: z.number().optional(),
   }),
-  // Optional so a payload written before the column existed still parses; the simulator rejects a company without it.
-  treasury: treasurySchema.optional(),
+  treasury: treasurySchema,
   latest: latestSchema,
 });
 

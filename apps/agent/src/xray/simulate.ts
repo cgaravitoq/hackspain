@@ -4,7 +4,6 @@ import type {
   ReportFigure,
   Simulate,
   SimulateScenario,
-  Treasury,
 } from "@hackspain/shared";
 import { z } from "zod";
 import { resolveCompany } from "./report.ts";
@@ -166,10 +165,10 @@ function withFigures(
 
 export function simulate(
   company: CompanyDetail,
-  treasury: Treasury,
   months: MonthEntry[],
   input: SimulateInput,
 ): Simulate {
+  const { treasury } = company;
   const currency = company.currency ?? "EUR";
   const observed = months.map((entry) => ({
     inflow: entry.flows.inflow,
@@ -311,15 +310,11 @@ export async function simulateCompany(
   if (!company) {
     return { error: "Unknown company" };
   }
-  const treasury = company.treasury;
-  if (!treasury) {
-    return { error: "No treasury snapshot" };
-  }
   const months = company.series
     .filter((entry) => entry.observed)
     .slice(-OBSERVED_MONTHS);
   if (months.length < OBSERVED_MONTHS) {
     return { error: "No months observed" };
   }
-  return simulate(company, treasury, months, input);
+  return simulate(company, months, input);
 }

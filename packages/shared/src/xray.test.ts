@@ -66,6 +66,13 @@ const stableMonth = {
   events: { E1: false, E2: false, E3: false, E4: false },
 };
 
+const demoTreasury = {
+  starting_cash: 150_000,
+  pending_receivables: 33_333.33,
+  credit_line_limit: 73_333.33,
+  credit_line_drawn: 40_000,
+};
+
 const demoCompanySummary = {
   rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
@@ -78,6 +85,7 @@ const demoCompanySummary = {
   stale: false,
   debt_outstanding: 1200,
   invoice_facts: {},
+  treasury: demoTreasury,
   latest: {
     month: "2026-08",
     score: 50,
@@ -148,13 +156,6 @@ const demoReport = {
     { code: "que_hacer", title: "Qué hacer", body: "Nada." },
   ],
   export_url: "/reports/COMP_0176/2026-08.pdf",
-};
-
-const demoTreasury = {
-  starting_cash: 150_000,
-  pending_receivables: 33_333.33,
-  credit_line_limit: 73_333.33,
-  credit_line_drawn: 40_000,
 };
 
 const demoScenario = {
@@ -242,6 +243,7 @@ describe("xray contracts", () => {
       stale: false,
       debt_outstanding: 0,
       invoice_facts: {},
+      treasury: demoTreasury,
       latest: {
         month: "2026-08",
         score: 51.2,
@@ -913,13 +915,16 @@ describe("xray contracts", () => {
     });
   });
 
-  it("keeps a company summary parseable with and without the treasury snapshot", () => {
-    expect(
-      companySummarySchema.parse(demoCompanySummary).treasury,
-    ).toBeUndefined();
+  it("rejects a company summary without a treasury snapshot", () => {
+    const { treasury: _treasury, ...withoutTreasury } = demoCompanySummary;
+    const result = companySummarySchema.safeParse(withoutTreasury);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["treasury"],
+    ]);
     expect(
       companySummarySchema.parse({
-        ...demoCompanySummary,
+        ...withoutTreasury,
         treasury: demoTreasury,
       }).treasury,
     ).toEqual(demoTreasury);
