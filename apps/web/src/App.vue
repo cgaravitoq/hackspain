@@ -23,6 +23,7 @@ const roles = [
   { value: "financiero", label: ROLE_LABELS.financiero },
   { value: "ventas", label: ROLE_LABELS.ventas },
 ] satisfies { value: Role; label: string }[];
+const TREASURER_COMPANY = "COMP_0176";
 const role = ref<Role>("financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
@@ -45,9 +46,6 @@ async function load(companyId: string) {
     ]);
     company.value = detail;
     explanation.value = why;
-    if (role.value === "tesorero") {
-      comparison.value = [detail];
-    }
     group.value = detail.group_id ? await api.group(detail.group_id) : null;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
@@ -55,14 +53,14 @@ async function load(companyId: string) {
 }
 
 function select(companyId: string) {
+  if (role.value === "tesorero") {
+    window.location.hash = TREASURER_COMPANY;
+    return;
+  }
   selected.value = companyId;
 }
 
 function addComparison(companyId: string) {
-  if (role.value === "tesorero") {
-    compareIds.value = [companyId];
-    return;
-  }
   if (!compareIds.value.includes(companyId) && compareIds.value.length < 3) {
     compareIds.value = [...compareIds.value, companyId];
   }
@@ -81,14 +79,13 @@ function removeComparison(companyId: string) {
 function selectRole(nextRole: Role) {
   role.value = nextRole;
   if (nextRole === "tesorero") {
-    addComparison("COMP_0176");
-    select("COMP_0176");
+    compareIds.value = [TREASURER_COMPANY];
+    selected.value = TREASURER_COMPANY;
   }
 }
 
 function syncHash() {
-  selected.value =
-    role.value === "tesorero" ? "COMP_0176" : window.location.hash.slice(1);
+  select(window.location.hash.slice(1));
 }
 
 function search() {
@@ -118,6 +115,7 @@ watch(
 
 watch(compareIds, async (ids) => {
   if (role.value === "tesorero" || ids.length === 0) {
+    comparison.value = [];
     return;
   }
   try {

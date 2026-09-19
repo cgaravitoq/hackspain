@@ -92,6 +92,47 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(window.location.hash).toBe("#COMP_0176");
+  });
+
+  it("keeps the treasurer on its company when a group member is clicked", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await selectRole(wrapper, "Tesorero");
+    await wrapper.findAll(".group button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(window.location.hash).toBe("#COMP_0176");
+    expect(seen).not.toContain("/api/companies/COMP_B");
+    await selectRole(wrapper, "Financiero");
+    expect(chips(wrapper)).toEqual(["COMP_0176"]);
+  });
+
+  it("draws one series when the treasurer takes over the company already on screen", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    window.location.hash = "COMP_0176";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    window.location.hash = "COMP_0176";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_0176", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    await selectRole(wrapper, "Tesorero");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "Talleres Ribera",
+    ]);
   });
 
   it("draws only the treasurer's series after comparing three companies", async () => {
