@@ -137,6 +137,13 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
   gap: 10px;
 }
 
+@media (max-width: 1100px) {
+  .messages {
+    min-height: 240px;
+    max-height: 60vh;
+  }
+}
+
 .message {
   max-width: 92%;
   padding: 8px 12px;

@@ -50,6 +50,12 @@ ul {
   overflow-y: auto;
 }
 
+@media (max-width: 1100px) {
+  ul {
+    max-height: 60vh;
+  }
+}
+
 button {
   width: 100%;
   display: grid;
