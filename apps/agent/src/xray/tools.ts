@@ -2,7 +2,9 @@ import {
   type Alert,
   alertKindSchema,
   type CompanyDetail,
+  type Explain,
   type Group,
+  type GroupMap,
   type MonthEntry,
   STATE_LABELS,
   type State,
@@ -108,7 +110,7 @@ function scoreOf(company: CompanyDetail) {
   };
 }
 
-function explainOf(company: CompanyDetail, entry: MonthEntry) {
+function explainOf(company: CompanyDetail, entry: MonthEntry): Explain {
   return {
     company_id: company.company_id,
     group_id: company.group_id,
@@ -155,6 +157,17 @@ function whatChangedOf(company: CompanyDetail) {
     changed: now.changed,
     drivers: now.drivers.slice(0, 3).map((driver) => driver.text),
     events: activeEvents(now),
+  };
+}
+
+function groupMapOf(group: Group): GroupMap {
+  return {
+    ...group,
+    tension_reason: tensionReason(group),
+    members: group.members.map((member) => ({
+      ...member,
+      state_label: STATE_LABELS[member.state],
+    })),
   };
 }
 
@@ -210,17 +223,9 @@ export function createTools(store: Store) {
 
     async group_map(input: z.infer<typeof toolInputs.group_map>) {
       const group = await store.group(input.group_id);
-      if (!group) {
-        return { error: `Unknown group ${input.group_id}` };
-      }
-      return {
-        ...group,
-        tension_reason: tensionReason(group),
-        members: group.members.map((member) => ({
-          ...member,
-          state_label: STATE_LABELS[member.state],
-        })),
-      };
+      return group
+        ? groupMapOf(group)
+        : { error: `Unknown group ${input.group_id}` };
     },
 
     async alerts(input: z.infer<typeof toolInputs.alerts>) {

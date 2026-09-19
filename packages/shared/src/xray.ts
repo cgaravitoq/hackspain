@@ -149,6 +149,34 @@ export const groupSchema = z.object({
 
 export type Group = z.infer<typeof groupSchema>;
 
+export const explainSchema = z.object({
+  company_id: z.string(),
+  group_id: z.string().nullable(),
+  month: z.string(),
+  score: z.number().nullable(),
+  level: z.number().nullable(),
+  momentum: z.number().nullable(),
+  state: stateSchema,
+  state_label: z.string(),
+  confidence: confidenceSchema,
+  drivers: z.array(driverSchema),
+  changed: z.array(z.object({ code: z.string(), delta: z.number() })),
+  events: z.array(z.string()),
+  evidence: evidenceSchema,
+  flows: monthEntrySchema.shape.flows,
+  invoice_facts: companySummarySchema.shape.invoice_facts,
+  action: z.string(),
+});
+
+export type Explain = z.infer<typeof explainSchema>;
+
+export const groupMapSchema = groupSchema.extend({
+  tension_reason: z.string().nullable(),
+  members: z.array(groupMemberSchema.extend({ state_label: z.string() })),
+});
+
+export type GroupMap = z.infer<typeof groupMapSchema>;
+
 export const backtestSchema = z.object({
   events: z.record(
     z.string(),

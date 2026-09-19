@@ -12,6 +12,7 @@ import { z } from "zod";
 import { chat, workersAiModel } from "./xray/chat.ts";
 import { createMcpServer } from "./xray/mcp.ts";
 import { createStore } from "./xray/store.ts";
+import { createTools } from "./xray/tools.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
@@ -58,13 +59,20 @@ export function createApp(options: AppOptions = {}) {
       : context.json({ error: "Unknown company" }, 404);
   });
 
+  app.get("/companies/:id/explain", async (context) => {
+    const explanation = await createTools(createStore(context.env.DB)).explain({
+      company_id: context.req.param("id"),
+    });
+    return "error" in explanation
+      ? context.json(explanation, 404)
+      : context.json(explanation);
+  });
+
   app.get("/groups/:id", async (context) => {
-    const group = await createStore(context.env.DB).group(
-      context.req.param("id"),
-    );
-    return group
-      ? context.json(group)
-      : context.json({ error: "Unknown group" }, 404);
+    const group = await createTools(createStore(context.env.DB)).group_map({
+      group_id: context.req.param("id"),
+    });
+    return "error" in group ? context.json(group, 404) : context.json(group);
   });
 
   app.get("/alerts", async (context) => {

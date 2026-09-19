@@ -3,7 +3,8 @@ import {
   alertSchema,
   companyDetailSchema,
   companySummarySchema,
-  groupSchema,
+  explainSchema,
+  groupMapSchema,
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -72,11 +73,26 @@ describe("GET /alerts", () => {
   });
 });
 
+describe("GET /companies/:id/explain", () => {
+  it("explains the latest month with drivers, events and the Embat action", async () => {
+    const response = await SELF.fetch(
+      "https://agent.test/companies/COMP_A/explain",
+    );
+    const explanation = explainSchema.parse(await response.json());
+    expect(explanation.state_label).toBe("cayendo");
+    expect(explanation.events).toEqual(["E1"]);
+    expect(explanation.action).toBe(
+      "Reclamar las 2 facturas vencidas desde Cuentas por cobrar",
+    );
+  });
+});
+
 describe("GET /groups/:id", () => {
-  it("maps a group with its members and the tension flag", async () => {
+  it("maps a group with its members, the tension flag and its reason", async () => {
     const response = await SELF.fetch("https://agent.test/groups/GROUP_1");
-    const group = groupSchema.parse(await response.json());
+    const group = groupMapSchema.parse(await response.json());
     expect(group.tension).toBe(true);
+    expect(group.tension_reason).toBe("1 de 2 empresas cayendo o torciéndose");
     expect(group.members.map((member) => member.state)).toEqual([
       "falling",
       "healthy",
