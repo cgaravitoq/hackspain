@@ -56,6 +56,21 @@ export function month(
 }
 
 export const meta: Meta = {
+  rule_version: "xray-score/0.1",
+  generated_at: "2026-09-19T13:04:05+00:00",
+  policy: {
+    lambda: 0.25,
+    adjustment_cap: 10,
+    momentum_threshold: 5,
+    volatility_factor: 0.75,
+    exit_factor: 0.5,
+    penalty_cap: 15,
+    healthy_level: 60,
+    persistence_months: 3,
+    window_months: 3,
+    min_months: 3,
+    momentum_min_months: 6,
+  },
   state_labels: {},
   latest_month: "2026-08",
   holdout_groups: [],
@@ -63,6 +78,7 @@ export const meta: Meta = {
 
 export const alerts: Alert[] = [
   {
+    rule_version: "xray-score/0.1",
     company_id: "COMP_A",
     group_id: "GROUP_1",
     month: "2026-08",
@@ -74,6 +90,7 @@ export const alerts: Alert[] = [
     driver: "Cobros 40.000 € frente a pagos 100.000 €",
   },
   {
+    rule_version: "xray-score/0.1",
     company_id: "COMP_C",
     group_id: "GROUP_2",
     month: "2026-08",
@@ -88,6 +105,7 @@ export const alerts: Alert[] = [
 
 export function alert(companyId: string, kind: Alert["kind"] = "down"): Alert {
   return {
+    rule_version: "xray-score/0.1",
     company_id: companyId,
     group_id: "GROUP_1",
     month: "2026-08",
@@ -108,6 +126,7 @@ export function company(id: string, groupId: string): CompanyDetail {
     month("2026-08", 12.3, "falling"),
   ];
   return {
+    rule_version: "xray-score/0.1",
     company_id: id,
     group_id: groupId,
     currency: "EUR",

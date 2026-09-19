@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   alertSchema,
+  backtestSchema,
   chatRequestSchema,
   companyDetailSchema,
   companyRelationsSchema,
+  companySummarySchema,
   compareSchema,
   DEMO_COMPANY_NAMES,
   driverSchema,
@@ -60,6 +62,7 @@ const stableMonth = {
 };
 
 const demoCompanySummary = {
+  rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
   group_id: "GROUP_0001",
   currency: "EUR",
@@ -76,6 +79,42 @@ const demoCompanySummary = {
     state: "stable",
     confidence: "high",
   },
+};
+
+const demoAlert = {
+  rule_version: "xray-score/0.1",
+  company_id: "COMP_0001",
+  group_id: "GROUP_0001",
+  month: "2026-08",
+  kind: "down",
+  state: "falling",
+  previous_state: "slipping",
+  score: 12.3,
+  delta: -27.9,
+  driver: null,
+};
+
+const demoBacktest = {
+  rule_version: "xray-score/0.1",
+  events: {},
+  alerts: {
+    evaluated: 0,
+    false_alarms: 0,
+    false_alarm_rate: 0,
+    reverted_within_3_months: 0,
+    revert_rate: 0,
+    censored: 0,
+  },
+  definitions: {},
+};
+
+const demoMeta = {
+  rule_version: "xray-score/0.1",
+  generated_at: "2026-09-19T13:04:05+00:00",
+  policy: { lambda: 0.25, adjustment_cap: 10, window_months: 3 },
+  state_labels: { healthy: "sana" },
+  latest_month: "2026-08",
+  holdout_groups: [],
 };
 
 const demoReport = {
@@ -100,6 +139,7 @@ const demoReport = {
 describe("xray contracts", () => {
   it("accepts a company whose first months are not evaluable", () => {
     const detail = companyDetailSchema.parse({
+      rule_version: "xray-score/0.1",
       company_id: "COMP_0001",
       group_id: "GROUP_0001",
       currency: "EUR",
@@ -254,13 +294,79 @@ describe("xray contracts", () => {
 
   it("rejects a meta whose state labels carry a key that is not a trajectory state", () => {
     const result = metaSchema.safeParse({
+      ...demoMeta,
       state_labels: { healthy: "sana", bad: "mala" },
-      latest_month: "2026-08",
-      holdout_groups: [],
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["state_labels"],
+    ]);
+  });
+
+  it("accepts a meta carrying the policy the score was computed with", () => {
+    const meta = metaSchema.parse(demoMeta);
+    expect(meta.rule_version).toBe("xray-score/0.1");
+    expect(meta.generated_at).toBe("2026-09-19T13:04:05+00:00");
+    expect(meta.policy).toEqual({
+      lambda: 0.25,
+      adjustment_cap: 10,
+      window_months: 3,
+    });
+  });
+
+  it("rejects a meta without the rule version", () => {
+    const { rule_version: _ruleVersion, ...meta } = demoMeta;
+    const result = metaSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["rule_version"],
+    ]);
+  });
+
+  it("rejects a meta without the generation timestamp", () => {
+    const { generated_at: _generatedAt, ...meta } = demoMeta;
+    const result = metaSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["generated_at"],
+    ]);
+  });
+
+  it("rejects a meta whose policy value is not a number", () => {
+    const result = metaSchema.safeParse({
+      ...demoMeta,
+      policy: { lambda: "0.25" },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["policy", "lambda"],
+    ]);
+  });
+
+  it("rejects an alert without the rule version", () => {
+    const { rule_version: _ruleVersion, ...alert } = demoAlert;
+    const result = alertSchema.safeParse(alert);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["rule_version"],
+    ]);
+  });
+
+  it("rejects a backtest without the rule version", () => {
+    const { rule_version: _ruleVersion, ...backtest } = demoBacktest;
+    const result = backtestSchema.safeParse(backtest);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["rule_version"],
+    ]);
+  });
+
+  it("rejects a company summary without the rule version", () => {
+    const { rule_version: _ruleVersion, ...company } = demoCompanySummary;
+    const result = companySummarySchema.safeParse(company);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["rule_version"],
     ]);
   });
 

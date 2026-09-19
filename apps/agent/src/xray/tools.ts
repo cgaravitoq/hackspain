@@ -144,6 +144,7 @@ function action(company: CompanyDetail, entry: MonthEntry): string {
 function scoreOf(company: CompanyDetail) {
   const entry = latestScored(company);
   return {
+    rule_version: company.rule_version,
     company_id: company.company_id,
     group_id: company.group_id,
     month: entry?.month ?? null,

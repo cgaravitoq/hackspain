@@ -1,6 +1,7 @@
 import { env, SELF } from "cloudflare:test";
 import {
   alertSchema,
+  backtestSchema,
   companyDetailSchema,
   companySummarySchema,
   explainSchema,
@@ -10,7 +11,7 @@ import {
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { meta, seed } from "./fixtures.ts";
+import { backtest, meta, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 
@@ -26,6 +27,7 @@ describe("GET /companies/:id", () => {
       "falling",
     ]);
     expect(company.latest.score).toBe(12.3);
+    expect(company.rule_version).toBe("xray-score/0.1");
   });
 
   it("answers 404 for a company that is not in the dataset", async () => {
@@ -79,6 +81,9 @@ describe("GET /alerts", () => {
       "down",
       "recovered",
     ]);
+    expect(
+      all.alerts.every((alert) => alert.rule_version === "xray-score/0.1"),
+    ).toBe(true);
     const recovered = z
       .object({ alerts: z.array(alertSchema) })
       .parse(
@@ -113,6 +118,36 @@ describe("GET /meta", () => {
     const body = metaSchema.parse(await response.json());
     expect(body).toEqual(meta);
     expect(body.state_labels.falling).not.toBe(STATE_LABELS.falling);
+  });
+
+  it("publishes the policy the stored scores were computed with", async () => {
+    const response = await SELF.fetch("https://agent.test/meta");
+    const body = metaSchema.parse(await response.json());
+    expect(body.rule_version).toBe("xray-score/0.1");
+    expect(body.generated_at).toBe("2026-09-19T13:04:05+00:00");
+    expect(body.policy).toEqual({
+      lambda: 0.25,
+      adjustment_cap: 10,
+      momentum_threshold: 5,
+      volatility_factor: 0.75,
+      exit_factor: 0.5,
+      penalty_cap: 15,
+      healthy_level: 60,
+      persistence_months: 3,
+      window_months: 3,
+      min_months: 3,
+      momentum_min_months: 6,
+    });
+  });
+});
+
+describe("GET /backtest", () => {
+  it("returns the backtest with the rule version it was scored with", async () => {
+    const response = await SELF.fetch("https://agent.test/backtest");
+    expect(response.status).toBe(200);
+    const body = backtestSchema.parse(await response.json());
+    expect(body).toEqual(backtest);
+    expect(body.rule_version).toBe("xray-score/0.1");
   });
 });
 

@@ -115,6 +115,7 @@ export const latestSchema = z.object({
 });
 
 export const companySummarySchema = z.object({
+  rule_version: z.string(),
   company_id: z.string(),
   group_id: z.string().nullable(),
   currency: z.string().nullable(),
@@ -142,6 +143,7 @@ export type CompanyDetail = z.infer<typeof companyDetailSchema>;
 export const alertKindSchema = z.enum(["down", "up", "recovered"]);
 
 export const alertSchema = z.object({
+  rule_version: z.string(),
   company_id: z.string(),
   group_id: z.string().nullable(),
   month: z.string(),
@@ -203,6 +205,7 @@ export const groupMapSchema = groupSchema.extend({
 export type GroupMap = z.infer<typeof groupMapSchema>;
 
 export const backtestSchema = z.object({
+  rule_version: z.string(),
   events: z.record(
     z.string(),
     z.object({
@@ -226,6 +229,9 @@ export const backtestSchema = z.object({
 export type Backtest = z.infer<typeof backtestSchema>;
 
 export const metaSchema = z.object({
+  rule_version: z.string(),
+  generated_at: z.iso.datetime({ offset: true }),
+  policy: z.record(z.string(), z.number()),
   state_labels: z.partialRecord(stateSchema, z.string()),
   latest_month: z.string(),
   holdout_groups: z.array(z.string()),

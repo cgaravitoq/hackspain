@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import polars as pl
@@ -10,7 +10,20 @@ from xray.events import backtest, cash_stress, debt_break, overdue_invoice_month
 from xray.export import alert_kind, build
 from xray.load import read
 from xray.panel import monthly_panel
-from xray.score import score_panel, states
+from xray.score import (
+    ADJUSTMENT_CAP,
+    EXIT_FACTOR,
+    HEALTHY_LEVEL,
+    LAMBDA,
+    MOMENTUM_THRESHOLD,
+    PENALTY_CAP,
+    PERSISTENCE_MONTHS,
+    RULE_VERSION,
+    VOLATILITY_FACTOR,
+    policy,
+    score_panel,
+    states,
+)
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -21,20 +34,26 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 def seed_dataset(
-    folder: Path, *, tx_date_override: str | None = None, invoice_date_override: dict[str, str] | None = None
+    folder: Path,
+    *,
+    tx_date_override: str | None = None,
+    invoice_date_override: dict[str, str] | None = None,
+    months: int = 3,
 ) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     _write_csv(folder / "companies.csv", [{"company_id": "C1", "group_id": "G1", "currency": "EUR"}])
     _write_csv(folder / "groups.csv", [{"group_id": "G1", "erp": "holded"}])
     _write_csv(folder / "banking_products.csv", [{"product_id": "P1", "currency": "EUR"}])
     txs: list[dict[str, object]] = []
-    for month in ("2026-01-15", "2026-02-15", "2026-03-15"):
+    for index in range(months):
+        month = f"2026-{index + 1:02d}-15"
         day = tx_date_override if tx_date_override and month == "2026-03-15" else month
+        inflow, outflow = (300.0, -100.0) if index < 3 else (100.0, -300.0)
         txs.append(
             {
                 "company_id": "C1",
                 "date": day,
-                "amount": 300.0,
+                "amount": inflow,
                 "category": "collection",
                 "status": "booked",
                 "product_id": "P1",
@@ -45,7 +64,7 @@ def seed_dataset(
             {
                 "company_id": "C1",
                 "date": day,
-                "amount": -100.0,
+                "amount": outflow,
                 "category": "payment",
                 "status": "booked",
                 "product_id": "P1",
@@ -184,6 +203,51 @@ def test_read_rejects_unparsable_invoice_dates(tmp_path: Path, column: str):
     seed_dataset(tmp_path, invoice_date_override={column: "not-a-date"})
     with pytest.raises(pl.exceptions.InvalidOperationError, match=rf"column '{column}' .*\"not-a-date\""):
         read(tmp_path)
+
+
+def test_policy_mirrors_the_constants_the_rules_read():
+    assert policy() == {
+        "rule_version": RULE_VERSION,
+        "parameters": {
+            "lambda": LAMBDA,
+            "adjustment_cap": ADJUSTMENT_CAP,
+            "momentum_threshold": MOMENTUM_THRESHOLD,
+            "volatility_factor": VOLATILITY_FACTOR,
+            "exit_factor": EXIT_FACTOR,
+            "penalty_cap": PENALTY_CAP,
+            "healthy_level": HEALTHY_LEVEL,
+            "persistence_months": PERSISTENCE_MONTHS,
+            "window_months": 3,
+            "min_months": 3,
+            "momentum_min_months": 6,
+        },
+    }
+
+
+def test_build_stamps_the_policy_on_every_artifact_it_writes(tmp_path: Path):
+    data = seed_dataset(tmp_path / "data", months=8)
+    _write_csv(
+        data / "companies.csv",
+        [
+            {"company_id": "C1", "group_id": "G1", "currency": "EUR"},
+            {"company_id": "C2", "group_id": "G1", "currency": "EUR"},
+        ],
+    )
+    out = tmp_path / "out"
+    build(read(data), out, seed=42)
+    meta = json.loads((out / "meta.json").read_text())
+    assert meta["rule_version"] == RULE_VERSION
+    assert meta["policy"] == policy()["parameters"]
+    assert datetime.fromisoformat(meta["generated_at"]).tzinfo is not None
+    companies = json.loads((out / "companies.json").read_text())
+    assert {company["company_id"] for company in companies} == {"C1", "C2"}
+    assert {company["rule_version"] for company in companies} == {RULE_VERSION}
+    alerts = json.loads((out / "alerts.json").read_text())
+    assert [alert["kind"] for alert in alerts] == ["down"]
+    assert {alert["rule_version"] for alert in alerts} == {RULE_VERSION}
+    assert json.loads((out / "backtest.json").read_text())["rule_version"] == RULE_VERSION
+    detail = json.loads((out / "scores" / "C1.json").read_text())
+    assert detail["rule_version"] == RULE_VERSION
 
 
 def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):

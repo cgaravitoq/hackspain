@@ -1,6 +1,6 @@
 import json
 import random
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +10,7 @@ from xray import drivers as d
 from xray.events import backtest, cash_stress, debt_break, overdue_invoice_months, recovery
 from xray.load import CUTOFF, Dataset
 from xray.panel import monthly_panel
-from xray.score import DOWN_STATES, NOT_EVALUABLE, confidence, score_panel, states
+from xray.score import DOWN_STATES, NOT_EVALUABLE, RULE_VERSION, confidence, policy, score_panel, states
 
 HOLDOUT_SHARE = 0.2
 STATE_LABELS = {
@@ -107,6 +107,7 @@ def _company_record(
 ) -> dict[str, Any]:
     group_id = company_group.get(company_id)
     return {
+        "rule_version": RULE_VERSION,
         "company_id": company_id,
         "group_id": group_id,
         "currency": company_currency.get(company_id),
@@ -131,6 +132,7 @@ def _alert(
     if not kind:
         return None
     return {
+        "rule_version": RULE_VERSION,
         "company_id": company_id,
         "group_id": company_group.get(company_id),
         "month": latest["month"],
@@ -153,6 +155,7 @@ def _unscorable(
 ) -> list[dict[str, Any]]:
     return [
         {
+            "rule_version": RULE_VERSION,
             "company_id": company_id,
             "group_id": group_id,
             "currency": company_currency.get(company_id),
@@ -294,14 +297,18 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
     groups_out = _groups(group_ids, companies_out, holdout_groups)
     order = {"down": 0, "recovered": 1, "up": 2}
     alerts.sort(key=lambda a: (order[a["kind"]], a["state"] != "falling", a["delta"]))
-    summary = backtest(company_rows)
+    summary = {**backtest(company_rows), "rule_version": RULE_VERSION}
     _write(out_dir / "companies.json", companies_out)
     _write(out_dir / "alerts.json", alerts)
     _write(out_dir / "groups.json", groups_out)
     _write(out_dir / "backtest.json", summary)
+    policy_document = policy()
     _write(
         out_dir / "meta.json",
         {
+            "rule_version": policy_document["rule_version"],
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "policy": policy_document["parameters"],
             "state_labels": STATE_LABELS,
             "latest_month": max(c["latest"]["month"] or "" for c in companies_out),
             "holdout_groups": sorted(holdout_groups),

@@ -36,7 +36,7 @@ function rpc(method: string, params: Params, id = 1) {
 
 const rpcResult = z.object({
   jsonrpc: z.literal("2.0"),
-  id: z.number(),
+  id: z.literal(1),
   result: z.object({
     content: z.array(z.object({ type: z.literal("text"), text: z.string() })),
   }),
@@ -94,6 +94,16 @@ describe("POST /mcp", () => {
     ).toBe(
       "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
     );
+  });
+
+  it("echoes the JSON-RPC id the caller sent", async () => {
+    const response = await rpc("tools/list", {}, 7);
+    expect(response.status).toBe(200);
+    const body = z
+      .object({ jsonrpc: z.literal("2.0"), id: z.literal(7) })
+      .loose()
+      .parse(await response.json());
+    expect(body.id).toBe(7);
   });
 
   it("answers a relations call with the edges and the counterpart state", async () => {
@@ -192,6 +202,7 @@ describe("POST /mcp", () => {
     expect(body.id).toBe(1);
     const score = z
       .object({
+        rule_version: z.string(),
         score: z.number(),
         state: z.string(),
         state_label: z.string(),
@@ -199,6 +210,7 @@ describe("POST /mcp", () => {
       })
       .parse(JSON.parse(body.result.content[0]?.text ?? ""));
     expect(score).toMatchObject({
+      rule_version: "xray-score/0.1",
       score: 12.3,
       state: "falling",
       state_label: "cayendo",
