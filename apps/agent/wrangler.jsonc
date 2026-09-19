@@ -11,12 +11,30 @@
     "traces": { "enabled": true }
   },
   "vars": { "ENVIRONMENT": "production" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hackspain-xray",
+      "database_id": "5897c324-a315-419b-9d78-65d2f0883afd",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ai": { "binding": "AI", "remote": true },
   // Bindings and vars are not inherited by named environments, so staging
   // repeats everything it needs.
   "env": {
     "staging": {
       "name": "hackspain-agent-staging",
-      "vars": { "ENVIRONMENT": "staging" }
+      "vars": { "ENVIRONMENT": "staging" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "hackspain-xray-staging",
+          "database_id": "d0a5967c-6403-4e5b-a1c6-5c79414cb597",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "ai": { "binding": "AI", "remote": true }
     }
   }
 }

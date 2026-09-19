@@ -9,13 +9,20 @@
     "types": "wrangler types",
     "deploy:dry": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
-    "deploy:staging": "wrangler deploy --env staging"
+    "deploy:staging": "wrangler deploy --env staging",
+    "load": "bun scripts/load-artifacts.ts"
   },
   "dependencies": {
     "@hackspain/shared": "workspace:*",
-    "hono": "4.13.8"
+    "@hono/mcp": "0.3.2",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "ai": "7.0.107",
+    "hono": "4.13.8",
+    "workers-ai-provider": "4.0.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "4.0.17",
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "vitest": "4.1.11"
   }
