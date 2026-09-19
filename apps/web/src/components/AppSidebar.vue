@@ -19,13 +19,6 @@ import {
 } from "reka-ui";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -45,16 +38,7 @@ type View = "radiography" | "graph";
 
 defineProps<{ view: View; role: Role }>();
 
-const emit = defineEmits<{
-  role: [role: Role];
-  view: [view: View];
-}>();
-
-const roles = [
-  { value: "tesorero", label: ROLE_LABELS.tesorero, initials: "TE" },
-  { value: "financiero", label: ROLE_LABELS.financiero, initials: "FI" },
-  { value: "ventas", label: ROLE_LABELS.ventas, initials: "VE" },
-] satisfies { value: Role; label: string; initials: string }[];
+const emit = defineEmits<{ view: [view: View] }>();
 
 const roleInitials = {
   tesorero: "TE",
@@ -166,42 +150,19 @@ const menuAfterAnalytics = [
     <SidebarFooter>
       <SidebarMenu>
         <SidebarMenuItem class="min-w-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <SidebarMenuButton
-                class="gap-1 px-1"
-                :tooltip="ROLE_LABELS[role]"
-                aria-label="Cambiar rol"
-              >
-                <Avatar class="size-6">
-                  <AvatarFallback class="bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {{ roleInitials[role] }}
-                  </AvatarFallback>
-                </Avatar>
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              aria-label="Perfil"
-              side="top"
-              align="start"
-            >
-              <DropdownMenuRadioGroup :model-value="role">
-                <DropdownMenuRadioItem
-                  v-for="option in roles"
-                  :key="option.value"
-                  :value="option.value"
-                  @select="emit('role', option.value)"
-                >
-                  <Avatar class="size-6">
-                    <AvatarFallback class="text-[10px] font-semibold">
-                      {{ option.initials }}
-                    </AvatarFallback>
-                  </Avatar>
-                  {{ option.label }}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <SidebarMenuButton
+            as="div"
+            role="img"
+            class="cursor-default gap-1 px-1 hover:bg-transparent"
+            :tooltip="ROLE_LABELS[role]"
+            :aria-label="`Rol: ${ROLE_LABELS[role]}`"
+          >
+            <Avatar class="size-6">
+              <AvatarFallback class="bg-primary text-[10px] font-semibold text-primary-foreground">
+                {{ roleInitials[role] }}
+              </AvatarFallback>
+            </Avatar>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarFooter>

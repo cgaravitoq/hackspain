@@ -160,14 +160,6 @@ function openReport(
   selected.value = result.company_id;
 }
 
-function selectRole(nextRole: Role) {
-  role.value = nextRole;
-  if (nextRole === "tesorero") {
-    compareIds.value = [TREASURER_COMPANY];
-    selected.value = TREASURER_COMPANY;
-  }
-}
-
 function syncHash() {
   const hash = window.location.hash.slice(1);
   if (hash === GRAPH_ROUTE && role.value === "tesorero") {
@@ -238,7 +230,6 @@ onUnmounted(() => {
     <AppSidebar
       :view="onGraph ? 'graph' : 'radiography'"
       :role="role"
-      @role="selectRole"
       @view="selectView"
     />
     <SidebarInset>

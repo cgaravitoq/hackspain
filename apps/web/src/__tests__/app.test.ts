@@ -49,20 +49,6 @@ function mountApp(props: { initialRole?: Role } = {}) {
   return mounted;
 }
 
-async function selectRole(wrapper: VueWrapper, label: string) {
-  const trigger = wrapper.find('button[aria-label="Cambiar rol"]');
-  if (trigger.attributes("aria-expanded") !== "true") {
-    await trigger.trigger("click");
-    await flushPromises();
-  }
-  const option = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
-  ).find((item) => item.textContent?.includes(label));
-  option?.click();
-  await flushPromises();
-  await flushPromises();
-}
-
 async function openRoute(wrapper: VueWrapper, label: string) {
   const tab = wrapper
     .findAll('[aria-label="Pantalla"] button')
@@ -359,38 +345,23 @@ describe("App", () => {
   it("pins the treasurer to its company without search, alerts or comparison", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
-    const wrapper = mountApp();
-    await flushPromises();
-    await flushPromises();
-    const before = seen.length;
-    await selectRole(wrapper, "Tesorero");
-    expect(seen).toContain("/api/companies/COMP_0176");
-    expect(seen.slice(before)).not.toContain("/api/compare");
-    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
-    expect(wrapper.find(".company-selector").exists()).toBe(false);
-    expect(wrapper.find(".alerts").exists()).toBe(false);
-    expect(wrapper.find(".compare-chip").exists()).toBe(false);
-  });
-
-  it("opens pinned to the treasurer's company when entered with that role", async () => {
-    const seen: string[] = [];
-    vi.stubGlobal("fetch", fakeApi(seen));
     const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
     expect(seen).toContain("/api/companies/COMP_0176");
     expect(seen).not.toContain("/api/compare");
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(wrapper.find(".company-selector").exists()).toBe(false);
-    expect(wrapper.find('button[aria-label="Cambiar rol"]').text()).toBe("TE");
+    expect(wrapper.find(".alerts").exists()).toBe(false);
+    expect(wrapper.find(".compare-chip").exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Rol: Tesorero"]').text()).toBe("TE");
   });
 
   it("keeps the treasurer on its company when the hash changes", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await selectRole(wrapper, "Tesorero");
     window.location.hash = "COMP_B";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
@@ -402,10 +373,9 @@ describe("App", () => {
   it("keeps the treasurer on its company when a group member is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await selectRole(wrapper, "Tesorero");
     await openTab(wrapper, "Grupo");
     expect(wrapper.findAll("section.group button")).toHaveLength(2);
     await wrapper.findAll("section.group button")[1]?.trigger("click");
@@ -414,44 +384,16 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(seen).not.toContain("/api/companies/COMP_B");
-    await selectRole(wrapper, "Financiero");
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
   });
 
-  it("draws one series when the treasurer takes over the company already on screen", async () => {
+  it("draws only the treasurer's series even when the hash names another company", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    window.location.hash = "COMP_0176";
-    const wrapper = mountApp();
+    window.location.hash = "COMP_C";
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await compareCompany(wrapper, "COMP_C");
-    window.location.hash = "COMP_0176";
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-    await flushPromises();
-    await flushPromises();
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera", "COMP_C"]);
-    expect(wrapper.findAll(".series-line")).toHaveLength(2);
-    await selectRole(wrapper, "Tesorero");
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
-    expect(wrapper.findAll(".series-line")).toHaveLength(1);
-    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
-    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "proyección por tendencia (3 meses)",
-      "rango por tendencia",
-    ]);
-  });
-
-  it("draws only the treasurer's series after comparing three companies", async () => {
-    vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
-    await flushPromises();
-    await flushPromises();
-    await compareCompany(wrapper, "COMP_B");
-    await compareCompany(wrapper, "COMP_C");
-    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
-    expect(wrapper.findAll(".series-line")).toHaveLength(3);
-    await selectRole(wrapper, "Tesorero");
-    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
+    expect(window.location.hash).toBe("#COMP_0176");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
@@ -744,7 +686,18 @@ describe("App", () => {
       "/api/companies/COMP_A/report.pdf?role=financiero",
     );
     expect(exportLink.attributes("target")).toBe("_blank");
-    await selectRole(wrapper, "Ventas");
+  });
+
+  it("requests the report for the role the dashboard was entered with", async () => {
+    const requested: string[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      requested.push(String(input));
+      return base(input);
+    });
+    const wrapper = mountApp({ initialRole: "ventas" });
+    await flushPromises();
+    await flushPromises();
     expect(requested).toContain("/api/companies/COMP_A/report?role=ventas");
     expect(wrapper.find(".report-export").attributes("href")).toBe(
       "/api/companies/COMP_A/report.pdf?role=ventas",
@@ -831,46 +784,37 @@ describe("App", () => {
     expect(window.location.hash).toBe("#graph");
   });
 
-  it("renders only the role control in the footer and switches roles", async () => {
+  it("shows the entered role on the avatar without a menu to change it", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    const wrapper = mountApp({ initialRole: "ventas" });
     await flushPromises();
     await flushPromises();
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Radiografía");
-    const roleTrigger = wrapper.find('[aria-label="Cambiar rol"]');
-    expect(roleTrigger.attributes("aria-label")).toBe("Cambiar rol");
-    expect(roleTrigger.text()).toBe("FI");
+    const avatar = wrapper.find('[aria-label="Rol: Ventas"]');
+    expect(avatar.text()).toBe("VE");
+    expect(avatar.element.tagName).not.toBe("BUTTON");
+    expect(wrapper.find('[aria-label="Cambiar rol"]').exists()).toBe(false);
     const footer = wrapper.find('[data-sidebar="footer"]');
     expect(footer.findAll('[data-sidebar="menu-button"]')).toHaveLength(1);
     expect(footer.text()).not.toContain("Ajustes");
     expect(wrapper.find('[aria-label="Alertas · próximamente"]').exists()).toBe(
       false,
     );
-    await wrapper.find('[aria-label="Cambiar rol"]').trigger("click");
-    await flushPromises();
-    expect(
-      Array.from(
-        document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
-      ).map((item) => item.textContent?.trim()),
-    ).toEqual(["TE Tesorero", "FI Financiero", "VE Ventas"]);
     await openRoute(wrapper, "Grafo");
-    await selectRole(wrapper, "Ventas");
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Grafo");
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe("VE");
+    expect(wrapper.find(".chat-stub").text()).toContain("ventas");
   });
 
   it("keeps the graph unavailable to the treasurer", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
-    const wrapper = mountApp();
+    window.location.hash = "graph";
+    const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    await openRoute(wrapper, "Grafo");
-    expect(wrapper.find(".graph-screen").exists()).toBe(true);
-    await selectRole(wrapper, "Tesorero");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
@@ -941,7 +885,7 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     const hash = window.location.hash;
-    const role = wrapper.find('[aria-label="Cambiar rol"]').text();
+    const role = wrapper.find('[aria-label="Rol: Financiero"]').text();
     const placeholders = wrapper
       .find('[aria-label="Pantalla"]')
       .findAll(":scope > li > [data-sidebar='menu-button']")
@@ -956,7 +900,7 @@ describe("App", () => {
       await placeholder.trigger("click");
     }
     expect(window.location.hash).toBe(hash);
-    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
+    expect(wrapper.find('[aria-label="Rol: Financiero"]').text()).toBe(role);
   });
 
   it("opens a company from the graph alone instead of adding it to the comparison", async () => {
