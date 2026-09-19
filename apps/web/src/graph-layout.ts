@@ -143,6 +143,7 @@ function componentAnchors(components: RelationNode[][]): Map<string, Point> {
     (sum, component) => sum + footprint(component),
     0,
   );
+  const spread = Math.min(1, Math.sqrt(total / (reach.x * reach.y)));
   const anchors = new Map<string, Point>();
   let covered = 0;
   ordered.forEach((component, index) => {
@@ -152,8 +153,8 @@ function componentAnchors(components: RelationNode[][]): Map<string, Point> {
     covered += area;
     const angle = index * GOLDEN_ANGLE;
     const anchor = {
-      x: LAYOUT_WIDTH / 2 + Math.cos(angle) * reach.x * distance,
-      y: LAYOUT_HEIGHT / 2 + Math.sin(angle) * reach.y * distance,
+      x: LAYOUT_WIDTH / 2 + Math.cos(angle) * reach.x * spread * distance,
+      y: LAYOUT_HEIGHT / 2 + Math.sin(angle) * reach.y * spread * distance,
     };
     for (const node of component) {
       anchors.set(node.company_id, anchor);
