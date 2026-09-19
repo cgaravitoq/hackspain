@@ -10,11 +10,13 @@ import {
   metaSchema,
   monthEntrySchema,
   ROLE_LABELS,
+  reportFigureSchema,
   reportSchema,
   reportSectionCodeSchema,
+  reportSectionSchema,
   roleSchema,
   stateSchema,
-} from "./xray.ts";
+} from "./index.ts";
 
 const stableMonth = {
   month: "2026-08",
@@ -309,6 +311,16 @@ describe("xray contracts", () => {
       tesorero: "Tesorero",
       financiero: "Financiero",
       ventas: "Ventas",
+    });
+  });
+
+  it("parses a section and a figure with their standalone schemas", () => {
+    const figure = { label: "Score", value: 50, unit: "pts" };
+    const section = { code: "grupo", title: "Grupo", body: "Sin tensión." };
+    expect(reportFigureSchema.parse(figure)).toEqual(figure);
+    expect(reportSectionSchema.parse(section)).toEqual({
+      ...section,
+      figures: [],
     });
   });
 
