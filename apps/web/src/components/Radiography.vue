@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CompanyDetail, Explain } from "@hackspain/shared";
+import type { Alert, CompanyDetail, Explain } from "@hackspain/shared";
 import { computed } from "vue";
 import {
   COMPONENT_CODES,
@@ -9,28 +9,16 @@ import {
   eventLabel,
   monthLabel,
   points,
-  STATE_COLORS,
 } from "../format.ts";
+import KpiCards from "./KpiCards.vue";
 import Sparkline from "./Sparkline.vue";
 
 const props = defineProps<{
   company: CompanyDetail;
   explanation: Explain;
   comparison: CompanyDetail[];
+  alerts: Alert[];
 }>();
-
-const previous = computed(() => {
-  const scored = props.company.series.filter((entry) => entry.score !== null);
-  return scored.at(-2) ?? null;
-});
-
-const previousScore = computed(() => previous.value?.score ?? null);
-
-const delta = computed(() => {
-  const now = props.explanation.score;
-  const before = previousScore.value;
-  return now === null || before === null ? null : now - before;
-});
 
 const mainDrivers = computed(() =>
   props.explanation.drivers.filter((driver) => driver.contribution !== 0),
@@ -44,32 +32,23 @@ const contextDrivers = computed(() =>
 </script>
 
 <template>
-  <section class="panel radiography">
+  <section class="radiography">
     <header class="head">
-      <div>
-        <h1>{{ company.company_id }}</h1>
-        <p class="meta">
-          {{ monthLabel(explanation.month) }} · {{ company.months_observed }} meses observados ·
-          {{ CONFIDENCE_LABELS[explanation.confidence] }}
-          <span v-if="company.holdout" class="holdout">held-out</span>
-        </p>
-      </div>
-      <div class="score-block">
-        <span class="score" :style="{ color: STATE_COLORS[explanation.state] }">
-          {{ explanation.score ?? "–" }}
-        </span>
-        <span class="delta" :class="{ negative: (delta ?? 0) < 0, positive: (delta ?? 0) > 0 }">
-          <template v-if="delta !== null">{{ delta < 0 ? "▼" : delta > 0 ? "▲" : "▶" }} {{ points(delta) }} vs mes anterior</template>
-          <template v-else>sin mes anterior</template>
-        </span>
-        <span class="chip" :style="{ background: STATE_COLORS[explanation.state] }">
-          {{ explanation.state_label }}
-        </span>
-      </div>
+      <h1>{{ company.company_id }}</h1>
+      <p class="meta">
+        {{ monthLabel(explanation.month) }} · {{ company.months_observed }} meses observados ·
+        {{ CONFIDENCE_LABELS[explanation.confidence] }}
+        <span v-if="company.holdout" class="holdout">held-out</span>
+      </p>
     </header>
 
-    <Sparkline :companies="comparison" />
+    <KpiCards :company="company" :explanation="explanation" :alerts="alerts" />
 
+    <div class="chart-card">
+      <Sparkline :companies="comparison" />
+    </div>
+
+    <div class="panel details">
     <div class="columns">
       <div>
         <h3>Por qué</h3>
@@ -114,23 +93,31 @@ const contextDrivers = computed(() =>
       <div v-if="explanation.invoice_facts.overdue_count"><dt>Facturas vencidas</dt><dd>{{ explanation.invoice_facts.overdue_count }} · {{ euro(explanation.invoice_facts.overdue_amount ?? 0) }}</dd></div>
       <div><dt>Regla</dt><dd>{{ explanation.evidence.rule_version }}</dd></div>
     </dl>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .radiography {
-  padding: 18px 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
 .head {
+  padding: 4px 2px 0;
+}
+
+.chart-card {
+  background: var(--card);
+  border-radius: 10px;
+}
+
+.details {
+  padding: 18px 20px 16px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 14px;
 }
 
 h1 {
@@ -152,42 +139,6 @@ h1 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.score-block {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-areas:
-    "score chip"
-    "score delta";
-  column-gap: 14px;
-  align-items: center;
-}
-
-.score {
-  grid-area: score;
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.chip {
-  grid-area: chip;
-  justify-self: start;
-}
-
-.delta {
-  grid-area: delta;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.delta.negative {
-  color: var(--falling);
-}
-
-.delta.positive {
-  color: var(--healthy);
 }
 
 .columns {

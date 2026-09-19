@@ -271,6 +271,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
           :company="company"
           :explanation="explanation"
           :comparison="comparison.length ? comparison : [company]"
+          :alerts="alerts"
         />
         <ReportPanel :company-id="selected" :role="role" />
         <GroupStrip v-if="group" :group="group" :selected="selected" @select="select" />
