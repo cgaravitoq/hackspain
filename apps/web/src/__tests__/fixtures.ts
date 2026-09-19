@@ -9,7 +9,7 @@ import {
   roleSchema,
 } from "@hackspain/shared";
 
-function month(
+export function month(
   name: string,
   score: number | null,
   state: MonthEntry["state"],
