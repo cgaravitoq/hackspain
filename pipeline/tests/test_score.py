@@ -1,5 +1,6 @@
 import csv
 import json
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -248,6 +249,45 @@ def test_build_stamps_the_policy_on_every_artifact_it_writes(tmp_path: Path):
     assert json.loads((out / "backtest.json").read_text())["rule_version"] == RULE_VERSION
     detail = json.loads((out / "scores" / "C1.json").read_text())
     assert detail["rule_version"] == RULE_VERSION
+
+
+def test_build_exports_score_deltas_from_three_and_six_entries_earlier(tmp_path: Path) -> None:
+    dataset = read(seed_dataset(tmp_path / "data"))
+    rows: list[tuple[str, float, str]] = []
+    for month in range(1, 13):
+        key = f"2025-{month:02d}"
+        if 7 <= month <= 9:
+            rows.append((key, 100.0, "transfer"))
+        else:
+            inflow, outflow = (100.0, -300.0) if 4 <= month <= 6 else (300.0, -100.0)
+            rows.extend([(key, inflow, "collection"), (key, outflow, "payment")])
+    txs = transactions(rows)
+    dataset = replace(
+        dataset,
+        companies=pl.DataFrame({
+            "company_id": ["C1", "C2", "C3"],
+            "group_id": ["G1"] * 3,
+            "currency": ["EUR"] * 3,
+        }),
+        transactions=pl.concat([txs, txs.with_columns(company_id=pl.lit("C2"), amount=-pl.col("amount"))]),
+    )
+    out = tmp_path / "out"
+    build(dataset, out, seed=42)
+    detail = json.loads((out / "scores" / "C1.json").read_text())
+    series = detail["series"]
+    assert [entry["score"] for entry in series] == [None, None, 75.0, 58.3, 41.7, 15.0, 16.7, 20.8, None, 85.0, 85.0, 75.0]
+    assert [entry["delta_3"] for entry in series] == [None, None, None, None, None, -60.0, -41.6, -20.9, None, 68.3, 64.2, None]
+    assert [entry["delta_6"] for entry in series] == [None, None, None, None, None, None, None, None, None, 26.7, 43.3, 60.0]
+    assert detail["latest"]["delta_3"] is None
+    assert detail["latest"]["delta_6"] == 60.0
+    other = json.loads((out / "scores" / "C2.json").read_text())
+    assert [entry["delta_3"] for entry in other["series"][:5]] == [None] * 5
+    assert other["latest"]["delta_6"] == -60.0
+    companies = json.loads((out / "companies.json").read_text())
+    assert companies[0]["latest"] == detail["latest"]
+    assert companies[1]["latest"] == other["latest"]
+    assert companies[2]["latest"]["delta_3"] is None
+    assert companies[2]["latest"]["delta_6"] is None
 
 
 def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
