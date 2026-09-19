@@ -286,10 +286,7 @@ export type Report = z.infer<typeof reportSchema>;
 
 export const compareSchema = z.object({
   months: z.array(z.string()).min(1),
-  companies: z
-    .array(companySummarySchema.extend({ series: z.array(monthEntrySchema) }))
-    .min(1)
-    .max(3),
+  companies: z.array(companyDetailSchema).min(1).max(3),
 });
 
 export type Compare = z.infer<typeof compareSchema>;
