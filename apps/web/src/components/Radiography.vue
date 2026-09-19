@@ -2,6 +2,7 @@
 import type { CompanyDetail, Explain } from "@hackspain/shared";
 import { computed } from "vue";
 import {
+  COMPONENT_CODES,
   CONFIDENCE_LABELS,
   componentLabel,
   euro,
@@ -27,15 +28,13 @@ const delta = computed(() =>
     : null,
 );
 
-const SCORED_CODES = new Set(["balance", "fees", "refunds", "momentum"]);
-
 const mainDrivers = computed(() =>
   props.explanation.drivers.filter((driver) => driver.contribution !== 0),
 );
 
 const contextDrivers = computed(() =>
   props.explanation.drivers.filter(
-    (driver) => driver.contribution === 0 && !SCORED_CODES.has(driver.code),
+    (driver) => driver.contribution === 0 && !COMPONENT_CODES.has(driver.code),
   ),
 );
 </script>

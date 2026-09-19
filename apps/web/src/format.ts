@@ -35,6 +35,10 @@ const componentLabels = new Map([
   ["cap", "Tope 0-100"],
 ]);
 
+export const COMPONENT_CODES: ReadonlySet<string> = new Set(
+  componentLabels.keys(),
+);
+
 export function componentLabel(code: string): string {
   return componentLabels.get(code) ?? code;
 }
