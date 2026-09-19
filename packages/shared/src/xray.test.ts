@@ -3,10 +3,14 @@ import {
   alertSchema,
   chatRequestSchema,
   companyDetailSchema,
+  compareSchema,
+  DEMO_COMPANY_NAMES,
   driverSchema,
   explainSchema,
   metaSchema,
   monthEntrySchema,
+  reportSchema,
+  roleSchema,
   stateSchema,
 } from "./xray.ts";
 
@@ -40,6 +44,44 @@ const stableMonth = {
     debt_repayment: 0,
   },
   events: { E1: false, E2: false, E3: false, E4: false },
+};
+
+const demoCompanySummary = {
+  company_id: "COMP_0176",
+  group_id: "GROUP_0001",
+  currency: "EUR",
+  scorable: true,
+  holdout: false,
+  months_observed: 3,
+  debt_outstanding: 1200,
+  invoice_facts: {},
+  latest: {
+    month: "2026-08",
+    score: 50,
+    level: 50,
+    momentum: 0,
+    state: "stable",
+    confidence: "high",
+  },
+};
+
+const demoReport = {
+  company_id: "COMP_0176",
+  month: "2026-08",
+  role: "tesorero",
+  rule_version: "xray-report/0.1",
+  generated_at: "2026-09-19T10:00:00.000Z",
+  summary: "La empresa se mantiene estable.",
+  sections: [
+    {
+      code: "resumen",
+      title: "Resumen",
+      body: "Todo en orden.",
+      figures: [{ label: "Score", value: 50, unit: "pts" }],
+    },
+    { code: "que_hacer", title: "Qué hacer", body: "Nada." },
+  ],
+  export_url: "/reports/COMP_0176/2026-08.pdf",
 };
 
 describe("xray contracts", () => {
@@ -226,5 +268,114 @@ describe("xray contracts", () => {
         ],
       }).messages,
     ).toHaveLength(1);
+  });
+
+  it("rejects a chat request whose role is not one of the three product roles", () => {
+    const result = chatRequestSchema.safeParse({
+      role: "ceo",
+      messages: [
+        { id: "m1", role: "user", parts: [{ type: "text", text: "Hola" }] },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([["role"]]);
+  });
+
+  it("accepts each of the three product roles", () => {
+    for (const role of ["tesorero", "financiero", "ventas"]) {
+      expect(roleSchema.parse(role)).toBe(role);
+    }
+  });
+
+  it("accepts a report and defaults missing figures to an empty list", () => {
+    const report = reportSchema.parse(demoReport);
+    expect(report.sections).toHaveLength(2);
+    expect(report.sections[1]?.figures).toEqual([]);
+  });
+
+  it("rejects a report whose role is not one of the three product roles", () => {
+    const result = reportSchema.safeParse({ ...demoReport, role: "ceo" });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([["role"]]);
+  });
+
+  it("rejects a report section whose code is not one of the six section codes", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      sections: [{ code: "intro", title: "Intro", body: "Texto" }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections", 0, "code"],
+    ]);
+  });
+
+  it("rejects a report figure whose value is not a number", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      sections: [
+        {
+          code: "resumen",
+          title: "Resumen",
+          body: "Texto",
+          figures: [{ label: "Score", value: "50", unit: "pts" }],
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections", 0, "figures", 0, "value"],
+    ]);
+  });
+
+  it("rejects a report without sections", () => {
+    const result = reportSchema.safeParse({ ...demoReport, sections: [] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections"],
+    ]);
+  });
+
+  it("accepts a compare payload of one month and one company with its series", () => {
+    const compare = compareSchema.parse({
+      months: ["2026-08"],
+      companies: [{ ...demoCompanySummary, series: [stableMonth] }],
+    });
+    expect(compare.companies[0]?.series).toHaveLength(1);
+  });
+
+  it("rejects a compare payload listing more than three companies", () => {
+    const result = compareSchema.safeParse({
+      months: ["2026-08"],
+      companies: [
+        { ...demoCompanySummary, company_id: "COMP_0001", series: [] },
+        { ...demoCompanySummary, company_id: "COMP_0002", series: [] },
+        { ...demoCompanySummary, company_id: "COMP_0003", series: [] },
+        { ...demoCompanySummary, company_id: "COMP_0004", series: [] },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["companies"],
+    ]);
+  });
+
+  it("rejects a compare payload without months", () => {
+    const result = compareSchema.safeParse({
+      months: [],
+      companies: [{ ...demoCompanySummary, series: [] }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["months"],
+    ]);
+  });
+
+  it("maps each demo company name to its fictional company id", () => {
+    expect(DEMO_COMPANY_NAMES).toEqual({
+      "Talleres Ribera": "COMP_0176",
+      "Bodegas Altamira": "COMP_0077",
+      "Meridian Logística": "COMP_0909",
+    });
   });
 });
