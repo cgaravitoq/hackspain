@@ -15,7 +15,7 @@ def main() -> None:
     score.add_argument("--out", type=Path, required=True, help="folder that receives the JSON artifacts")
     score.add_argument("--seed", type=int, default=42, help="seed that picks the held-out groups")
     relations = commands.add_parser("relations", help="detect inter-company relations and write relations.json")
-    relations.add_argument("--data", type=Path, required=True, help="folder with the nine Embat CSV files")
+    relations.add_argument("--data", type=Path, required=True, help="folder with the Embat CSV files")
     relations.add_argument("--out", type=Path, required=True, help="folder that receives relations.json")
     args = parser.parse_args()
     if args.command == "relations":

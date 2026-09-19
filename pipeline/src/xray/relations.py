@@ -1,8 +1,8 @@
 import json
-import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -257,7 +257,7 @@ def _invoice_edges(matches: pd.DataFrame) -> list[dict[str, Any]]:
             high = len(rows) >= INVOICE_HIGH_CONFIDENCE_MATCHES
         else:
             high = distinct_amounts >= INVOICE_HIGH_CONFIDENCE_MATCHES
-        currency = rows["currency_seller"].dropna()
+        currency = rows["currency_buyer"].dropna()
         edges.append(
             {
                 "source": buyer,
@@ -302,7 +302,7 @@ def _loan_edges(debt: pd.DataFrame, group_of: pd.Series, product_currency: pd.Se
     for (lender, borrower), rows in pairs.groupby(["company_id_lender", "company_id_borrower"], sort=True):
         products = min(rows["product_id_lender"].nunique(), rows["product_id_borrower"].nunique())
         created = pd.concat([rows["created_at_lender"], rows["created_at_borrower"]]).dropna().astype(str)
-        currency = rows["product_id_lender"].map(product_currency).dropna()
+        currency = rows["product_id_borrower"].map(product_currency).dropna()
         evidence = sorted(set(rows["product_id_lender"]) | set(rows["product_id_borrower"]))
         edges.append(
             {
@@ -311,13 +311,13 @@ def _loan_edges(debt: pd.DataFrame, group_of: pd.Series, product_currency: pd.Se
                 "relation_type": "OPEN_OBLIGATION_TO",
                 "subtype": "in_house_bank_line",
                 "scope": "intragroup",
-                "confidence": "high" if rows["cents"].nunique() == 1 and products >= 1 else "medium",
+                "confidence": "high" if rows["cents"].nunique() == 1 else "medium",
                 "claim_status": "inferred",
                 "evidence_level": "debt_balance_mirror",
                 "matches": int(products),
                 "amount_minor": _minor_units(rows.drop_duplicates("cents")["outstanding_lender"].sum()),
                 "currency": str(currency.value_counts().index[0]) if not currency.empty else DEFAULT_CURRENCY,
-                "first_date": str(created.min()[:10]) if not created.empty else "",
+                "first_date": str(created.min()[:10]) if not created.empty else CUTOFF.isoformat(),
                 # An in-house line stays open, so it ends at the artifact snapshot date.
                 "last_date": CUTOFF.isoformat(),
                 "evidence_ids": evidence[:EVIDENCE_ID_LIMIT],
@@ -340,12 +340,16 @@ def _counterparty_edges(
     ].copy()
     tagged["company_id"] = tagged["company_id"].astype(str)
     tagged["counterparty_id"] = tagged["counterparty_id"].astype(str)
-    holders = tagged.groupby("counterparty_id")["company_id"].nunique()
-    shared = tagged[tagged["counterparty_id"].isin(holders[holders > 1].index)]
-    partners = shared.groupby("counterparty_id")["company_id"].apply(lambda ids: tuple(sorted(set(ids))))
-    shared = shared.assign(partners=shared["counterparty_id"].map(partners))
+    holders = tagged.groupby("counterparty_id")["company_id"].agg(lambda ids: sorted(set(ids)))
+    shared_by_pair: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for counterparty_id, companies in holders.items():
+        for pair in combinations(companies, 2):
+            shared_by_pair[pair].append(str(counterparty_id))
     edges: list[dict[str, Any]] = []
-    for (first, second), rows in shared.groupby("partners", sort=True):
+    for first, second in sorted(shared_by_pair):
+        rows = tagged[
+            tagged["counterparty_id"].isin(shared_by_pair[first, second]) & tagged["company_id"].isin((first, second))
+        ]
         first_rows = rows[rows["company_id"] == first]
         second_rows = rows[rows["company_id"] == second]
         counterparties = int(rows["counterparty_id"].nunique())
