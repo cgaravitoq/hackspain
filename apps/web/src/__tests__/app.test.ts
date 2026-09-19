@@ -94,10 +94,8 @@ async function openSelector(wrapper: VueWrapper) {
 }
 
 function companyOption(wrapper: VueWrapper, companyId: string) {
-  const option = wrapper
-    .findAll(".option-row")
-    .find((item) => item.find(".company-id").text() === companyId);
-  if (!option) {
+  const option = wrapper.find(`[data-company-id="${companyId}"]`);
+  if (!option.exists()) {
     throw new Error(`Missing selector option ${companyId}`);
   }
   return option;
@@ -366,7 +364,7 @@ describe("App", () => {
     await selectRole(wrapper, "Tesorero");
     expect(seen).toContain("/api/companies/COMP_0176");
     expect(seen.slice(before)).not.toContain("/api/compare");
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
@@ -382,7 +380,7 @@ describe("App", () => {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(window.location.hash).toBe("#COMP_0176");
   });
 
@@ -398,7 +396,7 @@ describe("App", () => {
     await wrapper.findAll("section.group button")[1]?.trigger("click");
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(seen).not.toContain("/api/companies/COMP_B");
     await selectRole(wrapper, "Financiero");
@@ -419,7 +417,7 @@ describe("App", () => {
     expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(2);
     await selectRole(wrapper, "Tesorero");
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
@@ -438,7 +436,7 @@ describe("App", () => {
     expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(3);
     await selectRole(wrapper, "Tesorero");
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
@@ -768,9 +766,9 @@ describe("App", () => {
     await openSelector(wrapper);
     await wrapper.find("#company-search").setValue("COMP_B");
     await flushPromises();
-    expect(wrapper.findAll(".company-id").map((item) => item.text())).toEqual([
-      "COMP_B",
-    ]);
+    expect(wrapper.findAll(".company-name").map((item) => item.text())).toEqual(
+      ["COMP_B"],
+    );
     expect(seen).not.toContain("/api/companies/COMP_B");
   });
 
@@ -860,7 +858,7 @@ describe("App", () => {
     await selectRole(wrapper, "Tesorero");
     expect(window.location.hash).toBe("#COMP_0176");
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
-    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
     expect(
       wrapper
         .findAll('[data-sidebar="menu-sub-button"]')

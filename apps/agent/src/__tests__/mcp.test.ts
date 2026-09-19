@@ -94,7 +94,7 @@ describe("POST /mcp", () => {
     ).toContain("Never reserves cash");
     const compare = body.result.tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
-    expect(compare?.description).toContain("Talleres Ribera");
+    expect(compare?.description).toContain("company names or Embat ids");
     expect(
       body.result.tools.find((tool) => tool.name === "relations")?.description,
     ).toBe(

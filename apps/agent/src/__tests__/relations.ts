@@ -25,6 +25,7 @@ export const relationsJson = {
   nodes: [
     {
       company_id: "COMP_A",
+      name: "COMP_A",
       group_id: "GROUP_1",
       degree: 2,
       role: "connected",
@@ -32,6 +33,7 @@ export const relationsJson = {
     },
     {
       company_id: "COMP_B",
+      name: "COMP_B",
       group_id: "GROUP_1",
       degree: 2,
       role: "connected",
@@ -39,6 +41,7 @@ export const relationsJson = {
     },
     {
       company_id: "COMP_D",
+      name: "COMP_D",
       group_id: "GROUP_2",
       degree: 2,
       role: "connected",
@@ -46,6 +49,7 @@ export const relationsJson = {
     },
     {
       company_id: "COMP_E",
+      name: "COMP_E",
       group_id: "GROUP_2",
       degree: 0,
       role: "isolated",
@@ -122,10 +126,11 @@ export async function seedRelations(
       const { series: _series, ...summary } = detail;
       return db
         .prepare(
-          "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+          "INSERT INTO companies (company_id, name, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(
           detail.company_id,
+          detail.name,
           detail.group_id,
           detail.scorable ? 1 : 0,
           detail.latest.month,

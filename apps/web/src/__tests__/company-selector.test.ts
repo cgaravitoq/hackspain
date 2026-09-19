@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import CompanySelector from "../components/CompanySelector.vue";
 import { alerts, companies, company } from "./fixtures.ts";
 
-function summary(companyId: string): CompanySummary {
+function summary(companyId: string, name = companyId): CompanySummary {
   const { series: _series, ...item } = company(companyId, "GROUP_1");
-  return item;
+  return { ...item, name };
 }
 
 function mountSelector(comparison = ["COMP_A"]) {
@@ -14,7 +14,7 @@ function mountSelector(comparison = ["COMP_A"]) {
     attachTo: document.body,
     props: {
       alerts,
-      companies: [...companies, summary("COMP_D")],
+      companies: [...companies, summary("COMP_D", "Transportes Sierra S.L.")],
       selected: "COMP_A",
       comparison,
     },
@@ -27,10 +27,8 @@ async function openSelector(wrapper: VueWrapper) {
 }
 
 function option(wrapper: VueWrapper, companyId: string) {
-  const item = wrapper
-    .findAll(".option-row")
-    .find((candidate) => candidate.find(".company-id").text() === companyId);
-  if (!item) {
+  const item = wrapper.find(`[data-company-id="${companyId}"]`);
+  if (!item.exists()) {
     throw new Error(`Missing selector option ${companyId}`);
   }
   return item;
@@ -48,11 +46,11 @@ describe("CompanySelector", () => {
     const wrapper = mountSelector();
     await openSelector(wrapper);
     expect(wrapper.findAll(".company-option")).toHaveLength(4);
-    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("#company-search").setValue("Transportes Sierra");
     await flushPromises();
-    expect(wrapper.findAll(".company-id").map((item) => item.text())).toEqual([
-      "COMP_B",
-    ]);
+    expect(wrapper.findAll(".company-name").map((item) => item.text())).toEqual(
+      ["Transportes Sierra S.L."],
+    );
     wrapper.unmount();
   });
 

@@ -60,6 +60,12 @@ afterEach(() => {
 });
 
 describe("Radiography", () => {
+  it("shows the company name as the heading and its identifier as metadata", () => {
+    const wrapper = mountRadiography({ name: "Industrias Ebro S.A." });
+    expect(wrapper.get("h1").text()).toBe("Industrias Ebro S.A.");
+    expect(wrapper.get(".meta").text()).toContain("COMP_A");
+  });
+
   it("shows score, three and six month deltas and the month's alerts as four KPI cards", () => {
     const wrapper = mountRadiography({
       latest: { ...detail.latest, delta_3: 4.25, delta_6: -10.5 },

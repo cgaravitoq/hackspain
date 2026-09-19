@@ -11,6 +11,7 @@ import polars as pl
 from xray import drivers as d
 from xray.events import backtest, cash_stress, debt_break, overdue_invoice_months, recovery
 from xray.load import CUTOFF, Dataset
+from xray.names import company_names
 from xray.panel import monthly_panel
 from xray.score import DOWN_STATES, NOT_EVALUABLE, RULE_VERSION, confidence, policy, score_panel, states
 
@@ -197,6 +198,7 @@ def _treasury_of(treasury: dict[str, dict[str, float]], company_id: str) -> dict
 
 def _company_record(
     company_id: str,
+    name: str,
     rows: list[dict[str, Any]],
     series: list[dict[str, Any]],
     latest: dict[str, Any],
@@ -214,6 +216,7 @@ def _company_record(
     return {
         "rule_version": RULE_VERSION,
         "company_id": company_id,
+        "name": name,
         "group_id": group_id,
         "currency": company_currency.get(company_id),
         "scorable": latest["level"] is not None,
@@ -256,6 +259,7 @@ def _alert(
 
 
 def _unscorable(
+    names: dict[str, str],
     company_group: dict[str, str],
     company_rows: dict[str, list[dict[str, Any]]],
     company_currency: dict[str, str],
@@ -268,6 +272,7 @@ def _unscorable(
         {
             "rule_version": RULE_VERSION,
             "company_id": company_id,
+            "name": names[company_id],
             "group_id": group_id,
             "currency": company_currency.get(company_id),
             "scorable": False,
@@ -329,6 +334,7 @@ def _groups(
                 "members": [
                     {
                         "company_id": m["company_id"],
+                        "name": m["name"],
                         "debt_outstanding": m["debt_outstanding"],
                         "debt_share": round(m["debt_outstanding"] / total_debt, 3) if total_debt else None,
                         **m["latest"],
@@ -383,6 +389,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
     company_currency = dict(
         zip(dataset.companies["company_id"].to_list(), dataset.companies["currency"].to_list(), strict=True)
     )
+    names = company_names(dataset.companies["company_id"].to_list())
 
     companies_out: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
@@ -407,6 +414,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
         before = series[-2] if len(series) > 1 else None
         record = _company_record(
             company_id,
+            names[company_id],
             rows,
             series,
             latest,
@@ -426,7 +434,14 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
 
     companies_out.extend(
         _unscorable(
-            company_group, company_rows, company_currency, holdout_groups, debt_by_company, invoice_facts, treasury
+            names,
+            company_group,
+            company_rows,
+            company_currency,
+            holdout_groups,
+            debt_by_company,
+            invoice_facts,
+            treasury,
         )
     )
     for record in companies_out:

@@ -30,15 +30,17 @@ const alertsByCompany = computed(
 );
 const results = computed(() => {
   const text = query.value.trim().toUpperCase();
-  const byId = new Map<string, { company_id: string }>();
-  for (const alert of props.alerts) {
-    byId.set(alert.company_id, alert);
-  }
+  const byId = new Map<string, CompanySummary>();
   for (const company of props.companies) {
     byId.set(company.company_id, company);
   }
   return [...byId.values()]
-    .filter((item) => !text || item.company_id.toUpperCase().includes(text))
+    .filter(
+      (item) =>
+        !text ||
+        item.name.toUpperCase().includes(text) ||
+        item.company_id.toUpperCase().includes(text),
+    )
     .slice(0, SEARCH_RESULTS_LIMIT);
 });
 
@@ -101,7 +103,12 @@ function leaveSearch(event: FocusEvent) {
     />
     <div v-if="open" id="company-results" class="selector-popover" role="listbox">
       <p v-if="results.length === 0" class="empty">No hay empresas que coincidan.</p>
-      <div v-for="item in results" :key="item.company_id" class="option-row">
+      <div
+        v-for="item in results"
+        :key="item.company_id"
+        class="option-row"
+        :data-company-id="item.company_id"
+      >
         <button
           type="button"
           class="company-option"
@@ -110,7 +117,7 @@ function leaveSearch(event: FocusEvent) {
           @pointerdown.prevent="openCompany(item.company_id)"
           @click="openCompany(item.company_id)"
         >
-          <span class="company-id">{{ item.company_id }}</span>
+          <span class="company-name">{{ item.name }}</span>
           <template v-if="alertsByCompany.get(item.company_id)">
             <Badge
               class="state-badge"
@@ -201,7 +208,7 @@ function leaveSearch(event: FocusEvent) {
   outline: none;
 }
 
-.company-id {
+.company-name {
   min-width: 0;
   overflow: hidden;
   font-weight: 600;

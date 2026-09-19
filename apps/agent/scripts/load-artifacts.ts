@@ -67,7 +67,7 @@ function read<Schema extends z.ZodType>(
 
 function companyRow(detail: CompanyDetail): string {
   const { series: _series, ...summary } = detail;
-  return `INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (${text(detail.company_id)}, ${text(detail.group_id)}, ${flag(detail.scorable)}, ${text(detail.latest.month)}, ${num(detail.latest.score)}, ${text(detail.latest.state)}, ${json(summary)}, ${json(detail)});`;
+  return `INSERT INTO companies (company_id, name, group_id, scorable, month, score, state, summary, detail) VALUES (${text(detail.company_id)}, ${text(detail.name)}, ${text(detail.group_id)}, ${flag(detail.scorable)}, ${text(detail.latest.month)}, ${num(detail.latest.score)}, ${text(detail.latest.state)}, ${json(summary)}, ${json(detail)});`;
 }
 
 const statements = [

@@ -190,7 +190,7 @@ describe("POST /chat", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Cae porque cobra 40.000 €");
     const system = systemPrompt(model, 0);
-    expect(system).toContain("Empresa en pantalla: COMP_A");
+    expect(system).toContain("Empresa en pantalla: Industrias Ebro (COMP_A)");
     expect(system).toContain("cayendo");
     expect(system).toContain("Reclamar las 2 facturas vencidas");
     expect(system).not.toContain("Radiografía:");
@@ -207,9 +207,9 @@ describe("POST /chat", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("ok");
     const system = systemPrompt(model, 0);
-    expect(system).toContain("Empresa en pantalla: COMP_A");
+    expect(system).toContain("Empresa en pantalla: Industrias Ebro (COMP_A)");
     expect(system).toContain(
-      'Empresas en el gráfico: COMP_A, COMP_B. Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente esos ids en ese orden.',
+      'Empresas en el gráfico: Industrias Ebro (COMP_A), Transportes Sierra S.L. (COMP_B). Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente estos ids en este orden: COMP_A, COMP_B.',
     );
   });
 
@@ -281,7 +281,7 @@ describe("POST /chat", () => {
     expect(output).toContain('"state":"healthy"');
   });
 
-  it("offers the model a compare tool that names its cap and the demo names", async () => {
+  it("offers the model a compare tool that accepts names and ids", async () => {
     const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
     const response = await ask(model, {});
     expect(await response.text()).toContain("ok");
@@ -289,7 +289,7 @@ describe("POST /chat", () => {
     expect(tools.map((tool) => tool.name)).toContain("compare");
     const compare = tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
-    expect(compare?.description).toContain("Talleres Ribera");
+    expect(compare?.description).toContain("company names or Embat ids");
     expect(systemPrompt(model, 0)).toContain(
       "llama a compare en una sola llamada",
     );
@@ -320,6 +320,28 @@ describe("POST /chat", () => {
     expect(comparison.companies.map((company) => company.company_id)).toEqual([
       "COMP_B",
       "COMP_0176",
+    ]);
+  });
+
+  it("resolves demo and generated company names through D1", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("compare", {
+          company_ids: ["Bodegas Altamira", "transportes sierra"],
+        }),
+        textReply("Comparación lista."),
+      ],
+    });
+
+    const response = await ask(model, {});
+    await response.text();
+
+    const comparison = z
+      .object({ type: z.literal("json"), value: compareSchema })
+      .parse(JSON.parse(toolResult(model).output)).value;
+    expect(comparison.companies.map((company) => company.company_id)).toEqual([
+      "COMP_0077",
+      "COMP_B",
     ]);
   });
 

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from xray.load import CUTOFF
+from xray.names import company_names
 
 RULE_VERSION = "xray-relations/0.1"
 AMOUNT_FLOOR = 50.0
@@ -452,6 +453,7 @@ def _nodes(companies: pd.DataFrame, edges: list[dict[str, Any]], group_of: pd.Se
             best[group_id] = candidate
             hubs[group_id] = company_id
     nodes: list[dict[str, Any]] = []
+    names = company_names(companies["company_id"])
     for company_id, group_id in zip(companies["company_id"], companies["group_id"], strict=True):
         degree_count = degree[company_id]
         if degree_count == 0:
@@ -463,6 +465,7 @@ def _nodes(companies: pd.DataFrame, edges: list[dict[str, Any]], group_of: pd.Se
         nodes.append(
             {
                 "company_id": company_id,
+                "name": names[company_id],
                 "group_id": group_id,
                 "degree": degree_count,
                 "role": role,

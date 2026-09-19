@@ -152,6 +152,7 @@ export function company(id: string, groupId: string): CompanyDetail {
   return {
     rule_version: "xray-score/0.1",
     company_id: id,
+    name: id === "COMP_0176" ? "Talleres Ribera" : id,
     group_id: groupId,
     currency: "EUR",
     scorable: true,
@@ -189,6 +190,7 @@ export function company(id: string, groupId: string): CompanyDetail {
 export function explain(id: string, groupId: string): Explain {
   return {
     company_id: id,
+    name: id,
     group_id: groupId,
     month: "2026-08",
     score: 12.3,
@@ -243,7 +245,7 @@ export function explain(id: string, groupId: string): Explain {
   };
 }
 
-export const companies = ["COMP_B", "COMP_A"].map((id) => {
+export const companies = ["COMP_B", "COMP_A", "COMP_C"].map((id) => {
   const { series: _series, ...summary } = company(id, "GROUP_1");
   return summary;
 });
@@ -251,6 +253,7 @@ export const companies = ["COMP_B", "COMP_A"].map((id) => {
 export const report: Report = {
   schema_version: "human-v2",
   company_id: "COMP_A",
+  company_name: "Industrias Ebro",
   month: "2026-08",
   role: "financiero",
   rule_version: "xray-score/0.1",
@@ -282,6 +285,7 @@ export const group: GroupMap = {
   members: [
     {
       company_id: "COMP_A",
+      name: "COMP_A",
       debt_outstanding: 0,
       debt_share: null,
       month: "2026-08",
@@ -296,6 +300,7 @@ export const group: GroupMap = {
     },
     {
       company_id: "COMP_B",
+      name: "COMP_B",
       debt_outstanding: 0,
       debt_share: null,
       month: "2026-08",
@@ -319,6 +324,7 @@ export function graphNode(
 ): RelationNode {
   return {
     company_id: companyId,
+    name: companyId,
     group_id: groupId,
     degree,
     role: degree === 0 ? "isolated" : "connected",

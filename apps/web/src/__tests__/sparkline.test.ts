@@ -577,7 +577,10 @@ describe("Sparkline", () => {
     const wrapper = mount(Sparkline, {
       props: {
         companies: [
-          company("COMP_0176", "GROUP_1"),
+          {
+            ...company("COMP_0176", "GROUP_1"),
+            name: "Talleres Ribera",
+          },
           company("COMP_A", "GROUP_1"),
         ],
       },

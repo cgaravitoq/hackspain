@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-  type CompanyDetail,
-  DEMO_COMPANY_NAMES,
-  type MonthEntry,
-} from "@hackspain/shared";
+import type { CompanyDetail, MonthEntry } from "@hackspain/shared";
 import { computed, ref, useId } from "vue";
 import { monthLabel } from "../format.ts";
 
@@ -87,14 +83,6 @@ function shortMonth(name: string): string {
 
 function formatScore(score: number): string {
   return score.toLocaleString("es-ES", { maximumFractionDigits: 1 });
-}
-
-function companyLabel(companyId: string): string {
-  return (
-    Object.entries(DEMO_COMPANY_NAMES).find(
-      ([, id]) => id === companyId,
-    )?.[0] ?? companyId
-  );
 }
 
 function coordinate(point: Point): string {
@@ -211,7 +199,7 @@ function buildSeries(company: CompanyDetail, color: string) {
   const adverse = scenarioPoints("adverse");
   return {
     companyId: company.company_id,
-    label: companyLabel(company.company_id),
+    label: company.name,
     color,
     line: drawable.map(curve).join(" "),
     area: drawable.map(areaPath).join(" "),
@@ -303,7 +291,7 @@ const tooltip = computed(() => {
             {{ item.label }}
             <button
               type="button"
-              :aria-label="`Quitar ${item.companyId}`"
+              :aria-label="`Quitar ${item.label}`"
               :disabled="chartSeries.length === 1"
               @click="emit('remove', item.companyId)"
             >

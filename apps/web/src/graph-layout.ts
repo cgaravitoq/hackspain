@@ -285,7 +285,11 @@ export function layoutGraph(
 
 export function matchesQuery(node: RelationNode, query: string): boolean {
   const text = query.trim().toUpperCase();
-  return text === "" || node.company_id.toUpperCase().includes(text);
+  return (
+    text === "" ||
+    node.name.toUpperCase().includes(text) ||
+    node.company_id.toUpperCase().includes(text)
+  );
 }
 
 export function visibleNodes(

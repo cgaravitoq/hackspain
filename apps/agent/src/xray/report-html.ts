@@ -1,5 +1,4 @@
 import { REPORT_HEADINGS, type Report, ROLE_LABELS } from "@hackspain/shared";
-import { companyName } from "./report.ts";
 
 export const REPORT_DISCLOSURE =
   "Índice orientativo de salud de tesorería; no constituye una evaluación crediticia.";
@@ -77,7 +76,7 @@ ${table(
 }
 
 export function reportId(report: Report): string {
-  return `${report.company_id} / ${report.month} / ${report.role}`;
+  return `${report.company_name} (${report.company_id}) / ${report.month} / ${report.role}`;
 }
 
 function monthName(month: string): string {
@@ -95,7 +94,7 @@ function paragraphs(text: string): string {
 }
 
 export function renderReportHtml(report: Report): string {
-  const name = escapeHtml(companyName(report.company_id));
+  const name = escapeHtml(report.company_name);
   const headings = REPORT_HEADINGS[report.role];
   const audience =
     report.role === "tesorero"

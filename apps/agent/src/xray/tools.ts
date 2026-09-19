@@ -6,7 +6,6 @@ import {
   type Compare,
   commitmentDraftSchema,
   commitmentRequestSchema,
-  DEMO_COMPANY_NAMES,
   type Explain,
   type Group,
   type GroupMap,
@@ -20,25 +19,6 @@ import { z } from "zod";
 import { evaluateCommitment } from "./commitment.ts";
 import { diagnose } from "./diagnosis.ts";
 import type { Store } from "./store.ts";
-
-const COMPANY_NAMES = new Map(
-  Object.entries(DEMO_COMPANY_NAMES).map(([name, id]) => [
-    normalizeKey(name),
-    id,
-  ]),
-);
-
-function normalizeKey(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim()
-    .toLowerCase();
-}
-
-export function resolveCompanyId(value: string): string {
-  return COMPANY_NAMES.get(normalizeKey(value)) ?? value.trim();
-}
 
 const companyId = z
   .string()
@@ -105,7 +85,7 @@ export const toolDescriptions = {
   group_map:
     "Every company of a group with score, state and share of the group debt, plus whether the group is under tension",
   compare:
-    "Up to three companies side by side, aligned on the union of observed months; accepts demo names (Talleres Ribera) or Embat ids (COMP_0176)",
+    "Up to three companies side by side, aligned on the union of observed months; accepts company names or Embat ids",
   alerts:
     "Companies whose state changed in the latest month, worst first, with the driver behind each one",
   relations:
@@ -164,6 +144,7 @@ function scoreOf(company: CompanyDetail) {
   return {
     rule_version: company.rule_version,
     company_id: company.company_id,
+    name: company.name,
     group_id: company.group_id,
     month: entry?.month ?? null,
     score: entry?.score ?? null,
@@ -182,6 +163,7 @@ function scoreOf(company: CompanyDetail) {
 function explainOf(company: CompanyDetail, entry: MonthEntry): Explain {
   return {
     company_id: company.company_id,
+    name: company.name,
     group_id: company.group_id,
     month: entry.month,
     score: entry.score,
@@ -267,7 +249,7 @@ function tensionReason(group: Group): string | null {
     (member) => member.debt_share !== null && member.debt_share >= 0.8,
   );
   return debtor
-    ? `${debtor.company_id} concentra el ${Math.round((debtor.debt_share ?? 0) * 100)} % de la deuda del grupo y está ${STATE_LABELS[debtor.state]}`
+    ? `${debtor.name} concentra el ${Math.round((debtor.debt_share ?? 0) * 100)} % de la deuda del grupo y está ${STATE_LABELS[debtor.state]}`
     : null;
 }
 
@@ -275,23 +257,23 @@ function withLabel(alert: Alert) {
   return { ...alert, state_label: STATE_LABELS[alert.state] };
 }
 
-export function draftCommitment(
-  input: z.infer<typeof toolInputs.draft_commitment>,
-): CommitmentDraftResult {
-  const { company_id: requested, ...draft } = input;
-  return {
-    company_id: resolveCompanyId(requested),
-    draft,
-    missing: missingDraftFields(draft),
-  };
-}
-
 export function createTools(store: Store) {
   return {
+    async draft_commitment(
+      input: z.infer<typeof toolInputs.draft_commitment>,
+    ): Promise<CommitmentDraftResult> {
+      const { company_id: requested, ...draft } = input;
+      return {
+        company_id: await store.resolveCompany(requested),
+        draft,
+        missing: missingDraftFields(draft),
+      };
+    },
+
     async simulate_commitment(
       input: z.infer<typeof toolInputs.simulate_commitment>,
     ) {
-      const companyId = resolveCompanyId(input.company_id);
+      const companyId = await store.resolveCompany(input.company_id);
       const company = await store.company(companyId);
       const { company_id: _companyId, ...request } = input;
       return company
@@ -300,13 +282,13 @@ export function createTools(store: Store) {
     },
 
     async score(input: z.infer<typeof toolInputs.score>) {
-      const companyId = resolveCompanyId(input.company_id);
+      const companyId = await store.resolveCompany(input.company_id);
       const company = await store.company(companyId);
       return company ? scoreOf(company) : unknownCompany(companyId);
     },
 
     async explain(input: z.infer<typeof toolInputs.explain>) {
-      const companyId = resolveCompanyId(input.company_id);
+      const companyId = await store.resolveCompany(input.company_id);
       const company = await store.company(companyId);
       if (!company) {
         return unknownCompany(companyId);
@@ -331,7 +313,7 @@ export function createTools(store: Store) {
     },
 
     async what_changed(input: z.infer<typeof toolInputs.what_changed>) {
-      const companyId = resolveCompanyId(input.company_id);
+      const companyId = await store.resolveCompany(input.company_id);
       const company = await store.company(companyId);
       return company ? whatChangedOf(company) : unknownCompany(companyId);
     },
@@ -344,7 +326,9 @@ export function createTools(store: Store) {
     },
 
     async compare(input: z.infer<typeof toolInputs.compare>) {
-      const ids = input.company_ids.map(resolveCompanyId);
+      const ids = await Promise.all(
+        input.company_ids.map((value) => store.resolveCompany(value)),
+      );
       const companies = await store.details(ids);
       const found = new Set(companies.map((company) => company.company_id));
       const unknown = ids.filter((id) => !found.has(id));
@@ -363,7 +347,7 @@ export function createTools(store: Store) {
     },
 
     async relations(input: z.infer<typeof toolInputs.relations>) {
-      const companyId = resolveCompanyId(input.company_id);
+      const companyId = await store.resolveCompany(input.company_id);
       const relations = await store.companyRelations(
         companyId,
         input.relation_type,

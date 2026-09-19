@@ -48,7 +48,7 @@ EDGE_FIELDS = {
     "example",
     "provider_identity_confirmed",
 }
-NODE_FIELDS = {"company_id", "group_id", "degree", "role", "intercompany_flow_volume_minor"}
+NODE_FIELDS = {"company_id", "name", "group_id", "degree", "role", "intercompany_flow_volume_minor"}
 
 
 def _write_csv(path: Path, fields: list[str], rows: list[dict[str, Any]]) -> None:
@@ -571,6 +571,7 @@ def test_the_group_treasury_hub_is_the_most_connected_company_with_three_edges(t
     nodes = {node["company_id"]: node for node in payload["nodes"]}
     assert nodes["C1"] == {
         "company_id": "C1",
+        "name": "Distribuciones Olmedo S.L.",
         "group_id": "G1",
         "degree": 3,
         "role": "group_treasury_hub",
