@@ -1,9 +1,11 @@
-import type {
-  Alert,
-  CompanyDetail,
-  Group,
-  MonthEntry,
-  State,
+import {
+  type Alert,
+  type CompanyDetail,
+  type Group,
+  type Meta,
+  type MonthEntry,
+  STATE_LABELS,
+  type State,
 } from "@hackspain/shared";
 
 type Month = { month: string; score: number | null; state: State };
@@ -112,6 +114,13 @@ export const healthy = company("COMP_B", "GROUP_1", [
   { month: "2026-08", score: 91.0, state: "healthy" },
 ]);
 
+export const slipping = company("COMP_D", "GROUP_2", [
+  { month: "2026-05", score: 70.0, state: "healthy" },
+  { month: "2026-06", score: 45.0, state: "slipping" },
+  { month: "2026-07", score: 42.0, state: "slipping" },
+  { month: "2026-08", score: 40.0, state: "slipping" },
+]);
+
 export const group: Group = {
   group_id: "GROUP_1",
   holdout: false,
@@ -154,8 +163,14 @@ export const alerts: Alert[] = [
   },
 ];
 
+export const meta: Meta = {
+  state_labels: { ...STATE_LABELS, falling: "en caída" },
+  latest_month: "2026-08",
+  holdout_groups: [],
+};
+
 export async function seed(db: D1Database): Promise<void> {
-  const statements = [falling, healthy].map((detail) => {
+  const statements = [falling, healthy, slipping].map((detail) => {
     const { series: _series, ...summary } = detail;
     return db
       .prepare(
@@ -191,14 +206,9 @@ export async function seed(db: D1Database): Promise<void> {
           JSON.stringify(alert),
         ),
     ),
-    db.prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)").bind(
-      "meta",
-      JSON.stringify({
-        state_labels: {},
-        latest_month: "2026-08",
-        holdout_groups: [],
-      }),
-    ),
+    db
+      .prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)")
+      .bind("meta", JSON.stringify(meta)),
   );
   await db.batch(statements);
 }

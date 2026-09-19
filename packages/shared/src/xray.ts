@@ -22,8 +22,33 @@ export const STATE_LABELS: Record<State, string> = {
 
 export const confidenceSchema = z.enum(["none", "low", "medium", "high"]);
 
+export const componentCodeSchema = z.enum([
+  "balance",
+  "fees",
+  "refunds",
+  "momentum",
+]);
+
+export const driverCodeSchema = z.enum([
+  "balance",
+  "fees",
+  "refunds",
+  "momentum",
+  "inflow_vs_prev6",
+  "debt_repayment_break",
+  "withdrawals",
+]);
+
+export const changeCodeSchema = z.enum([
+  "balance",
+  "fees",
+  "refunds",
+  "momentum",
+  "cap",
+]);
+
 export const driverSchema = z.object({
-  code: z.string(),
+  code: driverCodeSchema,
   contribution: z.number(),
   value: z.number().nullable(),
   unit: z.string(),
@@ -59,9 +84,9 @@ export const monthEntrySchema = z.object({
   score: z.number().nullable(),
   state: stateSchema,
   confidence: confidenceSchema,
-  components: z.record(z.string(), z.number()),
+  components: z.partialRecord(componentCodeSchema, z.number()),
   drivers: z.array(driverSchema),
-  changed: z.array(z.object({ code: z.string(), delta: z.number() })),
+  changed: z.array(z.object({ code: changeCodeSchema, delta: z.number() })),
   evidence: evidenceSchema,
   flows: z.object({
     inflow: z.number(),
@@ -160,7 +185,7 @@ export const explainSchema = z.object({
   state_label: z.string(),
   confidence: confidenceSchema,
   drivers: z.array(driverSchema),
-  changed: z.array(z.object({ code: z.string(), delta: z.number() })),
+  changed: z.array(z.object({ code: changeCodeSchema, delta: z.number() })),
   events: z.array(z.string()),
   evidence: evidenceSchema,
   flows: monthEntrySchema.shape.flows,
@@ -201,16 +226,30 @@ export const backtestSchema = z.object({
 export type Backtest = z.infer<typeof backtestSchema>;
 
 export const metaSchema = z.object({
-  state_labels: z.record(z.string(), z.string()),
+  state_labels: z.partialRecord(stateSchema, z.string()),
   latest_month: z.string(),
   holdout_groups: z.array(z.string()),
 });
 
 export type Meta = z.infer<typeof metaSchema>;
 
+const chatPartSchema = z
+  .object({
+    type: z.string().min(1),
+  })
+  .loose();
+
+export const chatMessageSchema = z
+  .object({
+    id: z.string().min(1),
+    role: z.enum(["system", "user", "assistant"]),
+    parts: z.array(chatPartSchema).min(1),
+  })
+  .loose();
+
 export const chatRequestSchema = z.object({
-  company_id: z.string().optional(),
-  messages: z.array(z.unknown()),
+  company_id: z.string().min(1).optional(),
+  messages: z.array(chatMessageSchema).min(1),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

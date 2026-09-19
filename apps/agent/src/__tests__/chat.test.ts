@@ -88,8 +88,11 @@ describe("POST /chat", () => {
     expect(await response.text()).toContain("Cae porque cobra 40.000 €");
     const system = systemPrompt(model, 0);
     expect(system).toContain("Empresa en pantalla: COMP_A");
-    expect(system).toContain('"state_label":"cayendo"');
+    expect(system).toContain("cayendo");
     expect(system).toContain("Reclamar las 2 facturas vencidas");
+    expect(system).not.toContain("Radiografía:");
+    expect(system).not.toContain("Qué cambió:");
+    expect(system).not.toContain('"state_label"');
   });
 
   it("runs the tool the model asks for against D1 and feeds the result back", async () => {
@@ -100,7 +103,9 @@ describe("POST /chat", () => {
       ],
     });
     const response = await ask(model, {});
+    expect(response.status).toBe(200);
     expect(await response.text()).toContain("COMP_B está sana");
+    expect(model.doStreamCalls).toHaveLength(2);
     const parts =
       model.doStreamCalls[1]?.prompt
         .filter((message) => message.role === "tool")

@@ -21,7 +21,9 @@ function rpc(method: string, params: Params, id = 1) {
   });
 }
 
-const toolCallResult = z.object({
+const rpcResult = z.object({
+  jsonrpc: z.literal("2.0"),
+  id: z.number(),
   result: z.object({
     content: z.array(z.object({ type: z.literal("text"), text: z.string() })),
   }),
@@ -33,6 +35,8 @@ describe("POST /mcp", () => {
     expect(response.status).toBe(200);
     const body = z
       .object({
+        jsonrpc: z.literal("2.0"),
+        id: z.literal(1),
         result: z.object({
           tools: z.array(
             z.object({ name: z.string(), inputSchema: z.object({}).loose() }),
@@ -54,7 +58,8 @@ describe("POST /mcp", () => {
       name: "score",
       arguments: { company_id: "COMP_A" },
     });
-    const body = toolCallResult.parse(await response.json());
+    const body = rpcResult.parse(await response.json());
+    expect(body.id).toBe(1);
     const score = z
       .object({
         score: z.number(),
@@ -76,7 +81,7 @@ describe("POST /mcp", () => {
       name: "what_changed",
       arguments: { company_id: "COMP_A" },
     });
-    const body = toolCallResult.parse(await response.json());
+    const body = rpcResult.parse(await response.json());
     const changed = JSON.parse(body.result.content[0]?.text ?? "");
     expect(changed).toMatchObject({
       month: "2026-08",
@@ -84,8 +89,20 @@ describe("POST /mcp", () => {
       delta: -27.9,
       state: "falling",
       previous_state: "slipping",
-      state_since: "2026-07",
+      state_since: "2026-08",
     });
+  });
+
+  it("reports state_since as the first month of the current state, not the last month of the previous one", async () => {
+    const response = await rpc("tools/call", {
+      name: "what_changed",
+      arguments: { company_id: "COMP_D" },
+    });
+    const body = rpcResult.parse(await response.json());
+    const changed = JSON.parse(body.result.content[0]?.text ?? "");
+    expect(changed.state).toBe("slipping");
+    expect(changed.previous_state).toBe("slipping");
+    expect(changed.state_since).toBe("2026-06");
   });
 
   it("rejects a tool call whose arguments do not match the schema", async () => {
@@ -94,8 +111,18 @@ describe("POST /mcp", () => {
       arguments: { kind: "sideways" },
     });
     const body = z
-      .object({ result: z.object({ isError: z.boolean().optional() }).loose() })
-      .or(z.object({ error: z.object({}).loose() }))
+      .object({
+        jsonrpc: z.literal("2.0"),
+        id: z.literal(1),
+        result: z.object({ isError: z.boolean().optional() }).loose(),
+      })
+      .or(
+        z.object({
+          jsonrpc: z.literal("2.0"),
+          id: z.literal(1),
+          error: z.object({ code: z.number(), message: z.string() }).loose(),
+        }),
+      )
       .parse(await response.json());
     expect("error" in body || body.result.isError).toBeTruthy();
   });
