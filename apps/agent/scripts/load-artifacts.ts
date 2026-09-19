@@ -10,10 +10,14 @@ import {
   type CompanyDetail,
   companyDetailSchema,
   companySummarySchema,
+  type GraphMeta,
   type Group,
   groupSchema,
   type Meta,
   metaSchema,
+  type RelationArtifactNode,
+  type RelationEdge,
+  relationsArtifactSchema,
 } from "@hackspain/shared";
 import { z } from "zod";
 
@@ -48,7 +52,10 @@ type Payload =
   | Alert
   | Group
   | Backtest
-  | Meta;
+  | Meta
+  | GraphMeta
+  | RelationEdge
+  | RelationArtifactNode;
 const json = (value: Payload) => text(JSON.stringify(value));
 
 function read<Schema extends z.ZodType>(
@@ -69,6 +76,8 @@ const statements = [
   "DELETE FROM alerts;",
   "DELETE FROM groups;",
   "DELETE FROM documents;",
+  "DELETE FROM relations;",
+  "DELETE FROM relation_nodes;",
 ];
 
 const scored = new Set<string>();
@@ -99,8 +108,27 @@ for (const group of read("groups.json", z.array(groupSchema))) {
 statements.push(
   `INSERT INTO documents (name, payload) VALUES ('backtest', ${json(read("backtest.json", backtestSchema))});`,
   `INSERT INTO documents (name, payload) VALUES ('meta', ${json(read("meta.json", metaSchema))});`,
-  "COMMIT;",
 );
+
+const relations = read("relations.json", relationsArtifactSchema);
+
+statements.push(
+  `INSERT INTO documents (name, payload) VALUES ('relations_meta', ${json(relations.meta)});`,
+);
+
+relations.edges.forEach((edge, position) => {
+  statements.push(
+    `INSERT INTO relations (position, source, target, relation_type, scope, confidence, payload) VALUES (${position}, ${text(edge.source)}, ${text(edge.target)}, ${text(edge.relation_type)}, ${text(edge.scope)}, ${text(edge.confidence)}, ${json(edge)});`,
+  );
+});
+
+for (const node of relations.nodes) {
+  statements.push(
+    `INSERT INTO relation_nodes (company_id, group_id, degree, role, payload) VALUES (${text(node.company_id)}, ${text(node.group_id)}, ${num(node.degree)}, ${text(node.role)}, ${json(node)});`,
+  );
+}
+
+statements.push("COMMIT;");
 
 const sqlPath = join(artifacts, "xray.sql");
 writeFileSync(sqlPath, statements.join("\n"));

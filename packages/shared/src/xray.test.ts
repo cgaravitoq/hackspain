@@ -3,13 +3,22 @@ import {
   alertSchema,
   chatRequestSchema,
   companyDetailSchema,
+  companyRelationsSchema,
   compareSchema,
   DEMO_COMPANY_NAMES,
   driverSchema,
   explainSchema,
+  graphMetaSchema,
+  graphSchema,
   metaSchema,
   monthEntrySchema,
   ROLE_LABELS,
+  relationArtifactNodeSchema,
+  relationEdgeSchema,
+  relationNodeSchema,
+  relationScopeSchema,
+  relationsArtifactSchema,
+  relationTypeSchema,
   reportFigureSchema,
   reportSchema,
   reportSectionCodeSchema,
@@ -617,5 +626,284 @@ describe("xray contracts", () => {
       "Bodegas Altamira": "COMP_0077",
       "Meridian Logística": "COMP_0909",
     });
+  });
+});
+
+const relationEdge = {
+  source: "COMP_0001",
+  target: "COMP_0002",
+  relation_type: "INFERRED_PAYMENT_TO",
+  subtype: "cash_pooling",
+  scope: "intragroup",
+  confidence: "high",
+  claim_status: "inferred",
+  evidence_level: "bank_mirror",
+  matches: 12,
+  amount_minor: 1_234_500,
+  currency: "EUR",
+  first_date: "2025-01-03",
+  last_date: "2026-08-27",
+  evidence_ids: ["TX_0001", "TX_0002"],
+  detail: { subtype_counts: { cash_pooling: 12 } },
+  example: "Traspaso automatico de saldos",
+  provider_identity_confirmed: false,
+};
+
+const relationArtifactNode = {
+  company_id: "COMP_0001",
+  group_id: "GROUP_0001",
+  degree: 3,
+  role: "group_treasury_hub",
+  intercompany_flow_volume_minor: 9_000_000,
+};
+
+const relationNode = {
+  ...relationArtifactNode,
+  score: 51.2,
+  state: "stable",
+  scorable: true,
+};
+
+const relationsArtifact = {
+  meta: {
+    rule_version: "xray-relations/0.1",
+    generated_at: "2026-09-19T13:04:05+00:00",
+    counts: { INFERRED_PAYMENT_TO: 1731, OPEN_OBLIGATION_TO: 6 },
+  },
+  calibration: {
+    bank_flows_observed_min_2: { intragroup: 41, intergroup: 7 },
+  },
+  nodes: [relationArtifactNode],
+  edges: [relationEdge],
+};
+
+describe("relation contracts", () => {
+  it("admits exactly the three relation types, in order", () => {
+    expect(relationTypeSchema.options).toEqual([
+      "INFERRED_PAYMENT_TO",
+      "OPEN_OBLIGATION_TO",
+      "SHARES_COUNTERPARTY_WITH",
+    ]);
+  });
+
+  it("admits exactly the two relation scopes, in order", () => {
+    expect(relationScopeSchema.options).toEqual(["intragroup", "intergroup"]);
+    expect(relationScopeSchema.safeParse("both").success).toBe(false);
+  });
+
+  it("accepts an edge with every field of the relation contract", () => {
+    expect(relationEdgeSchema.parse(relationEdge)).toEqual(relationEdge);
+  });
+
+  it("rejects an edge whose relation type is not one of the three relation types", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      relation_type: "OWNS",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["relation_type"],
+    ]);
+  });
+
+  it("rejects an edge whose confidence is not one of the three relation confidences", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      confidence: "certain",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["confidence"],
+    ]);
+  });
+
+  it("rejects an edge whose claim status is not inferred", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      claim_status: "confirmed",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["claim_status"],
+    ]);
+  });
+
+  it("rejects an edge whose provider identity was confirmed", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      provider_identity_confirmed: true,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["provider_identity_confirmed"],
+    ]);
+  });
+
+  it("rejects an edge whose evidence level is not one the pipeline emits", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      evidence_level: "guess",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["evidence_level"],
+    ]);
+  });
+
+  it("rejects an edge whose subtype is not one the pipeline emits", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      subtype: "salary",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["subtype"],
+    ]);
+  });
+
+  it("rejects an edge carrying more than twenty evidence ids", () => {
+    const result = relationEdgeSchema.safeParse({
+      ...relationEdge,
+      evidence_ids: Array.from({ length: 21 }, (_item, index) => `TX_${index}`),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["evidence_ids"],
+    ]);
+  });
+
+  it("accepts the artifact node the pipeline writes without the joined score", () => {
+    expect(relationArtifactNodeSchema.parse(relationArtifactNode)).toEqual(
+      relationArtifactNode,
+    );
+    const result = relationNodeSchema.safeParse(relationArtifactNode);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["score"],
+      ["state"],
+      ["scorable"],
+    ]);
+  });
+
+  it("accepts a served node with the score, state and scorable of the latest month", () => {
+    expect(relationNodeSchema.parse(relationNode)).toEqual(relationNode);
+  });
+
+  it("rejects a node whose role is not one of the three graph roles", () => {
+    const result = relationNodeSchema.safeParse({
+      ...relationNode,
+      role: "treasury",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([["role"]]);
+  });
+
+  it("accepts the relations artifact the pipeline writes, calibration included", () => {
+    const artifact = relationsArtifactSchema.parse(relationsArtifact);
+    expect(artifact.calibration.bank_flows_observed_min_2?.intergroup).toBe(7);
+    expect(artifact.nodes).toHaveLength(1);
+    expect(artifact.edges[0]?.claim_status).toBe("inferred");
+  });
+
+  it("rejects a relations artifact whose edge carries an unknown relation type", () => {
+    const result = relationsArtifactSchema.safeParse({
+      ...relationsArtifact,
+      edges: [{ ...relationEdge, relation_type: "OWNS" }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["edges", 0, "relation_type"],
+    ]);
+  });
+
+  it("accepts a graph of served nodes and edges", () => {
+    const graph = graphSchema.parse({
+      meta: relationsArtifact.meta,
+      nodes: [relationNode],
+      edges: [relationEdge],
+    });
+    expect(graph.nodes[0]?.state).toBe("stable");
+  });
+
+  it("serves a count for every relation type, zero when the artifact omits it", () => {
+    expect(Object.keys(graphMetaSchema.shape.counts.shape)).toEqual(
+      relationTypeSchema.options,
+    );
+    const meta = graphMetaSchema.parse({
+      ...relationsArtifact.meta,
+      counts: {},
+    });
+    expect(meta.counts).toEqual({
+      INFERRED_PAYMENT_TO: 0,
+      OPEN_OBLIGATION_TO: 0,
+      SHARES_COUNTERPARTY_WITH: 0,
+    });
+    expect(
+      relationsArtifactSchema.parse(relationsArtifact).meta.counts,
+    ).toEqual({
+      INFERRED_PAYMENT_TO: 1731,
+      OPEN_OBLIGATION_TO: 6,
+      SHARES_COUNTERPARTY_WITH: 0,
+    });
+  });
+
+  it("rejects a graph whose meta count is negative", () => {
+    const result = graphMetaSchema.safeParse({
+      ...relationsArtifact.meta,
+      counts: { INFERRED_PAYMENT_TO: -1 },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["counts", "INFERRED_PAYMENT_TO"],
+    ]);
+  });
+
+  it("rejects a graph whose meta counts use a key that is not a relation type", () => {
+    const result = graphSchema.safeParse({
+      meta: { ...relationsArtifact.meta, counts: { OWNS: 1 } },
+      nodes: [relationNode],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["meta", "counts"],
+    ]);
+  });
+
+  it("accepts a company relations payload whose edges carry the counterpart", () => {
+    const relations = companyRelationsSchema.parse({
+      company_id: "COMP_0001",
+      edges: [
+        {
+          ...relationEdge,
+          counterpart_company_id: "COMP_0002",
+          counterpart_group_id: "GROUP_0001",
+          counterpart_score: 88.1,
+          counterpart_state: "healthy",
+        },
+      ],
+    });
+    expect(relations.edges[0]?.counterpart_state).toBe("healthy");
+  });
+
+  it("rejects a company relation edge without the counterpart state", () => {
+    const {
+      counterpart_state: _counterpartState,
+      ...edgeWithoutCounterpartState
+    } = {
+      ...relationEdge,
+      counterpart_company_id: "COMP_0002",
+      counterpart_group_id: "GROUP_0001",
+      counterpart_score: 88.1,
+      counterpart_state: "healthy" as const,
+    };
+    const result = companyRelationsSchema.safeParse({
+      company_id: "COMP_0001",
+      edges: [edgeWithoutCounterpartState],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["edges", 0, "counterpart_state"],
+    ]);
   });
 });

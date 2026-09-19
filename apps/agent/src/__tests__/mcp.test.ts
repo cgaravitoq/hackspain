@@ -1,14 +1,26 @@
 import { env, SELF } from "cloudflare:test";
-import { compareSchema } from "@hackspain/shared";
+import { compareSchema, relationsArtifactSchema } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seed } from "./fixtures.ts";
+import { relationsJson, seedRelations } from "./relations.ts";
 
-beforeAll(() => seed(env.DB));
+beforeAll(async () => {
+  await seed(env.DB);
+  await seedRelations(
+    env.DB,
+    relationsArtifactSchema.parse(JSON.parse(JSON.stringify(relationsJson))),
+  );
+});
 
 type Params = {
   name?: string;
-  arguments?: { company_id?: string; company_ids?: string[]; kind?: string };
+  arguments?: {
+    company_id?: string;
+    company_ids?: string[];
+    kind?: string;
+    relation_type?: string;
+  };
 };
 
 function rpc(method: string, params: Params, id = 1) {
@@ -46,7 +58,7 @@ async function toolResult(name: string, args: Params["arguments"]) {
 }
 
 describe("POST /mcp", () => {
-  it("lists the seven X Ray tools with their input schemas", async () => {
+  it("lists the eight X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -72,10 +84,76 @@ describe("POST /mcp", () => {
       "compare",
       "alerts",
       "report",
+      "relations",
     ]);
     const compare = body.result.tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
     expect(compare?.description).toContain("Talleres Ribera");
+    expect(
+      body.result.tools.find((tool) => tool.name === "relations")?.description,
+    ).toBe(
+      "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
+    );
+  });
+
+  it("answers a relations call with the edges and the counterpart state", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: { company_id: "COMP_A" },
+    });
+    const body = rpcResult.parse(await response.json());
+    const relations = z
+      .object({
+        company_id: z.string(),
+        edges: z.array(
+          z.object({
+            relation_type: z.string(),
+            counterpart_company_id: z.string(),
+            counterpart_score: z.number().nullable(),
+            counterpart_state: z.string(),
+          }),
+        ),
+      })
+      .parse(JSON.parse(body.result.content[0]?.text ?? ""));
+    expect(relations.company_id).toBe("COMP_A");
+    expect(relations.edges).toMatchObject([
+      {
+        relation_type: "INFERRED_PAYMENT_TO",
+        counterpart_company_id: "COMP_B",
+        counterpart_score: 91,
+        counterpart_state: "healthy",
+      },
+      {
+        relation_type: "SHARES_COUNTERPARTY_WITH",
+        counterpart_company_id: "COMP_D",
+        counterpart_state: "slipping",
+      },
+    ]);
+  });
+
+  it("keeps only the requested relation type in a relations call", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: {
+        company_id: "COMP_A",
+        relation_type: "SHARES_COUNTERPARTY_WITH",
+      },
+    });
+    const body = rpcResult.parse(await response.json());
+    const relations = JSON.parse(body.result.content[0]?.text ?? "");
+    expect(relations.edges).toHaveLength(1);
+    expect(relations.edges[0].counterpart_company_id).toBe("COMP_D");
+  });
+
+  it("answers a relations call for an unknown company with the error shape", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: { company_id: "COMP_X" },
+    });
+    const body = rpcResult.parse(await response.json());
+    expect(JSON.parse(body.result.content[0]?.text ?? "")).toEqual({
+      error: "Unknown company COMP_X",
+    });
   });
 
   it("scores a company addressed by its demo name", async () => {

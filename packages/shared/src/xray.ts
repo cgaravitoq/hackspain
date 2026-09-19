@@ -291,6 +291,141 @@ export const compareSchema = z.object({
 
 export type Compare = z.infer<typeof compareSchema>;
 
+export const relationTypeSchema = z.enum([
+  "INFERRED_PAYMENT_TO",
+  "OPEN_OBLIGATION_TO",
+  "SHARES_COUNTERPARTY_WITH",
+]);
+
+export type RelationType = z.infer<typeof relationTypeSchema>;
+
+export const relationConfidenceSchema = z.enum(["high", "medium", "low"]);
+
+export type RelationConfidence = z.infer<typeof relationConfidenceSchema>;
+
+export const relationSubtypeSchema = z.enum([
+  "cash_pooling",
+  "credit_line_financing",
+  "payroll_on_behalf",
+  "taxes_on_behalf",
+  "funds_transfer",
+  "commercial_payment",
+  "other_flows",
+  "sale_to_purchase_invoice",
+  "in_house_bank_line",
+  "client_portfolio_transfer",
+  "shared_supplier_or_client",
+]);
+
+export type RelationSubtype = z.infer<typeof relationSubtypeSchema>;
+
+export const relationScopeSchema = z.enum(["intragroup", "intergroup"]);
+
+export type RelationScope = z.infer<typeof relationScopeSchema>;
+
+export const relationEvidenceLevelSchema = z.enum([
+  "bank_mirror",
+  "invoice_mirror",
+  "debt_balance_mirror",
+  "shared_counterparty_id",
+]);
+
+export const relationEdgeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  relation_type: relationTypeSchema,
+  subtype: relationSubtypeSchema,
+  scope: relationScopeSchema,
+  confidence: relationConfidenceSchema,
+  claim_status: z.literal("inferred"),
+  evidence_level: relationEvidenceLevelSchema,
+  matches: z.number().int().nonnegative(),
+  amount_minor: z.number().int(),
+  currency: z.string(),
+  first_date: z.string(),
+  last_date: z.string(),
+  evidence_ids: z.array(z.string()).max(20),
+  detail: z.record(z.string(), z.unknown()),
+  example: z.string(),
+  provider_identity_confirmed: z.literal(false),
+});
+
+export type RelationEdge = z.infer<typeof relationEdgeSchema>;
+
+export const relationRoleSchema = z.enum([
+  "group_treasury_hub",
+  "connected",
+  "isolated",
+]);
+
+export const relationArtifactNodeSchema = z.object({
+  company_id: z.string(),
+  group_id: z.string().nullable(),
+  degree: z.number().int().nonnegative(),
+  role: relationRoleSchema,
+  intercompany_flow_volume_minor: z.number().int().nonnegative(),
+});
+
+export type RelationArtifactNode = z.infer<typeof relationArtifactNodeSchema>;
+
+export const relationNodeSchema = relationArtifactNodeSchema.extend({
+  score: z.number().nullable(),
+  state: stateSchema,
+  scorable: z.boolean(),
+});
+
+export type RelationNode = z.infer<typeof relationNodeSchema>;
+
+const relationCountSchema = z.number().int().nonnegative().default(0);
+
+export const graphMetaSchema = z.object({
+  rule_version: z.string(),
+  generated_at: z.iso.datetime({ offset: true }),
+  counts: z.strictObject({
+    INFERRED_PAYMENT_TO: relationCountSchema,
+    OPEN_OBLIGATION_TO: relationCountSchema,
+    SHARES_COUNTERPARTY_WITH: relationCountSchema,
+  }),
+});
+
+export type GraphMeta = z.infer<typeof graphMetaSchema>;
+
+export const graphSchema = z.object({
+  meta: graphMetaSchema,
+  nodes: z.array(relationNodeSchema),
+  edges: z.array(relationEdgeSchema),
+});
+
+export type Graph = z.infer<typeof graphSchema>;
+
+export const companyRelationEdgeSchema = relationEdgeSchema.extend({
+  counterpart_company_id: z.string(),
+  counterpart_group_id: z.string().nullable(),
+  counterpart_score: z.number().nullable(),
+  counterpart_state: stateSchema,
+});
+
+export type CompanyRelationEdge = z.infer<typeof companyRelationEdgeSchema>;
+
+export const companyRelationsSchema = z.object({
+  company_id: z.string(),
+  edges: z.array(companyRelationEdgeSchema),
+});
+
+export type CompanyRelations = z.infer<typeof companyRelationsSchema>;
+
+export const relationsArtifactSchema = z.object({
+  meta: graphMetaSchema,
+  calibration: z.record(
+    z.string(),
+    z.object({ intragroup: z.number().int(), intergroup: z.number().int() }),
+  ),
+  nodes: z.array(relationArtifactNodeSchema),
+  edges: z.array(relationEdgeSchema),
+});
+
+export type RelationsArtifact = z.infer<typeof relationsArtifactSchema>;
+
 export const DEMO_COMPANY_NAMES = {
   "Talleres Ribera": "COMP_0176",
   "Bodegas Altamira": "COMP_0077",
