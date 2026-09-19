@@ -213,7 +213,7 @@ function paint() {
     const hovered =
       hover.value?.kind === "edge" && hover.value.edge === link.edge;
     context.strokeStyle = TYPE_COLORS[link.edge.relation_type];
-    context.globalAlpha = hovered ? 1 : 0.35;
+    context.globalAlpha = hovered ? 1 : 0.7;
     context.lineWidth = hovered ? 2.4 : 1.2;
     context.beginPath();
     context.moveTo(link.source.x, link.source.y);
@@ -226,9 +226,9 @@ function paint() {
   for (const position of layout.value.positions.values()) {
     const { node, x, y, radius } = position;
     context.beginPath();
-    context.arc(x, y, radius + 2.5, 0, Math.PI * 2);
+    context.arc(x, y, radius + 1.5, 0, Math.PI * 2);
     context.strokeStyle = bandColor(node.group_id);
-    context.lineWidth = node.role === "group_treasury_hub" ? 3 : 1.6;
+    context.lineWidth = node.role === "group_treasury_hub" ? 2 : 1;
     context.stroke();
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);

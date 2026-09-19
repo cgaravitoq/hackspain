@@ -14,13 +14,20 @@ export const LAYOUT_WIDTH = 1000;
 export const LAYOUT_HEIGHT = 640;
 export const LAYOUT_SEED = 20260919;
 
+export const PADDING = 30;
+export const LINK_GAP = 24;
+export const NODE_GAP = 8;
+export const MAX_RADIUS = 22;
+
 const TICKS = 300;
-const PADDING = 30;
-const LINK_DISTANCE = 44;
-const MANY_BODY_STRENGTH = -120;
-const ANCHOR_STRENGTH = 0.12;
+const MANY_BODY_STRENGTH = -40;
+const MANY_BODY_REACH = 80;
+const ANCHOR_STRENGTH = 0.08;
 const JITTER = 28;
-const MAX_SCALE = 2;
+const MAX_SCALE = 8;
+// Collisions swell the rim by about the same amount on both axes, so the
+// anchors leave proportionally more of the shorter axis free for it.
+const VERTICAL_REACH = 0.9;
 const EDGE_TOLERANCE = 5;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
@@ -52,7 +59,7 @@ type SimLink = SimulationLinkDatum<SimNode> & { edge: RelationEdge };
 type Point = { x: number; y: number };
 
 export function nodeRadius(degree: number): number {
-  return Math.min(4 + Math.sqrt(degree) * 2.4, 20);
+  return Math.min(2.5 + Math.sqrt(degree), 8);
 }
 
 function seededRandom(seed: number): () => number {
@@ -115,21 +122,38 @@ function connectedComponents(
   return components;
 }
 
+function footprint(component: RelationNode[]): number {
+  return component.reduce(
+    (total, node) => total + (nodeRadius(node.degree) + LINK_GAP / 2) ** 2,
+    0,
+  );
+}
+
 function componentAnchors(components: RelationNode[][]): Map<string, Point> {
   const ordered = [...components].sort(
     (left, right) =>
       right.length - left.length ||
       (left[0]?.company_id ?? "").localeCompare(right[0]?.company_id ?? ""),
   );
-  const reach = Math.min(LAYOUT_WIDTH, LAYOUT_HEIGHT) / 2 - PADDING;
+  const reach = {
+    x: LAYOUT_WIDTH / 2 - PADDING,
+    y: (LAYOUT_HEIGHT / 2 - PADDING) * VERTICAL_REACH,
+  };
+  const total = ordered.reduce(
+    (sum, component) => sum + footprint(component),
+    0,
+  );
   const anchors = new Map<string, Point>();
+  let covered = 0;
   ordered.forEach((component, index) => {
+    const area = footprint(component);
     const distance =
-      ordered.length === 1 ? 0 : Math.sqrt((index + 0.5) / ordered.length);
+      ordered.length === 1 ? 0 : Math.sqrt((covered + area / 2) / total);
+    covered += area;
     const angle = index * GOLDEN_ANGLE;
     const anchor = {
-      x: LAYOUT_WIDTH / 2 + Math.cos(angle) * reach * distance,
-      y: LAYOUT_HEIGHT / 2 + Math.sin(angle) * reach * distance,
+      x: LAYOUT_WIDTH / 2 + Math.cos(angle) * reach.x * distance,
+      y: LAYOUT_HEIGHT / 2 + Math.sin(angle) * reach.y * distance,
     };
     for (const node of component) {
       anchors.set(node.company_id, anchor);
@@ -172,7 +196,7 @@ function fitToCanvas(simulated: SimNode[]): Map<string, NodePosition> {
         node: simulatedNode.node,
         x: offsetX + (simulatedNode.x ?? 0) * scale,
         y: offsetY + (simulatedNode.y ?? 0) * scale,
-        radius: simulatedNode.radius * Math.max(scale, 0.6),
+        radius: Math.min(simulatedNode.radius * scale, MAX_RADIUS),
       };
       return [simulatedNode.node.company_id, position];
     }),
@@ -202,6 +226,12 @@ export function layoutGraph(
       y: anchor.y + (random() - 0.5) * JITTER,
     };
   });
+  const radiusOf = new Map(
+    simulated.map((simulatedNode) => [
+      simulatedNode.node.company_id,
+      simulatedNode.radius,
+    ]),
+  );
   const links: SimLink[] = visibleEdges.map((edge) => ({
     edge,
     source: edge.source,
@@ -213,13 +243,21 @@ export function layoutGraph(
       "link",
       forceLink<SimNode, SimLink>(links)
         .id((node) => node.node.company_id)
-        .distance(LINK_DISTANCE)
-        .strength(0.6),
+        .distance(
+          (link) =>
+            (radiusOf.get(link.edge.source) ?? 0) +
+            (radiusOf.get(link.edge.target) ?? 0) +
+            LINK_GAP,
+        )
+        .strength(0.9),
     )
-    .force("charge", forceManyBody().strength(MANY_BODY_STRENGTH))
+    .force(
+      "charge",
+      forceManyBody().strength(MANY_BODY_STRENGTH).distanceMax(MANY_BODY_REACH),
+    )
     .force(
       "collide",
-      forceCollide<SimNode>().radius((node) => node.radius + 3),
+      forceCollide<SimNode>().radius((node) => node.radius + NODE_GAP),
     )
     .force(
       "x",
