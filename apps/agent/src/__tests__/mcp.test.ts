@@ -1,4 +1,5 @@
 import { env, SELF } from "cloudflare:test";
+import { compareSchema } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seed } from "./fixtures.ts";
@@ -7,7 +8,7 @@ beforeAll(() => seed(env.DB));
 
 type Params = {
   name?: string;
-  arguments?: { company_id?: string; kind?: string };
+  arguments?: { company_id?: string; company_ids?: string[]; kind?: string };
 };
 
 function rpc(method: string, params: Params, id = 1) {
@@ -104,6 +105,42 @@ describe("POST /mcp", () => {
     expect(changed.state).toBe("slipping");
     expect(changed.previous_state).toBe("slipping");
     expect(changed.state_since).toBe("2026-06");
+  });
+
+  it("compares up to three companies in request order", async () => {
+    const response = await rpc("tools/call", {
+      name: "compare",
+      arguments: { company_ids: ["COMP_B", "COMP_A"] },
+    });
+    const body = rpcResult.parse(await response.json());
+    const comparison = compareSchema.parse(
+      JSON.parse(body.result.content[0]?.text ?? ""),
+    );
+    expect(comparison.companies.map((company) => company.company_id)).toEqual([
+      "COMP_B",
+      "COMP_A",
+    ]);
+    expect(comparison.months).toEqual([
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ]);
+  });
+
+  it("compares companies addressed by their demo names", async () => {
+    const response = await rpc("tools/call", {
+      name: "compare",
+      arguments: { company_ids: ["Talleres Ribera", "COMP_A"] },
+    });
+    const body = rpcResult.parse(await response.json());
+    const comparison = compareSchema.parse(
+      JSON.parse(body.result.content[0]?.text ?? ""),
+    );
+    expect(comparison.companies.map((company) => company.company_id)).toEqual([
+      "COMP_0176",
+      "COMP_A",
+    ]);
   });
 
   it("rejects a tool call whose arguments do not match the schema", async () => {

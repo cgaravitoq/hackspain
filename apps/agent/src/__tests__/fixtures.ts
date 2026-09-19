@@ -114,6 +114,17 @@ export const healthy = company("COMP_B", "GROUP_1", [
   { month: "2026-08", score: 91.0, state: "healthy" },
 ]);
 
+export const ribera = company("COMP_0176", "GROUP_1", [
+  { month: "2026-06", score: 70.0, state: "stable" },
+  { month: "2026-07", score: 72.5, state: "stable" },
+  { month: "2026-08", score: 74.1, state: "stable" },
+]);
+
+export const meridian = company("COMP_0909", "GROUP_2", [
+  { month: "2026-07", score: 66.0, state: "stable" },
+  { month: "2026-08", score: 64.5, state: "stable" },
+]);
+
 export const slipping = company("COMP_D", "GROUP_2", [
   { month: "2026-05", score: 70.0, state: "healthy" },
   { month: "2026-06", score: 45.0, state: "slipping" },
@@ -170,23 +181,25 @@ export const meta: Meta = {
 };
 
 export async function seed(db: D1Database): Promise<void> {
-  const statements = [falling, healthy, slipping].map((detail) => {
-    const { series: _series, ...summary } = detail;
-    return db
-      .prepare(
-        "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-      )
-      .bind(
-        detail.company_id,
-        detail.group_id,
-        detail.scorable ? 1 : 0,
-        detail.latest.month,
-        detail.latest.score,
-        detail.latest.state,
-        JSON.stringify(summary),
-        JSON.stringify(detail),
-      );
-  });
+  const statements = [falling, healthy, ribera, meridian, slipping].map(
+    (detail) => {
+      const { series: _series, ...summary } = detail;
+      return db
+        .prepare(
+          "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .bind(
+          detail.company_id,
+          detail.group_id,
+          detail.scorable ? 1 : 0,
+          detail.latest.month,
+          detail.latest.score,
+          detail.latest.state,
+          JSON.stringify(summary),
+          JSON.stringify(detail),
+        );
+    },
+  );
   statements.push(
     db
       .prepare(
