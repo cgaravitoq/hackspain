@@ -13,6 +13,8 @@ OVERDUE_DAYS = 90
 FALSE_ALARM_HORIZON = 6
 REVERT_HORIZON = 3
 LEAD_WINDOW = 12
+EVENT_CODES = ("E1", "E3")
+ALERT_STAGES = ("candidate", "confirmed")
 
 
 def cash_stress(observed: list[bool], inflow: list[float], outflow: list[float]) -> list[bool]:
@@ -70,13 +72,63 @@ def alert_episodes(states: list[str]) -> list[int]:
     return starts
 
 
+def alert_stages(states: list[str]) -> dict[str, list[int]]:
+    anchors: dict[str, list[int]] = {stage: [] for stage in ALERT_STAGES}
+    for start in alert_episodes(states):
+        end = start
+        while end < len(states) and states[end] in DOWN_STATES:
+            end += 1
+        confirmed = next((index for index in range(start, end) if states[index] == "falling"), None)
+        anchors["confirmed" if confirmed is not None else "candidate"].append(
+            confirmed if confirmed is not None else start
+        )
+    return anchors
+
+
+def _alert_stats(states: list[str], starts: list[int], event_months: list[tuple[str, int]]) -> dict[str, int]:
+    evaluated = false_alarms = reverted = censored = 0
+    for start in starts:
+        future_events = [index for _, index in event_months if start < index <= start + FALSE_ALARM_HORIZON]
+        if len(states) - 1 - start < FALSE_ALARM_HORIZON and not future_events:
+            censored += 1
+            continue
+        evaluated += 1
+        if not future_events:
+            false_alarms += 1
+        after = states[start + 1 : start + 1 + REVERT_HORIZON]
+        if after and any(state not in DOWN_STATES for state in after):
+            reverted += 1
+    return {
+        "evaluated": evaluated,
+        "false_alarms": false_alarms,
+        "reverted_within_3_months": reverted,
+        "censored": censored,
+    }
+
+
+def _rates(stats: dict[str, int]) -> dict[str, Any]:
+    evaluated = stats["evaluated"]
+    return {
+        "evaluated": evaluated,
+        "false_alarms": stats["false_alarms"],
+        "false_alarm_rate": round(stats["false_alarms"] / evaluated, 3) if evaluated else None,
+        "reverted_within_3_months": stats["reverted_within_3_months"],
+        "revert_rate": round(stats["reverted_within_3_months"] / evaluated, 3) if evaluated else None,
+        "censored": stats["censored"],
+    }
+
+
 def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    leads: dict[str, list[int]] = {"E1": [], "E3": []}
-    events_total: dict[str, int] = {"E1": 0, "E3": 0}
-    alerts_total = alerts_false = alerts_reverted = alerts_censored = 0
+    leads: dict[str, list[int]] = {code: [] for code in EVENT_CODES}
+    events_total: dict[str, int] = {code: 0 for code in EVENT_CODES}
+    totals: dict[str, dict[str, int]] = {
+        name: {"evaluated": 0, "false_alarms": 0, "reverted_within_3_months": 0, "censored": 0}
+        for name in ("alerts", *ALERT_STAGES)
+    }
     for rows in company_rows.values():
         states = [row["state"] for row in rows]
         starts = alert_episodes(states)
+        stages = alert_stages(states)
         event_months: list[tuple[str, int]] = []
         for index, row in enumerate(rows):
             for code, flag in (("E1", row["e1"]), ("E3", row["e3"] > 0)):
@@ -94,19 +146,11 @@ def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
             prior = [start for start in starts if index - LEAD_WINDOW <= start < index]
             if prior:
                 leads[code].append(index - prior[0])
-        for start in starts:
-            future_events = [i for _, i in event_months if start < i <= start + FALSE_ALARM_HORIZON]
-            if len(rows) - 1 - start < FALSE_ALARM_HORIZON and not future_events:
-                alerts_censored += 1
-                continue
-            alerts_total += 1
-            if not future_events:
-                alerts_false += 1
-            after = states[start + 1 : start + 1 + REVERT_HORIZON]
-            if after and any(state not in DOWN_STATES for state in after):
-                alerts_reverted += 1
+        for name, anchors in (("alerts", starts), *stages.items()):
+            for key, value in _alert_stats(states, anchors, event_months).items():
+                totals[name][key] += value
     summary = {}
-    for code in ("E1", "E3"):
+    for code in EVENT_CODES:
         found = leads[code]
         summary[code] = {
             "events": events_total[code],
@@ -116,18 +160,14 @@ def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         }
     return {
         "events": summary,
-        "alerts": {
-            "evaluated": alerts_total,
-            "false_alarms": alerts_false,
-            "false_alarm_rate": round(alerts_false / alerts_total, 3) if alerts_total else None,
-            "reverted_within_3_months": alerts_reverted,
-            "revert_rate": round(alerts_reverted / alerts_total, 3) if alerts_total else None,
-            "censored": alerts_censored,
-        },
+        "alerts": _rates(totals["alerts"]),
+        "alerts_by_stage": {stage: _rates(totals[stage]) for stage in ALERT_STAGES},
         "definitions": {
             "E1": "Three consecutive observed months with operating inflow below operating outflow",
             "E3": "A month without debt repayment after six or more consecutive months with one",
             "alert": "First month the state enters slipping or falling",
+            "candidate": "Episode that never reaches falling, anchored on the month it entered slipping",
+            "confirmed": "Episode that reaches falling, anchored on the month it entered falling",
             "lead": "Months between the first alert in the previous twelve months and the event",
         },
     }

@@ -42,6 +42,12 @@ def alert_kind(before: str, now: str) -> str | None:
     return None
 
 
+def alert_stage(kind: str, state: str) -> str | None:
+    if kind != "down":
+        return None
+    return "confirmed" if state == "falling" else "candidate"
+
+
 def _write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
@@ -141,6 +147,7 @@ def _alert(
         "group_id": company_group.get(company_id),
         "month": latest["month"],
         "kind": kind,
+        "stage": alert_stage(kind, latest["state"]),
         "state": latest["state"],
         "previous_state": before["state"],
         "score": latest["score"],
