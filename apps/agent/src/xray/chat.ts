@@ -46,6 +46,34 @@ const ROLE_CONTEXT: Record<Role, string> = {
 
 const chatReportInput = reportInput.extend({ role: roleSchema.optional() });
 
+const RELATIONS_RULES = `Relaciones entre empresas: evidencias y reglas.
+Establece únicamente relaciones respaldadas por los registros recibidos.
+1. Usa los identificadores exactos; no emparejes códigos por semejanza numérica.
+2. Separa relaciones observadas, inferidas y similitudes.
+3. En movimientos espejo, identifica como pagador candidato al titular de la salida y como receptor candidato al titular de la entrada.
+4. No conviertas una contraparte compartida, un grupo común o una correlación en un pago entre empresas.
+5. No fusiones \`COUNTERPARTY\` y \`COMP\`: propone una equivalencia con sus evidencias y señala contradicciones.
+6. No uses \`[COMPANY]\`, \`[ACCOUNT]\`, \`[REF]\` o \`[NUM]\` como identificadores compartidos.
+7. Una fecha de pago en una factura no acredita por sí sola un pago efectivo.
+8. No sumes factura, efecto y movimiento bancario como tres obligaciones independientes.
+9. No declares una deuda actual usando una operación pagada.
+10. No infieras riesgo de impago únicamente por existir una relación.
+11. Si falta evidencia, devuelve «relación no determinable».
+12. No utilices evidencias posteriores al corte para afirmar que el vínculo se conocía antes.
+
+Marco de producto.
+El grafo puede mostrar vínculos inferidos, siempre diferenciados y con su evidencia accesible.
+El análisis de exposición y cualquier optimizador de pagos necesitan obligaciones verificadas.
+Un pago reconstruye el historial; una obligación abierta permite estudiar una acción futura; no son intercambiables.
+Nunca cuentes la misma operación desde los dos extremos como volumen adicional.
+
+Al responder sobre relaciones.
+Toda relación que devuelve la herramienta relations está inferida de movimientos espejo (claim_status: inferred) y provider_identity_confirmed es siempre false: dilo una vez en cada respuesta que cite relaciones.
+Nunca presentes un vínculo inferido como una obligación verificada ni como una deuda actual; solo los vínculos OPEN_OBLIGATION_TO describen un saldo pendiente y aun así son espejos de saldo, no contratos verificados.
+Cita cada importe con el campo amount, ya expresado en su divisa (currency), con su periodo (first_date a last_date) y su número de coincidencias (matches); amount_minor está en céntimos y no se cita; nombra como tal un vínculo de confianza low.
+Responde solo con las relaciones que devolvió la herramienta relations; si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer.
+Para una pregunta de grupo («¿qué empresas mueven dinero con este grupo?»), llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo.`;
+
 async function context(
   tools: Tools,
   companyId: string | undefined,
@@ -79,7 +107,7 @@ export async function chat(
   const messages = await validateUIMessages({ messages: request.messages });
   const result = streamText({
     model,
-    system: `${SYSTEM}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
+    system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
     messages: await convertToModelMessages(messages),
     tools: {
       report: tool({
@@ -125,6 +153,22 @@ export async function chat(
         description: toolDescriptions.alerts,
         inputSchema: toolInputs.alerts,
         execute: tools.alerts,
+      }),
+      relations: tool({
+        description: toolDescriptions.relations,
+        inputSchema: toolInputs.relations,
+        execute: async (input) => {
+          const relations = await tools.relations(input);
+          return "error" in relations
+            ? relations
+            : {
+                ...relations,
+                edges: relations.edges.map((edge) => ({
+                  ...edge,
+                  amount: edge.amount_minor / 100,
+                })),
+              };
+        },
       }),
     },
     stopWhen: stepCountIs(5),

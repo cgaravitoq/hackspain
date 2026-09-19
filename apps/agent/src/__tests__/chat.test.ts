@@ -1,6 +1,13 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
-import { compareSchema, type Role } from "@hackspain/shared";
+import {
+  companyRelationEdgeSchema,
+  companyRelationsSchema,
+  compareSchema,
+  type RelationType,
+  type Role,
+  relationsArtifactSchema,
+} from "@hackspain/shared";
 import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -9,8 +16,15 @@ import { chat } from "../xray/chat.ts";
 import type { reportInput } from "../xray/report-tool.ts";
 import { createStore } from "../xray/store.ts";
 import { seed } from "./fixtures.ts";
+import { relationsJson, seedRelations } from "./relations.ts";
 
-beforeAll(() => seed(env.DB));
+beforeAll(async () => {
+  await seed(env.DB);
+  await seedRelations(
+    env.DB,
+    relationsArtifactSchema.parse(JSON.parse(JSON.stringify(relationsJson))),
+  );
+});
 
 const usage = {
   inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
@@ -44,6 +58,7 @@ function toolCall(
     company?: string;
     company_id?: string;
     company_ids?: string[];
+    relation_type?: RelationType;
     role?: Role;
   },
 ) {
@@ -110,6 +125,58 @@ function toolsHandedToModel(model: MockLanguageModelV4) {
     tool.type === "function" ? [tool] : [],
   );
 }
+
+function toolCallSentToModel(model: MockLanguageModelV4) {
+  const calls: { toolName: string; input: unknown }[] = [];
+  for (const message of model.doStreamCalls[1]?.prompt ?? []) {
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+    for (const part of message.content) {
+      if (part.type === "tool-call") {
+        calls.push({ toolName: part.toolName, input: part.input });
+      }
+    }
+  }
+  return calls;
+}
+
+const chatRelationsSchema = companyRelationsSchema.extend({
+  edges: z.array(companyRelationEdgeSchema.extend({ amount: z.number() })),
+});
+
+const RELATIONS_PREAMBLE =
+  "Establece únicamente relaciones respaldadas por los registros recibidos.";
+
+const RELATION_RULES = [
+  "1. Usa los identificadores exactos; no emparejes códigos por semejanza numérica.",
+  "2. Separa relaciones observadas, inferidas y similitudes.",
+  "3. En movimientos espejo, identifica como pagador candidato al titular de la salida y como receptor candidato al titular de la entrada.",
+  "4. No conviertas una contraparte compartida, un grupo común o una correlación en un pago entre empresas.",
+  "5. No fusiones `COUNTERPARTY` y `COMP`: propone una equivalencia con sus evidencias y señala contradicciones.",
+  "6. No uses `[COMPANY]`, `[ACCOUNT]`, `[REF]` o `[NUM]` como identificadores compartidos.",
+  "7. Una fecha de pago en una factura no acredita por sí sola un pago efectivo.",
+  "8. No sumes factura, efecto y movimiento bancario como tres obligaciones independientes.",
+  "9. No declares una deuda actual usando una operación pagada.",
+  "10. No infieras riesgo de impago únicamente por existir una relación.",
+  "11. Si falta evidencia, devuelve «relación no determinable».",
+  "12. No utilices evidencias posteriores al corte para afirmar que el vínculo se conocía antes.",
+];
+
+const PRODUCT_FRAMING = [
+  "El grafo puede mostrar vínculos inferidos, siempre diferenciados y con su evidencia accesible.",
+  "El análisis de exposición y cualquier optimizador de pagos necesitan obligaciones verificadas.",
+  "Un pago reconstruye el historial; una obligación abierta permite estudiar una acción futura; no son intercambiables.",
+  "Nunca cuentes la misma operación desde los dos extremos como volumen adicional.",
+];
+
+const RELATION_ANSWER_RULES = [
+  "Toda relación que devuelve la herramienta relations está inferida de movimientos espejo (claim_status: inferred) y provider_identity_confirmed es siempre false: dilo una vez en cada respuesta que cite relaciones.",
+  "Nunca presentes un vínculo inferido como una obligación verificada ni como una deuda actual; solo los vínculos OPEN_OBLIGATION_TO describen un saldo pendiente y aun así son espejos de saldo, no contratos verificados.",
+  "Cita cada importe con el campo amount, ya expresado en su divisa (currency), con su periodo (first_date a last_date) y su número de coincidencias (matches); amount_minor está en céntimos y no se cita; nombra como tal un vínculo de confianza low.",
+  "Responde solo con las relaciones que devolvió la herramienta relations; si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer.",
+  "Para una pregunta de grupo («¿qué empresas mueven dinero con este grupo?»), llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo.",
+];
 
 describe("POST /chat", () => {
   it("grounds the model in the radiography of the company on screen", async () => {
@@ -230,6 +297,146 @@ describe("POST /chat", () => {
       "COMP_B",
       "COMP_0176",
     ]);
+  });
+
+  it("hands the model a relations tool and feeds every inferred edge back", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "COMP_A" }),
+        textReply("COMP_A se relaciona con COMP_B y COMP_D."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_A" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("COMP_A se relaciona");
+    const relations = toolsHandedToModel(model).find(
+      (tool) => tool.name === "relations",
+    );
+    expect(relations?.description).toContain("inferred");
+    expect(relations?.description).toContain("not a verified obligation");
+    expect(relations?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["company_id"],
+      properties: {
+        company_id: { type: "string" },
+        relation_type: {
+          enum: [
+            "INFERRED_PAYMENT_TO",
+            "OPEN_OBLIGATION_TO",
+            "SHARES_COUNTERPARTY_WITH",
+          ],
+        },
+      },
+    });
+    const [call] = toolCallSentToModel(model);
+    expect(call?.toolName).toBe("relations");
+    expect(call?.input).toEqual({ company_id: "COMP_A" });
+    expect(model.doStreamCalls).toHaveLength(2);
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    const parsed = z
+      .object({ type: z.literal("json"), value: chatRelationsSchema })
+      .parse(JSON.parse(output)).value;
+    expect(parsed.company_id).toBe("COMP_A");
+    expect(parsed.edges.map((edge) => edge.counterpart_company_id)).toEqual([
+      "COMP_B",
+      "COMP_D",
+    ]);
+    expect(parsed.edges.map((edge) => edge.counterpart_group_id)).toEqual([
+      "GROUP_1",
+      "GROUP_2",
+    ]);
+    expect(parsed.edges[0]?.counterpart_state).toBe("healthy");
+    expect(parsed.edges[0]?.counterpart_score).toBe(91);
+    expect(
+      parsed.edges.map((edge) => [
+        edge.amount_minor,
+        edge.amount,
+        edge.currency,
+      ]),
+    ).toEqual([
+      [1_234_500, 12_345, "EUR"],
+      [426_457, 4264.57, "EUR"],
+    ]);
+  });
+
+  it("carries Miguel's twelve evidence rules and the relations answer rules", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    const response = await ask(model, { company_id: "COMP_A" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("ok");
+    expect(RELATION_RULES).toHaveLength(12);
+    const system = systemPrompt(model, 0);
+    const missing = [
+      RELATIONS_PREAMBLE,
+      ...RELATION_RULES,
+      ...PRODUCT_FRAMING,
+      ...RELATION_ANSWER_RULES,
+    ].filter((rule) => !system.includes(rule));
+    expect(missing).toEqual([]);
+  });
+
+  it("forwards the relation type the model asks for to the store", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", {
+          company_id: "COMP_A",
+          relation_type: "SHARES_COUNTERPARTY_WITH",
+        }),
+        textReply("COMP_A comparte contraparte con COMP_D."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_A" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("comparte contraparte");
+    expect(toolCallSentToModel(model)[0]?.input).toEqual({
+      company_id: "COMP_A",
+      relation_type: "SHARES_COUNTERPARTY_WITH",
+    });
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    const parsed = z
+      .object({ type: z.literal("json"), value: chatRelationsSchema })
+      .parse(JSON.parse(output)).value;
+    expect(
+      parsed.edges.map((edge) => [
+        edge.relation_type,
+        edge.counterpart_company_id,
+      ]),
+    ).toEqual([["SHARES_COUNTERPARTY_WITH", "COMP_D"]]);
+  });
+
+  it("resolves a demo name to its id before reading the relations", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "Talleres Ribera" }),
+        textReply("Talleres Ribera no tiene vínculos registrados."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_0176" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Talleres Ribera");
+    expect(toolCallSentToModel(model)[0]?.input).toEqual({
+      company_id: "Talleres Ribera",
+    });
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    expect(output).toContain('"company_id":"COMP_0176"');
+  });
+
+  it("feeds an unknown company back to the model as the relations error", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "COMP_ZZZ" }),
+        textReply("Relación no determinable."),
+      ],
+    });
+    const response = await ask(model, {});
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Relación no determinable");
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    expect(output).toContain('"error":"Unknown company COMP_ZZZ"');
   });
 
   it("rejects a body without messages", async () => {
