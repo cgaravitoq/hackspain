@@ -88,6 +88,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
     class="chat-popover"
     role="dialog"
     aria-label="Asistente"
+    @keydown.esc="close"
   >
     <ChatPanel
       ref="chatPanel"

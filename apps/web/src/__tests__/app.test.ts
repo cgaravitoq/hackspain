@@ -196,7 +196,7 @@ describe("App", () => {
     const button = wrapper.find('button[aria-label="Abrir el asistente"]');
     await button.trigger("click");
     await wrapper.find("#chat-input").setValue("Compara A y B");
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await wrapper.find("#chat-input").trigger("keydown", { key: "Escape" });
     await flushPromises();
     expect(wrapper.find(".chat-popover").isVisible()).toBe(false);
     await button.trigger("click");
