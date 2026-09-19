@@ -66,12 +66,16 @@ def seed_dataset(
     invoices: list[dict[str, Any]] | None = None,
     debt_products: list[dict[str, Any]] | None = None,
     banking_products: list[dict[str, Any]] | None = None,
+    currencies: dict[str, str] | None = None,
 ) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     _write_csv(
         folder / "companies.csv",
         COMPANY_FIELDS,
-        [{"company_id": company_id, "group_id": group_id, "currency": "EUR"} for company_id, group_id in companies],
+        [
+            {"company_id": company_id, "group_id": group_id, "currency": (currencies or {}).get(company_id, "EUR")}
+            for company_id, group_id in companies
+        ],
     )
     _write_csv(
         folder / "banking_products.csv",
@@ -185,15 +189,22 @@ def invoice_pair(
     ]
 
 
-def debt_product(product_id: str, company_id: str, outstanding: float) -> dict[str, Any]:
+def debt_product(
+    product_id: str,
+    company_id: str,
+    outstanding: float,
+    *,
+    currency: str = "EUR",
+    created_at: str = "2026-01-01 00:00:00",
+) -> dict[str, Any]:
     return {
         "product_id": product_id,
         "company_id": company_id,
         "type": "lineofcredit",
         "bank_name": "In-house bank",
         "outstanding": outstanding,
-        "currency": "EUR",
-        "created_at": "2026-01-01 00:00:00",
+        "currency": currency,
+        "created_at": created_at,
     }
 
 
@@ -556,6 +567,7 @@ def test_the_group_treasury_hub_is_the_most_connected_company_with_three_edges(t
             *bank_pair(10, "C7", "C6", 510.0, "2026-02-10", "2026-02-10"),
         ],
     )
+    assert [node["company_id"] for node in payload["nodes"]] == ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]
     nodes = {node["company_id"]: node for node in payload["nodes"]}
     assert nodes["C1"] == {
         "company_id": "C1",
@@ -573,7 +585,7 @@ def test_the_group_treasury_hub_is_the_most_connected_company_with_three_edges(t
     assert (nodes["C6"]["degree"], nodes["C6"]["role"]) == (2, "connected")
 
 
-def test_evidence_ids_keep_the_twenty_earliest_matches(tmp_path: Path):
+def test_evidence_ids_keep_the_twenty_earliest_matches_by_date_not_by_id(tmp_path: Path):
     transactions = []
     for index in range(25):
         transactions.extend(
@@ -582,14 +594,14 @@ def test_evidence_ids_keep_the_twenty_earliest_matches(tmp_path: Path):
                 "C1",
                 "C2",
                 100.0 * (index + 1),
-                f"2026-01-{index + 1:02d}",
-                f"2026-01-{index + 1:02d}",
+                f"2026-01-{25 - index:02d}",
+                f"2026-01-{25 - index:02d}",
             )
         )
     payload = detect(tmp_path, companies=[("C1", "G1"), ("C2", "G1")], transactions=transactions)
     edge = edges_of(payload, "bank_mirror")[0]
     assert edge["matches"] == 25
-    assert edge["evidence_ids"] == [f"TX_{index}_out" for index in range(100, 120)]
+    assert edge["evidence_ids"] == [f"TX_{index}_out" for index in range(124, 104, -1)]
 
 
 def test_a_bank_movement_with_two_same_cents_candidates_pairs_with_neither(tmp_path: Path):
@@ -736,4 +748,108 @@ def test_invoice_mirrors_are_high_confidence_from_five_matches_or_five_distinct_
         ("C6", "C3", 4, "medium"),
         ("C2", "C1", 5, "high"),
         ("C4", "C3", 4, "medium"),
+    ]
+
+
+def test_the_edge_currency_is_the_source_side_of_every_relation(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[(f"C{index}", "G1") for index in range(1, 9)],
+        currencies={"C7": "USD"},
+        banking_products=[
+            {"product_id": "P_USD", "type": "checking", "currency": "USD"},
+            {"product_id": "P_EUR", "type": "checking", "currency": "EUR"},
+        ],
+        transactions=[
+            transaction("TX_1_out", "C1", "2026-01-10", -100.0, product_id="P_USD"),
+            transaction("TX_1_in", "C2", "2026-01-10", 100.0, product_id="P_EUR"),
+            transaction("TX_2_out", "C1", "2026-01-20", -200.0, product_id="P_USD"),
+            transaction("TX_2_in", "C2", "2026-01-20", 200.0, product_id="P_EUR"),
+            transaction("TX_3", "C7", "2025-01-05", 10.0, counterparty_id="CP_1"),
+            transaction("TX_4", "C8", "2025-06-05", 10.0, counterparty_id="CP_1"),
+        ],
+        invoices=[
+            invoice("INV_1_sale", "C3", "2026-01-10", 300.0, currency="EUR"),
+            invoice("INV_1_buy", "C4", "2026-01-10", -300.0, currency="USD"),
+            invoice("INV_2_sale", "C3", "2026-02-10", 400.0, currency="EUR"),
+            invoice("INV_2_buy", "C4", "2026-02-10", -400.0, currency="USD"),
+            invoice("INV_3_sale", "C3", "2026-03-10", 500.0, currency="EUR"),
+            invoice("INV_3_buy", "C4", "2026-03-10", -500.0, currency="USD"),
+        ],
+        debt_products=[
+            debt_product("D_LENDER", "C5", 5000.0, currency="EUR"),
+            debt_product("D_BORROWER", "C6", -5000.0, currency="USD"),
+        ],
+    )
+    assert sorted((edge["evidence_level"], edge["source"], edge["currency"]) for edge in payload["edges"]) == [
+        ("bank_mirror", "C1", "USD"),
+        ("debt_balance_mirror", "C6", "USD"),
+        ("invoice_mirror", "C4", "USD"),
+        ("shared_counterparty_id", "C7", "USD"),
+    ]
+
+
+def test_a_counterparty_shared_by_three_companies_links_every_pair_on_its_own_rows(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G1")],
+        transactions=[
+            transaction("TX_1", "C1", "2025-01-05", 10.0, counterparty_id="CP_1"),
+            transaction("TX_2", "C2", "2025-02-05", 20.0, counterparty_id="CP_1"),
+            transaction("TX_3", "C3", "2025-03-05", 40.0, counterparty_id="CP_1"),
+        ],
+    )
+    edges = edges_of(payload, "shared_counterparty_id")
+    assert [
+        (edge["source"], edge["target"], edge["matches"], edge["amount_minor"], edge["first_date"], edge["last_date"])
+        for edge in edges
+    ] == [
+        ("C1", "C2", 1, 3000, "2025-01-05", "2025-02-05"),
+        ("C1", "C3", 1, 5000, "2025-01-05", "2025-03-05"),
+        ("C2", "C3", 1, 6000, "2025-02-05", "2025-03-05"),
+    ]
+
+
+def test_an_in_house_line_without_a_creation_date_starts_at_the_cutoff(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1")],
+        debt_products=[
+            debt_product("D1", "C1", 5000.0, created_at=""),
+            debt_product("D2", "C2", -5000.0, created_at=""),
+        ],
+    )
+    edge = edges_of(payload, "debt_balance_mirror")[0]
+    assert (edge["first_date"], edge["last_date"]) == ("2026-09-01", "2026-09-01")
+
+
+def test_edges_are_ordered_by_scope_relation_type_matches_then_company_ids(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G1"), ("C4", "G1"), ("C5", "G2"), ("C6", "G2")],
+        transactions=[
+            *bank_pair(1, "C1", "C3", 100.0, "2026-01-10", "2026-01-10"),
+            *bank_pair(2, "C1", "C3", 110.0, "2026-01-20", "2026-01-20"),
+            *bank_pair(3, "C1", "C3", 120.0, "2026-01-30", "2026-01-30"),
+            *bank_pair(4, "C1", "C2", 200.0, "2026-02-10", "2026-02-10"),
+            *bank_pair(5, "C1", "C2", 210.0, "2026-02-20", "2026-02-20"),
+            *bank_pair(6, "C2", "C3", 300.0, "2026-03-10", "2026-03-10"),
+            *bank_pair(7, "C2", "C3", 310.0, "2026-03-20", "2026-03-20"),
+            *bank_pair(8, "C1", "C5", 400.0, "2026-04-10", "2026-04-10"),
+            *bank_pair(9, "C1", "C5", 410.0, "2026-04-20", "2026-04-20"),
+            transaction("TX_SHARED_1", "C4", "2025-01-05", 10.0, counterparty_id="CP_1"),
+            transaction("TX_SHARED_2", "C6", "2025-06-05", 10.0, counterparty_id="CP_1"),
+        ],
+        debt_products=[debt_product("D1", "C1", 5000.0), debt_product("D2", "C3", -5000.0)],
+    )
+    assert [
+        (edge["scope"], edge["relation_type"], edge["matches"], edge["source"], edge["target"])
+        for edge in payload["edges"]
+    ] == [
+        ("intergroup", "INFERRED_PAYMENT_TO", 2, "C1", "C5"),
+        ("intergroup", "SHARES_COUNTERPARTY_WITH", 1, "C4", "C6"),
+        ("intragroup", "INFERRED_PAYMENT_TO", 3, "C1", "C3"),
+        ("intragroup", "INFERRED_PAYMENT_TO", 2, "C1", "C2"),
+        ("intragroup", "INFERRED_PAYMENT_TO", 2, "C2", "C3"),
+        ("intragroup", "OPEN_OBLIGATION_TO", 1, "C3", "C1"),
     ]
