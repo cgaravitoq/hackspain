@@ -76,30 +76,38 @@ afterEach(() => {
 });
 
 describe("DecisionPanel", () => {
-  it("mounts from the tab and sends treasury defaults in the first scenario request", async () => {
-    const detail = company("COMP_A", "GROUP_1");
-    const seen: string[] = [];
-    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-      const url = new URL(String(input), "https://web.test");
-      seen.push(`${url.pathname}${url.search}`);
-      if (url.pathname.endsWith("/simulate")) {
-        return Promise.resolve(Response.json(simulation));
-      }
-      return Promise.resolve(Response.json(detail));
-    });
+  it("is hidden from the company detail tabs", () => {
     const wrapper = mount(DetailTabs, {
       props: {
-        company: detail,
+        company: company("COMP_A", "GROUP_1"),
         explanation: explain("COMP_A", "GROUP_1"),
         group,
         selected: "COMP_A",
         role: "financiero",
       },
     });
-    await wrapper
-      .findAll('[role="tab"]')
-      .find((tab) => tab.text() === "Decisión")
-      ?.trigger("click");
+    expect(
+      wrapper.findAll('[role="tab"]').map((tab) => tab.text()),
+    ).not.toContain("Decisión");
+    expect(wrapper.find(".decision-panel").exists()).toBe(false);
+  });
+
+  it("sends treasury defaults in the first scenario request", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://web.test");
+      seen.push(`${url.pathname}${url.search}`);
+      return Promise.resolve(
+        Response.json(
+          url.pathname.endsWith("/simulate")
+            ? simulation
+            : company("COMP_A", "GROUP_1"),
+        ),
+      );
+    });
+    const wrapper = mount(DecisionPanel, {
+      props: { companyId: "COMP_A", role: "financiero" },
+    });
     await flushPromises();
     expect(wrapper.find(".decision-panel").exists()).toBe(true);
     expect(seen).toContain(
