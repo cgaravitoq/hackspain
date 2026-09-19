@@ -14,7 +14,7 @@ const PAD_X = 28;
 const PAD_Y = 14;
 const SERIES_COLORS = ["#1d4ed8", "#b45309", "#0f766e"];
 
-const months = computed(() =>
+const observedMonths = computed(() =>
   [
     ...new Set(
       props.companies.flatMap((company) =>
@@ -25,6 +25,21 @@ const months = computed(() =>
     .sort()
     .slice(-24),
 );
+
+const months = computed(() => {
+  const last = observedMonths.value.at(-1);
+  if (!last) {
+    return [];
+  }
+  const future = [1, 2, 3].map((offset) => {
+    const date = new Date(`${last}-01T00:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + offset);
+    return date.toISOString().slice(0, 7);
+  });
+  return [...observedMonths.value, ...future];
+});
+
+const todayX = computed(() => x(observedMonths.value.length - 1));
 
 function x(index: number): number {
   const span = Math.max(months.value.length - 1, 1);
@@ -47,7 +62,7 @@ function segments(entries: MonthEntry[]): string[] {
   const byMonth = new Map(entries.map((entry) => [entry.month, entry]));
   const result: string[] = [];
   let current: string[] = [];
-  months.value.forEach((month, index) => {
+  observedMonths.value.forEach((month, index) => {
     const entry = byMonth.get(month);
     if (!entry || entry.score === null) {
       if (current.length > 1) {
@@ -66,12 +81,30 @@ function segments(entries: MonthEntry[]): string[] {
 
 function points(entries: MonthEntry[]) {
   const byMonth = new Map(entries.map((entry) => [entry.month, entry]));
-  return months.value.flatMap((month, index) => {
+  return observedMonths.value.flatMap((month, index) => {
     const entry = byMonth.get(month);
     return entry?.score === null || !entry
       ? []
       : [{ x: x(index), y: y(entry.score), entry }];
   });
+}
+
+function projection(entries: MonthEntry[]): string {
+  const last = points(entries).at(-1);
+  if (!last || last.entry.score === null || last.entry.momentum === null) {
+    return "";
+  }
+  const { score, momentum } = last.entry;
+  return [
+    `${last.x},${last.y}`,
+    ...[1, 2, 3].map((step) => {
+      const projected = Math.max(
+        0,
+        Math.min(100, score + (momentum * step) / 3),
+      );
+      return `${x(observedMonths.value.length - 1 + step)},${y(projected)}`;
+    }),
+  ].join(" ");
 }
 
 const chartSeries = computed(() =>
@@ -81,6 +114,7 @@ const chartSeries = computed(() =>
     color: SERIES_COLORS[index] ?? SERIES_COLORS[0],
     segments: segments(company.series),
     points: points(company.series),
+    projection: projection(company.series),
   })),
 );
 
@@ -97,8 +131,26 @@ const labels = computed(() =>
       class="sparkline"
       :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
       role="img"
-      aria-label="Evolución del score en 24 meses"
+      aria-label="Evolución del score en 24 meses y proyección por tendencia a 3 meses"
     >
+      <template v-if="observedMonths.length">
+        <rect
+          :x="todayX"
+          :y="PAD_Y"
+          :width="WIDTH - PAD_X - todayX"
+          :height="HEIGHT - PAD_Y * 2"
+          class="projection-area"
+        />
+        <line
+          :x1="todayX"
+          :x2="todayX"
+          :y1="PAD_Y"
+          :y2="HEIGHT - PAD_Y"
+          stroke-dasharray="1 3"
+          class="today-marker"
+        />
+        <text :x="todayX" :y="PAD_Y - 4" class="axis today-label">hoy</text>
+      </template>
       <line :x1="PAD_X" :x2="WIDTH - PAD_X" :y1="y(50)" :y2="y(50)" class="guide" />
       <text :x="PAD_X - 6" :y="y(100) + 4" class="axis">100</text>
       <text :x="PAD_X - 6" :y="y(50) + 4" class="axis">50</text>
@@ -110,6 +162,14 @@ const labels = computed(() =>
           :points="segment"
           :stroke="item.color"
           class="series-line"
+        />
+        <polyline
+          v-if="item.projection"
+          :points="item.projection"
+          :stroke="item.color"
+          stroke-dasharray="5 4"
+          opacity="0.6"
+          class="projection-line"
         />
         <circle
           v-for="point in item.points"
@@ -142,6 +202,10 @@ const labels = computed(() =>
         <i :style="{ background: item.color }" />
         {{ item.label }}
       </span>
+      <span>
+        <i class="projection-sample" />
+        proyección por tendencia (3 meses)
+      </span>
     </div>
   </div>
 </template>
@@ -158,7 +222,18 @@ const labels = computed(() =>
   stroke-dasharray: 4 4;
 }
 
-.series-line {
+.projection-area {
+  fill: var(--muted);
+  opacity: 0.07;
+}
+
+.today-marker {
+  stroke: var(--muted);
+  stroke-linecap: round;
+}
+
+.series-line,
+.projection-line {
   fill: none;
   stroke-width: 1.8;
 }
@@ -169,7 +244,8 @@ const labels = computed(() =>
   text-anchor: end;
 }
 
-.month {
+.month,
+.today-label {
   text-anchor: middle;
 }
 
@@ -193,5 +269,12 @@ const labels = computed(() =>
   width: 18px;
   height: 3px;
   border-radius: 999px;
+}
+
+.legend .projection-sample {
+  height: 0;
+  border-top: 2px dashed currentColor;
+  border-radius: 0;
+  opacity: 0.6;
 }
 </style>
