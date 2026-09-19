@@ -829,6 +829,31 @@ describe("App", () => {
     );
   });
 
+  it("keeps the graph unavailable to the treasurer", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    await selectRole(wrapper, "Tesorero");
+    expect(window.location.hash).toBe("#COMP_0176");
+    expect(wrapper.find(".graph-screen").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(
+      wrapper
+        .findAll('[data-sidebar="menu-sub-button"]')
+        .map((item) => item.text()),
+    ).toEqual(["Radiografía"]);
+    window.location.hash = "graph";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(window.location.hash).toBe("#COMP_0176");
+    expect(wrapper.find(".graph-screen").exists()).toBe(false);
+    expect(wrapper.find('[data-active="true"]').text()).toBe("Radiografía");
+  });
+
   it("renders the Embat menu in order with Analytics open", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();

@@ -132,7 +132,7 @@ const menuAfterAnalytics = [
                         <span>Radiografía</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
+                    <SidebarMenuSubItem v-if="role !== 'tesorero'">
                       <SidebarMenuSubButton
                         as="button"
                         :is-active="view === 'graph'"

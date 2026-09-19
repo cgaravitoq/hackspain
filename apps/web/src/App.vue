@@ -96,6 +96,12 @@ function showChatCommitment(result: CommitmentResponse) {
 
 watch([selected, role], closeCommitment);
 
+watch(role, (nextRole) => {
+  if (nextRole === "tesorero" && onGraph.value) {
+    openRadiography();
+  }
+});
+
 async function load(companyId: string) {
   const request = ++companyRequest;
   error.value = "";
@@ -127,6 +133,10 @@ function select(companyId: string) {
 }
 
 function openGraph() {
+  if (role.value === "tesorero") {
+    openRadiography();
+    return;
+  }
   onGraph.value = true;
   window.location.hash = GRAPH_ROUTE;
 }
@@ -199,6 +209,10 @@ function selectRole(nextRole: Role) {
 
 function syncHash() {
   const hash = window.location.hash.slice(1);
+  if (hash === GRAPH_ROUTE && role.value === "tesorero") {
+    openRadiography();
+    return;
+  }
   onGraph.value = hash === GRAPH_ROUTE;
   if (!onGraph.value) {
     select(hash);
