@@ -1,10 +1,10 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import {
-  companyRelationEdgeSchema,
-  companyRelationsSchema,
   type CommitmentRequest,
   commitmentRequestSchema,
+  companyRelationEdgeSchema,
+  companyRelationsSchema,
   compareSchema,
   type RelationType,
   type Role,
