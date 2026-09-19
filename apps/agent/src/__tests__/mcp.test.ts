@@ -192,6 +192,7 @@ describe("POST /mcp", () => {
     expect(body.id).toBe(1);
     const score = z
       .object({
+        rule_version: z.string(),
         score: z.number(),
         state: z.string(),
         state_label: z.string(),
@@ -199,6 +200,7 @@ describe("POST /mcp", () => {
       })
       .parse(JSON.parse(body.result.content[0]?.text ?? ""));
     expect(score).toMatchObject({
+      rule_version: "xray-score/0.1",
       score: 12.3,
       state: "falling",
       state_label: "cayendo",
