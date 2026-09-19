@@ -90,13 +90,14 @@ describe("Radiography", () => {
     const wrapper = mountRadiography();
     expect(tabs(wrapper).map((tab) => tab.text())).toEqual([
       "Acción",
+      "Decisión",
       "Por qué",
       "Qué cambió",
       "Informe",
       "Grupo",
     ]);
     expect(tabs(wrapper).map((tab) => tab.attributes("aria-selected"))).toEqual(
-      ["true", "false", "false", "false", "false"],
+      ["true", "false", "false", "false", "false", "false"],
     );
     expect(wrapper.find('[role="tabpanel"] .action').text()).toBe(ACTION);
     expect(wrapper.find(".drivers").exists()).toBe(false);
