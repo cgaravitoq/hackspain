@@ -3,6 +3,7 @@ import {
   chatRequestSchema,
   environmentSchema,
   type HealthResponse,
+  roleSchema,
   stateSchema,
 } from "@hackspain/shared";
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -11,11 +12,20 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { chat, workersAiModel } from "./xray/chat.ts";
 import { createMcpServer } from "./xray/mcp.ts";
+import { loadReport, reportSources } from "./xray/report.ts";
+import { renderReportHtml } from "./xray/report-html.ts";
+import {
+  type ReportBrowser,
+  reportFilename,
+  reportPdf,
+} from "./xray/report-pdf.ts";
+import { createReportTool } from "./xray/report-tool.ts";
 import { createStore } from "./xray/store.ts";
 import { createTools } from "./xray/tools.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
+  browser?: ReportBrowser;
 };
 
 const companiesQuerySchema = z.object({
@@ -68,6 +78,63 @@ export function createApp(options: AppOptions = {}) {
       : context.json(explanation);
   });
 
+  app.get("/companies/:id/report", async (context) => {
+    const role = roleSchema.safeParse(context.req.query("role"));
+    if (!role.success) {
+      return context.json({ error: "Unknown role" }, 400);
+    }
+    const report = await loadReport(
+      context.env.DB,
+      () => model(context.env),
+      context.req.param("id"),
+      role.data,
+    );
+    return context.json(report);
+  });
+
+  app.get("/companies/:id/report.pdf", async (context) => {
+    const role = roleSchema.safeParse(context.req.query("role"));
+    if (!role.success) {
+      return context.json({ error: "Unknown role" }, 400);
+    }
+    const report = await loadReport(
+      context.env.DB,
+      () => model(context.env),
+      context.req.param("id"),
+      role.data,
+    );
+    const pdf = await reportPdf(
+      context.env.DB,
+      options.browser ?? context.env.BROWSER,
+      report,
+    );
+    return new Response(pdf, {
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `inline; filename="${reportFilename(report)}"`,
+        "cache-control": "private, max-age=3600",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  });
+
+  app.get("/companies/:id/report.html", async (context) => {
+    const role = roleSchema.safeParse(context.req.query("role"));
+    if (!role.success) {
+      return context.json({ error: "Unknown role" }, 400);
+    }
+    const report = await loadReport(
+      context.env.DB,
+      () => model(context.env),
+      context.req.param("id"),
+      role.data,
+    );
+    const sources = await reportSources(context.env.DB, report.company_id);
+    context.header("cache-control", "private, no-store");
+    context.header("x-content-type-options", "nosniff");
+    return context.html(renderReportHtml(report, sources));
+  });
+
   app.get("/groups/:id", async (context) => {
     const group = await createTools(createStore(context.env.DB)).group_map({
       group_id: context.req.param("id"),
@@ -106,12 +173,30 @@ export function createApp(options: AppOptions = {}) {
     if (!request.success) {
       return context.json({ error: z.treeifyError(request.error) }, 400);
     }
-    return chat(model(context.env), createStore(context.env.DB), request.data);
+    return chat(
+      model(context.env),
+      createStore(context.env.DB),
+      request.data,
+      createReportTool(
+        context.env.DB,
+        () => model(context.env),
+        options.browser ?? context.env.BROWSER,
+        "/api",
+      ),
+    );
   });
 
   app.all("/mcp", async (context) => {
     const transport = new StreamableHTTPTransport({ enableJsonResponse: true });
-    await createMcpServer(createStore(context.env.DB)).connect(transport);
+    await createMcpServer(
+      createStore(context.env.DB),
+      createReportTool(
+        context.env.DB,
+        () => model(context.env),
+        options.browser ?? context.env.BROWSER,
+        new URL(context.req.url).origin,
+      ),
+    ).connect(transport);
     const response = await transport.handleRequest(context);
     return response ?? context.body(null, 204);
   });

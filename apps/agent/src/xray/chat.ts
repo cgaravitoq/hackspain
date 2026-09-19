@@ -8,6 +8,11 @@ import {
   validateUIMessages,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import {
+  type ReportTool,
+  reportDescription,
+  reportInput,
+} from "./report-tool.ts";
 import type { Store } from "./store.ts";
 import {
   createTools,
@@ -54,14 +59,23 @@ export async function chat(
   model: LanguageModel,
   store: Store,
   request: ChatRequest,
+  report: ReportTool,
 ): Promise<Response> {
   const tools = createTools(store);
   const messages = await validateUIMessages({ messages: request.messages });
   const result = streamText({
     model,
-    system: `${SYSTEM}\n\n${await context(tools, request.company_id)}`,
+    system: `${SYSTEM}\n\nRol seleccionado: ${request.role ?? "tesorero"}. Para exportar un informe llama a report con company y este rol; devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
     messages: await convertToModelMessages(messages),
     tools: {
+      report: tool({
+        description: reportDescription,
+        inputSchema: reportInput,
+        execute: async (input) => {
+          const { url, filename, sizeBytes } = await report(input);
+          return { url, filename, sizeBytes };
+        },
+      }),
       score: tool({
         description: toolDescriptions.score,
         inputSchema: toolInputs.score,
