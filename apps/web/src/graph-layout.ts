@@ -21,7 +21,6 @@ const MANY_BODY_STRENGTH = -120;
 const ANCHOR_STRENGTH = 0.12;
 const JITTER = 28;
 const MAX_SCALE = 2;
-const NODE_HIT_SLACK = 5;
 const EDGE_TOLERANCE = 5;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
@@ -279,7 +278,7 @@ export function nodeAt(
   let hit: { node: RelationNode; distance: number } | undefined;
   for (const position of layout.positions.values()) {
     const distance = Math.hypot(position.x - x, position.y - y);
-    if (distance > position.radius + NODE_HIT_SLACK) {
+    if (distance > position.radius) {
       continue;
     }
     if (!hit || distance < hit.distance) {
