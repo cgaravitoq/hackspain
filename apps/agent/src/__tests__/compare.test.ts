@@ -59,6 +59,16 @@ describe("GET /compare", () => {
     );
   });
 
+  it("treats a quote in an id as data and answers 404", async () => {
+    const response = await SELF.fetch(
+      "https://agent.test/compare?ids=COMP_A%27--",
+    );
+    expect(response.status).toBe(404);
+    expect(errorBody.parse(await response.json()).error).toBe(
+      "Unknown company COMP_A'--",
+    );
+  });
+
   it("rejects an empty list with a message about the bounds", async () => {
     const response = await SELF.fetch("https://agent.test/compare?ids=");
     expect(response.status).toBe(400);
