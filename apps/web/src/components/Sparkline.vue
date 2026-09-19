@@ -586,7 +586,7 @@ const tooltip = computed(() => {
 }
 
 .axis {
-  font-size: 13px;
+  font-size: 15px;
   fill: var(--muted);
   text-anchor: end;
 }
@@ -615,7 +615,6 @@ const tooltip = computed(() => {
 }
 
 .tooltip strong {
-  text-transform: capitalize;
   color: var(--ink-soft);
   font-weight: 600;
 }
