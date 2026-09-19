@@ -5,8 +5,9 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
+import { decisionSimulation } from "../xray/report.ts";
 import type { Narrative, Verdict } from "../xray/report-judge.ts";
-import { company, seed } from "./fixtures.ts";
+import { company, falling, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
@@ -360,6 +361,13 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
+  it("requests all receivables and only the undrawn line for the decision", () => {
+    const simulation = decisionSimulation(falling);
+    expect(simulation?.scenarios.map((scenario) => scenario.requested)).toEqual(
+      [33_333.33, 33_333.33],
+    );
+  });
+
   it("reserves the output budget for narrative rather than model reasoning", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) =>
