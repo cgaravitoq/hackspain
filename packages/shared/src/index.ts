@@ -58,7 +58,6 @@ export {
   compareSchema,
   componentCodeSchema,
   confidenceSchema,
-  DEMO_COMPANY_NAMES,
   type Diagnosis,
   type Driver,
   diagnosisSchema,

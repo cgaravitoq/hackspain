@@ -7,7 +7,6 @@ import {
   companyRelationsSchema,
   companySummarySchema,
   compareSchema,
-  DEMO_COMPANY_NAMES,
   driverSchema,
   explainSchema,
   graphMetaSchema,
@@ -117,6 +116,7 @@ const demoTrendProjectionRefusal = {
 const demoCompanySummary = {
   rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
+  name: "Talleres Ribera",
   group_id: "GROUP_0001",
   currency: "EUR",
   scorable: true,
@@ -314,6 +314,7 @@ describe("xray contracts", () => {
     const detail = companyDetailSchema.parse({
       rule_version: "xray-score/0.1",
       company_id: "COMP_0001",
+      name: "Transportes Navarro",
       group_id: "GROUP_0001",
       currency: "EUR",
       scorable: true,
@@ -989,14 +990,6 @@ describe("xray contracts", () => {
     ]);
   });
 
-  it("maps each demo company name to its fictional company id", () => {
-    expect(DEMO_COMPANY_NAMES).toEqual({
-      "Talleres Ribera": "COMP_0176",
-      "Bodegas Altamira": "COMP_0077",
-      "Meridian Logística": "COMP_0909",
-    });
-  });
-
   it("rejects a company summary without a treasury snapshot", () => {
     const { treasury: _treasury, ...withoutTreasury } = demoCompanySummary;
     const result = companySummarySchema.safeParse(withoutTreasury);
@@ -1162,6 +1155,7 @@ const relationEdge = {
 
 const relationArtifactNode = {
   company_id: "COMP_0001",
+  name: "Transportes Navarro",
   group_id: "GROUP_0001",
   degree: 3,
   role: "group_treasury_hub",

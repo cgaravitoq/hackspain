@@ -152,6 +152,7 @@ export function company(id: string, groupId: string): CompanyDetail {
   return {
     rule_version: "xray-score/0.1",
     company_id: id,
+    name: id,
     group_id: groupId,
     currency: "EUR",
     scorable: true,
@@ -282,6 +283,7 @@ export const group: GroupMap = {
   members: [
     {
       company_id: "COMP_A",
+      name: "COMP_A",
       debt_outstanding: 0,
       debt_share: null,
       month: "2026-08",
@@ -296,6 +298,7 @@ export const group: GroupMap = {
     },
     {
       company_id: "COMP_B",
+      name: "COMP_B",
       debt_outstanding: 0,
       debt_share: null,
       month: "2026-08",
@@ -319,6 +322,7 @@ export function graphNode(
 ): RelationNode {
   return {
     company_id: companyId,
+    name: companyId,
     group_id: groupId,
     degree,
     role: degree === 0 ? "isolated" : "connected",

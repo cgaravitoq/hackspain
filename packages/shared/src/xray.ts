@@ -182,6 +182,7 @@ export type TrendProjection = z.infer<typeof trendProjectionSchema>;
 export const companySummarySchema = z.object({
   rule_version: z.string(),
   company_id: z.string(),
+  name: z.string().min(1),
   group_id: z.string().nullable(),
   currency: z.string().nullable(),
   scorable: z.boolean(),
@@ -232,6 +233,7 @@ export type Alert = z.infer<typeof alertSchema>;
 
 export const groupMemberSchema = latestSchema.extend({
   company_id: z.string(),
+  name: z.string().min(1),
   debt_outstanding: z.number(),
   debt_share: z.number().nullable(),
 });
@@ -522,6 +524,7 @@ export const relationRoleSchema = z.enum([
 
 export const relationArtifactNodeSchema = z.object({
   company_id: z.string(),
+  name: z.string().min(1),
   group_id: z.string().nullable(),
   degree: z.number().int().nonnegative(),
   role: relationRoleSchema,
@@ -654,12 +657,6 @@ export const simulateSchema = z
   });
 
 export type Simulate = z.infer<typeof simulateSchema>;
-
-export const DEMO_COMPANY_NAMES = {
-  "Talleres Ribera": "COMP_0176",
-  "Bodegas Altamira": "COMP_0077",
-  "Meridian Logística": "COMP_0909",
-} satisfies Record<string, string>;
 
 const chatPartSchema = z
   .object({

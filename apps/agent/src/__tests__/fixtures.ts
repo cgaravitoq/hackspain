@@ -112,6 +112,7 @@ export function company(
   return {
     rule_version: "xray-score/0.1",
     company_id: id,
+    name: id,
     group_id: groupId,
     currency: "EUR",
     scorable: latest.score !== null,
@@ -217,6 +218,7 @@ export const group: Group = {
   tension: true,
   members: [falling, healthy].map((member) => ({
     company_id: member.company_id,
+    name: member.name,
     debt_outstanding: 0,
     debt_share: null,
     ...member.latest,
