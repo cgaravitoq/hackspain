@@ -487,26 +487,45 @@ export const simulateScenarioSchema = z.object({
 
 export type SimulateScenario = z.infer<typeof simulateScenarioSchema>;
 
-export const simulateSchema = z.object({
-  company_id: z.string(),
-  label: z.literal("escenario"),
-  horizon: z.number().int(),
-  inputs: z.object({
-    starting_cash: z.number(),
-    pending_receivables: z.number(),
-    credit_line_limit: z.number(),
-    credit_line_drawn: z.number(),
-    net_flow_monthly: z.number(),
-  }),
-  baseline: z.object({
-    cash: z.array(z.number()).min(1),
-    final_cash: z.number(),
-    minimum_cash: z.number(),
-    minimum_cash_month: z.number().int(),
-    score: z.number().nullable(),
-  }),
-  scenarios: z.array(simulateScenarioSchema),
-});
+export const simulateSchema = z
+  .object({
+    company_id: z.string(),
+    label: z.literal("escenario"),
+    horizon: z.number().int(),
+    inputs: z.object({
+      starting_cash: z.number(),
+      pending_receivables: z.number(),
+      credit_line_limit: z.number(),
+      credit_line_drawn: z.number(),
+      net_flow_monthly: z.number(),
+    }),
+    baseline: z.object({
+      cash: z.array(z.number()).min(1),
+      final_cash: z.number(),
+      minimum_cash: z.number(),
+      minimum_cash_month: z.number().int(),
+      score: z.number().nullable(),
+    }),
+    scenarios: z.array(simulateScenarioSchema),
+  })
+  .superRefine((simulate, context) => {
+    const paths = [
+      { path: ["baseline", "cash"], cash: simulate.baseline.cash },
+      ...simulate.scenarios.map((scenario, index) => ({
+        path: ["scenarios", index, "cash"],
+        cash: scenario.cash,
+      })),
+    ];
+    for (const { path, cash } of paths) {
+      if (cash.length !== simulate.horizon + 1) {
+        context.addIssue({
+          code: "custom",
+          message: `expected ${simulate.horizon + 1} cash entries, one per month from today to the horizon`,
+          path,
+        });
+      }
+    }
+  });
 
 export type Simulate = z.infer<typeof simulateSchema>;
 

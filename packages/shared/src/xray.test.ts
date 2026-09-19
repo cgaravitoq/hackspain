@@ -1028,7 +1028,33 @@ describe("xray contracts", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["baseline", "cash"],
+      ["baseline", "cash"],
     ]);
+  });
+
+  it("rejects a cash path that does not carry horizon plus one entries", () => {
+    const truncated = simulateSchema.safeParse({
+      ...demoSimulate,
+      baseline: { ...demoSimulate.baseline, cash: [150_000, 90_000] },
+      scenarios: [{ ...demoScenario, cash: [150_000, 122_666.66] }],
+    });
+    expect(truncated.success).toBe(false);
+    expect(
+      truncated.error?.issues.map((issue) => [issue.path, issue.message]),
+    ).toEqual([
+      [
+        ["baseline", "cash"],
+        "expected 3 cash entries, one per month from today to the horizon",
+      ],
+      [
+        ["scenarios", 0, "cash"],
+        "expected 3 cash entries, one per month from today to the horizon",
+      ],
+    ]);
+    expect(
+      simulateSchema.safeParse({ ...demoSimulate, horizon: 3 }).success,
+    ).toBe(false);
+    expect(simulateSchema.safeParse(demoSimulate).success).toBe(true);
   });
 });
 
