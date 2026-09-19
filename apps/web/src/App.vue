@@ -13,7 +13,7 @@ import {
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AlertList from "./components/AlertList.vue";
-import ChatPanel from "./components/ChatPanel.vue";
+import ChatBubble from "./components/ChatBubble.vue";
 import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
@@ -277,15 +277,15 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       </template>
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
     </div>
-    <ChatPanel
-      v-if="selected"
-      :company-id="selected"
-      :alerts="alerts"
-      :role="role"
-      @compare="replaceComparison"
-      @report="openReport"
-    />
   </main>
+  <ChatBubble
+    v-if="selected"
+    :company-id="selected"
+    :alerts="alerts"
+    :role="role"
+    @compare="replaceComparison"
+    @report="openReport"
+  />
 </template>
 
 <style scoped>

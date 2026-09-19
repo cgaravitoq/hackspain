@@ -17,6 +17,17 @@ function sse(chunks: object[]): Response {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ChatPanel", () => {
+  it("renders the assistant header and closes from its button", async () => {
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
+    });
+    expect(wrapper.find("h2").text()).toBe("Asistente");
+    await wrapper
+      .find('button[aria-label="Cerrar el asistente"]')
+      .trigger("click");
+    expect(wrapper.emitted("close")).toEqual([[]]);
+  });
+
   it("marks the alert count as truncated when the list reaches the fetch limit", () => {
     const capped = Array.from({ length: ALERTS_LIMIT }, (_, index) =>
       alert(`COMP_${index}`),
