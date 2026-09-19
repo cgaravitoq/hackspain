@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
+import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { reportSchema } from "@hackspain/shared";
-import { MockLanguageModelV4 } from "ai/test";
+import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
@@ -110,6 +111,189 @@ describe("GET /companies/:id/report.pdf", () => {
       .bind("COMP_A", "tesorero")
       .first<{ size: number }>();
     expect(cached?.size).toBe(pdfBytes.byteLength);
+  });
+});
+
+function stream(parts: LanguageModelV4StreamPart[]) {
+  return {
+    stream: simulateReadableStream<LanguageModelV4StreamPart>({
+      chunks: [{ type: "stream-start", warnings: [] }, ...parts],
+    }),
+  };
+}
+
+describe("report tools", () => {
+  it("streams a report tool result with a same-origin download link", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+      doStream: [
+        stream([
+          {
+            type: "tool-call",
+            toolCallId: "report-call",
+            toolName: "report",
+            input: JSON.stringify({ company: "COMP_A", role: "tesorero" }),
+          },
+          {
+            type: "finish",
+            finishReason: { unified: "tool-calls", raw: undefined },
+            usage: reply("").usage,
+          },
+        ]),
+        stream([
+          { type: "text-start", id: "t" },
+          {
+            type: "text-delta",
+            id: "t",
+            delta: "Informe listo para descargar.",
+          },
+          { type: "text-end", id: "t" },
+          {
+            type: "finish",
+            finishReason: { unified: "stop", raw: undefined },
+            usage: reply("").usage,
+          },
+        ]),
+      ],
+    });
+    const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
+      expect(action).toBe("pdf");
+      pdfRequest.parse(input);
+      return Promise.resolve(
+        new Response(pdfBytes, {
+          headers: { "content-type": "application/pdf" },
+        }),
+      );
+    });
+    const response = await createApp({
+      model: () => model,
+      browser: { quickAction },
+    }).request(
+      "/chat",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          company_id: "COMP_A",
+          role: "tesorero",
+          messages: [
+            {
+              id: "m1",
+              role: "user",
+              parts: [{ type: "text", text: "Exporta el informe." }],
+            },
+          ],
+        }),
+      },
+      env,
+    );
+    const text = await response.text();
+    expect(text).toContain('"type":"tool-output-available"');
+    expect(text).toContain('"toolName":"report"');
+    expect(text).toContain("/api/companies/COMP_A/report.pdf?role=tesorero");
+    expect(quickAction).toHaveBeenCalledTimes(1);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(model.doStreamCalls).toHaveLength(2);
+    const result = model.doStreamCalls[1]?.prompt
+      .filter((message) => message.role === "tool")
+      .flatMap((message) => message.content)
+      .find((part) => part.type === "tool-result");
+    expect(result?.toolName).toBe("report");
+    const output = z
+      .object({
+        type: z.literal("json"),
+        value: z.strictObject({
+          url: z.string(),
+          filename: z.string(),
+          sizeBytes: z.number(),
+        }),
+      })
+      .parse(result?.output);
+    expect(output.value).toEqual({
+      url: "/api/companies/COMP_A/report.pdf?role=tesorero",
+      filename: "xray-COMP_A-2026-08-tesorero.pdf",
+      sizeBytes: pdfBytes.byteLength,
+    });
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
+      "Rol seleccionado: tesorero",
+    );
+  });
+
+  it("exports a named company through MCP as a text URL and structured metadata", async () => {
+    await env.DB.prepare(
+      "INSERT INTO companies SELECT 'COMP_0176', group_id, scorable, month, score, state, json_set(summary, '$.company_id', 'COMP_0176'), json_set(detail, '$.company_id', 'COMP_0176') FROM companies WHERE company_id = 'COMP_A'",
+    ).run();
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
+      expect(action).toBe("pdf");
+      expect(pdfRequest.parse(input).html).toContain("Talleres Ribera");
+      return Promise.resolve(
+        new Response(pdfBytes, {
+          headers: { "content-type": "application/pdf" },
+        }),
+      );
+    });
+    const app = createApp({ model: () => model, browser: { quickAction } });
+    for (const company of ["Talleres Ribera", "COMP_0176"]) {
+      const response = await app.request(
+        "https://agent.test/mcp",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "report",
+              arguments: { company, role: "tesorero" },
+            },
+          }),
+        },
+        env,
+      );
+      expect(response.status).toBe(200);
+      const result = z
+        .object({
+          result: z.object({
+            content: z.array(
+              z.object({ type: z.literal("text"), text: z.string() }),
+            ),
+            structuredContent: z.strictObject({
+              url: z.url(),
+              filename: z.string(),
+              mimeType: z.literal("application/pdf"),
+              sizeBytes: z.number(),
+              generatedAt: z.iso.datetime(),
+            }),
+          }),
+        })
+        .parse(await response.json()).result;
+      expect(result.structuredContent).toMatchObject({
+        url: "https://agent.test/companies/COMP_0176/report.pdf?role=tesorero",
+        filename: "xray-COMP_0176-2026-08-tesorero.pdf",
+        sizeBytes: pdfBytes.byteLength,
+      });
+      expect(result.content).toEqual([
+        {
+          type: "text",
+          text: `Informe listo (PDF, ${pdfBytes.byteLength} bytes): ${result.structuredContent.url}`,
+        },
+      ]);
+      const downloaded = await app.request(
+        result.structuredContent.url,
+        undefined,
+        env,
+      );
+      expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(pdfBytes);
+    }
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(quickAction).toHaveBeenCalledTimes(1);
   });
 });
 

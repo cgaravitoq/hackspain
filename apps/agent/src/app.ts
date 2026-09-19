@@ -19,6 +19,7 @@ import {
   reportFilename,
   reportPdf,
 } from "./xray/report-pdf.ts";
+import { createReportTool } from "./xray/report-tool.ts";
 import { createStore } from "./xray/store.ts";
 import { createTools } from "./xray/tools.ts";
 
@@ -172,12 +173,30 @@ export function createApp(options: AppOptions = {}) {
     if (!request.success) {
       return context.json({ error: z.treeifyError(request.error) }, 400);
     }
-    return chat(model(context.env), createStore(context.env.DB), request.data);
+    return chat(
+      model(context.env),
+      createStore(context.env.DB),
+      request.data,
+      createReportTool(
+        context.env.DB,
+        () => model(context.env),
+        options.browser ?? context.env.BROWSER,
+        "/api",
+      ),
+    );
   });
 
   app.all("/mcp", async (context) => {
     const transport = new StreamableHTTPTransport({ enableJsonResponse: true });
-    await createMcpServer(createStore(context.env.DB)).connect(transport);
+    await createMcpServer(
+      createStore(context.env.DB),
+      createReportTool(
+        context.env.DB,
+        () => model(context.env),
+        options.browser ?? context.env.BROWSER,
+        new URL(context.req.url).origin,
+      ),
+    ).connect(transport);
     const response = await transport.handleRequest(context);
     return response ?? context.body(null, 204);
   });
