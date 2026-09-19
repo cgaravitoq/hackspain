@@ -57,6 +57,24 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
+  it("keeps the radiography when only the group request fails", async () => {
+    const seen: string[] = [];
+    const base = fakeApi(seen);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const path = new URL(String(input), "https://web.test").pathname;
+      return path.startsWith("/api/groups/")
+        ? Promise.resolve(new Response("down", { status: 500 }))
+        : base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(wrapper.find(".score").text()).toBe("12.3");
+    expect(wrapper.find(".error").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("grupo en tensión");
+  });
+
   it("loads another company when an alert is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
