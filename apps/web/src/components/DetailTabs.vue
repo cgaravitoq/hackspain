@@ -8,6 +8,7 @@ import {
   eventLabel,
   points,
 } from "../format.ts";
+import DecisionPanel from "./DecisionPanel.vue";
 import GroupStrip from "./GroupStrip.vue";
 import ReportPanel from "./ReportPanel.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -23,6 +24,7 @@ const emit = defineEmits<{ select: [companyId: string] }>();
 
 const TABS = [
   { id: "action", label: "Acción" },
+  { id: "decision", label: "Decisión" },
   { id: "why", label: "Por qué" },
   { id: "changed", label: "Qué cambió" },
   { id: "report", label: "Informe" },
@@ -42,7 +44,10 @@ const current = computed<TabId>(() =>
 );
 
 const framed = computed(
-  () => current.value !== "report" && current.value !== "group",
+  () =>
+    current.value !== "decision" &&
+    current.value !== "report" &&
+    current.value !== "group",
 );
 
 const mainDrivers = computed(() =>
@@ -81,6 +86,12 @@ const sources = computed(() =>
       :class="{ panel: framed, body: framed }"
     >
       <p v-if="current === 'action'" class="action">{{ explanation.action }}</p>
+
+      <DecisionPanel
+        v-else-if="current === 'decision'"
+        :company-id="selected"
+        :role="role"
+      />
 
       <template v-else-if="current === 'why'">
         <ul class="drivers">
