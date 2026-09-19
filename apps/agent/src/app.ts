@@ -1,6 +1,7 @@
 import {
   alertKindSchema,
   chatRequestSchema,
+  commitmentRequestSchema,
   environmentSchema,
   type HealthResponse,
   relationConfidenceSchema,
@@ -14,6 +15,7 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { chat, workersAiModel } from "./xray/chat.ts";
+import { simulateCommitment } from "./xray/commitment-tool.ts";
 import { createMcpServer } from "./xray/mcp.ts";
 import { loadReport, reportSources } from "./xray/report.ts";
 import { renderReportHtml } from "./xray/report-html.ts";
@@ -99,6 +101,29 @@ export function createApp(options: AppOptions = {}) {
     return "error" in explanation
       ? context.json(explanation, 404)
       : context.json(explanation);
+  });
+
+  app.post("/companies/:id/commitment", async (context) => {
+    const request = commitmentRequestSchema.safeParse(await context.req.json());
+    if (
+      !request.success ||
+      request.data.advance_date > request.data.final_date
+    ) {
+      return context.json({ error: "Solicitud de simulación no válida" }, 400);
+    }
+    const companyId = context.req.param("id");
+    const simulation = await simulateCommitment(
+      createStore(context.env.DB),
+      companyId,
+      request.data,
+    );
+    if ("error" in simulation) {
+      return context.json(
+        simulation,
+        simulation.error === `Unknown company ${companyId}` ? 404 : 400,
+      );
+    }
+    return context.json(simulation);
   });
 
   app.get("/compare", async (context) => {
