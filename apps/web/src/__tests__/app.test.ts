@@ -43,10 +43,15 @@ function mountApp() {
 }
 
 async function selectRole(wrapper: VueWrapper, label: string) {
-  const tab = wrapper
-    .findAll('[aria-label="Perfil"] button')
-    .find((button) => button.text() === label);
-  await tab?.trigger("click");
+  const trigger = wrapper.find('button[aria-label="Cambiar rol"]');
+  if (trigger.attributes("aria-expanded") !== "true") {
+    await trigger.trigger("click");
+    await flushPromises();
+  }
+  const option = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
+  ).find((item) => item.textContent?.includes(label));
+  option?.click();
   await flushPromises();
   await flushPromises();
 }
@@ -111,6 +116,22 @@ async function compareCompany(wrapper: VueWrapper, companyId: string) {
 
 beforeEach(() => {
   installStorage();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {
+        return undefined;
+      }
+
+      unobserve() {
+        return undefined;
+      }
+
+      disconnect() {
+        return undefined;
+      }
+    },
+  );
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     value: () => undefined,
@@ -554,11 +575,7 @@ describe("App", () => {
       "/api/companies/COMP_A/report.pdf?role=financiero",
     );
     expect(exportLink.attributes("target")).toBe("_blank");
-    const salesTab = wrapper
-      .findAll('[aria-label="Perfil"] button')
-      .find((button) => button.text() === "Ventas");
-    await salesTab?.trigger("click");
-    await flushPromises();
+    await selectRole(wrapper, "Ventas");
     expect(requested).toContain("/api/companies/COMP_A/report?role=ventas");
     expect(wrapper.find(".report-export").attributes("href")).toBe(
       "/api/companies/COMP_A/report.pdf?role=ventas",
@@ -646,7 +663,7 @@ describe("App", () => {
     expect(window.location.hash).toBe("#graph");
   });
 
-  it("tracks the active view and role in the sidebar", async () => {
+  it("lists and switches roles from the avatar menu", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
@@ -654,17 +671,42 @@ describe("App", () => {
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Radiografía");
+    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toContain(
+      "Financiero",
+    );
+    await wrapper.find('[aria-label="Cambiar rol"]').trigger("click");
+    await flushPromises();
     expect(
-      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
-    ).toBe("Financiero");
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
+      ).map((item) => item.textContent?.trim()),
+    ).toEqual(["TE Tesorero", "FI Financiero", "VE Ventas"]);
     await openRoute(wrapper, "Grafo");
     await selectRole(wrapper, "Ventas");
     expect(
       wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
     ).toBe("Grafo");
+    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toContain(
+      "Ventas",
+    );
+  });
+
+  it("removes the roles group and assistant button from the sidebar", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
     expect(
-      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
-    ).toBe("Ventas");
+      wrapper
+        .findAll('[data-sidebar="group-label"]')
+        .every((label) => label.text() !== "Roles"),
+    ).toBe(true);
+    expect(wrapper.text()).not.toContain("Preguntar al agente");
+    expect(
+      wrapper
+        .find('[data-sidebar="header"] [aria-label="Abrir el asistente"]')
+        .exists(),
+    ).toBe(false);
   });
 
   it("leaves the current view and role untouched for placeholder items", async () => {
@@ -673,9 +715,7 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     const hash = window.location.hash;
-    const role = wrapper
-      .find('[aria-label="Perfil"] [data-active="true"]')
-      .text();
+    const role = wrapper.find('[aria-label="Cambiar rol"]').text();
     const alertItem = wrapper
       .findAll('[aria-label="Pantalla"] button')
       .find((button) => button.text() === "Alertas");
@@ -683,9 +723,7 @@ describe("App", () => {
     expect(alertItem?.attributes("title")).toBe("Próximamente");
     await alertItem?.trigger("click");
     expect(window.location.hash).toBe(hash);
-    expect(
-      wrapper.find('[aria-label="Perfil"] [data-active="true"]').text(),
-    ).toBe(role);
+    expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
   });
 
   it("returns from the graph to the company that was on screen", async () => {

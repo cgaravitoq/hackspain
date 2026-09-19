@@ -4,23 +4,26 @@ import {
   Bell,
   ChartNoAxesCombined,
   FlaskConical,
-  MessageSquareText,
   Network,
   ScanSearch,
   Settings,
   TriangleAlert,
-  UserRound,
   WalletCards,
 } from "@lucide/vue";
-import { onMounted, ref } from "vue";
-import { Button } from "./ui/button";
+import { Avatar, AvatarFallback } from "./ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -28,39 +31,26 @@ import {
   SidebarRail,
 } from "./ui/sidebar";
 
-const SEEN_KEY = "xray.chat.seen";
-
 type View = "radiography" | "graph";
 
 defineProps<{ view: View; role: Role }>();
 
 const emit = defineEmits<{
-  chat: [];
   role: [role: Role];
   view: [view: View];
 }>();
 
-// SAFETY: ROLE_LABELS is declared as Record<Role, string> at the shared boundary.
-const roles = Object.entries(ROLE_LABELS) as [Role, string][];
-const seen = ref(false);
+const roles = [
+  { value: "tesorero", label: ROLE_LABELS.tesorero, initials: "TE" },
+  { value: "financiero", label: ROLE_LABELS.financiero, initials: "FI" },
+  { value: "ventas", label: ROLE_LABELS.ventas, initials: "VE" },
+] satisfies { value: Role; label: string; initials: string }[];
 
-function openChat() {
-  seen.value = true;
-  try {
-    window.localStorage.setItem(SEEN_KEY, "true");
-  } catch {
-    seen.value = true;
-  }
-  emit("chat");
-}
-
-onMounted(() => {
-  try {
-    seen.value = window.localStorage.getItem(SEEN_KEY) === "true";
-  } catch {
-    seen.value = false;
-  }
-});
+const roleInitials = {
+  tesorero: "TE",
+  financiero: "FI",
+  ventas: "VE",
+} satisfies Record<Role, string>;
 </script>
 
 <template>
@@ -79,33 +69,6 @@ onMounted(() => {
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
-      <div class="flex gap-2 group-data-[collapsible=icon]:flex-col">
-        <SidebarMenuButton
-          class="relative bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-          tooltip="Preguntar al agente"
-          aria-label="Abrir el asistente"
-          @click="openChat"
-        >
-          <MessageSquareText />
-          <span>Preguntar al agente</span>
-          <span
-            v-if="!seen"
-            class="absolute top-0 right-0 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] text-white"
-            aria-label="1 aviso"
-          >1</span>
-        </SidebarMenuButton>
-        <Button
-          class="shrink-0 group-data-[collapsible=icon]:size-8"
-          variant="outline"
-          size="icon"
-          type="button"
-          aria-disabled="true"
-          title="Próximamente"
-        >
-          <Bell />
-          <span class="sr-only">Notificaciones - Próximamente</span>
-        </Button>
-      </div>
     </SidebarHeader>
 
     <SidebarContent>
@@ -165,36 +128,71 @@ onMounted(() => {
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-
-      <SidebarGroup>
-        <SidebarGroupLabel>Roles</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu class="role-menu" aria-label="Perfil">
-            <SidebarMenuItem v-for="[value, label] in roles" :key="value">
-              <SidebarMenuButton
-                :tooltip="label"
-                :is-active="role === value"
-                @click="emit('role', value)"
-              >
-                <UserRound />
-                <span>{{ label }}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
     </SidebarContent>
 
     <SidebarFooter>
-      <SidebarMenu>
+      <SidebarMenu
+        class="grid grid-cols-[minmax(0,1fr)_auto_auto] group-data-[collapsible=icon]:grid-cols-1"
+      >
+        <SidebarMenuItem class="min-w-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <SidebarMenuButton
+                class="gap-1 px-1"
+                :tooltip="ROLE_LABELS[role]"
+                aria-label="Cambiar rol"
+              >
+                <Avatar class="size-6">
+                  <AvatarFallback class="bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {{ roleInitials[role] }}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{{ ROLE_LABELS[role] }}</span>
+              </SidebarMenuButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              aria-label="Perfil"
+              side="top"
+              align="start"
+            >
+              <DropdownMenuRadioGroup :model-value="role">
+                <DropdownMenuRadioItem
+                  v-for="option in roles"
+                  :key="option.value"
+                  :value="option.value"
+                  @select="emit('role', option.value)"
+                >
+                  <Avatar class="size-6">
+                    <AvatarFallback class="text-[10px] font-semibold">
+                      {{ option.initials }}
+                    </AvatarFallback>
+                  </Avatar>
+                  {{ option.label }}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            tooltip="Próximamente"
+            class="w-auto gap-1 px-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:p-2!"
+            tooltip="Ajustes · próximamente"
             aria-disabled="true"
             title="Próximamente"
           >
             <Settings />
             <span>Ajustes</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            class="w-auto group-data-[collapsible=icon]:w-full"
+            tooltip="Alertas · próximamente"
+            aria-label="Alertas · próximamente"
+            aria-disabled="true"
+            title="Próximamente"
+          >
+            <Bell />
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
