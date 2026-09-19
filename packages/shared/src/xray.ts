@@ -126,6 +126,8 @@ export const companySummarySchema = z.object({
   scorable: z.boolean(),
   holdout: z.boolean(),
   months_observed: z.number(),
+  last_observed_month: z.string().nullable(),
+  stale: z.boolean(),
   debt_outstanding: z.number(),
   invoice_facts: z.object({
     overdue_count: z.number().optional(),
@@ -146,12 +148,15 @@ export type CompanyDetail = z.infer<typeof companyDetailSchema>;
 
 export const alertKindSchema = z.enum(["down", "up", "recovered"]);
 
+const alertStageSchema = z.enum(["candidate", "confirmed"]);
+
 export const alertSchema = z.object({
   rule_version: z.string(),
   company_id: z.string(),
   group_id: z.string().nullable(),
   month: z.string(),
   kind: alertKindSchema,
+  stage: alertStageSchema.nullable(),
   state: stateSchema,
   previous_state: stateSchema,
   score: z.number(),
@@ -208,6 +213,15 @@ export const groupMapSchema = groupSchema.extend({
 
 export type GroupMap = z.infer<typeof groupMapSchema>;
 
+const alertStatsSchema = z.object({
+  evaluated: z.number(),
+  false_alarms: z.number(),
+  false_alarm_rate: z.number().nullable(),
+  reverted_within_3_months: z.number(),
+  revert_rate: z.number().nullable(),
+  censored: z.number(),
+});
+
 export const backtestSchema = z.object({
   rule_version: z.string(),
   events: z.record(
@@ -219,13 +233,10 @@ export const backtestSchema = z.object({
       median_lead_months: z.number().nullable(),
     }),
   ),
-  alerts: z.object({
-    evaluated: z.number(),
-    false_alarms: z.number(),
-    false_alarm_rate: z.number(),
-    reverted_within_3_months: z.number(),
-    revert_rate: z.number(),
-    censored: z.number(),
+  alerts: alertStatsSchema,
+  alerts_by_stage: z.object({
+    candidate: alertStatsSchema,
+    confirmed: alertStatsSchema,
   }),
   definitions: z.record(z.string(), z.string()),
 });
@@ -239,6 +250,11 @@ export const metaSchema = z.object({
   state_labels: z.partialRecord(stateSchema, z.string()),
   latest_month: z.string(),
   holdout_groups: z.array(z.string()),
+  gaps: z.object({
+    companies_with_gaps: z.number().int().nonnegative(),
+    unobserved_months: z.number().int().nonnegative(),
+    stale_companies: z.number().int().nonnegative(),
+  }),
 });
 
 export type Meta = z.infer<typeof metaSchema>;

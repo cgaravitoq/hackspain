@@ -92,6 +92,8 @@ export function company(
     scorable: latest.score !== null,
     holdout: false,
     months_observed: months.filter((month) => month.observed !== false).length,
+    last_observed_month: latest.month,
+    stale: false,
     debt_outstanding: 0,
     invoice_facts: {
       overdue_count: 2,
@@ -169,6 +171,7 @@ export const alerts: Alert[] = [
     group_id: "GROUP_1",
     month: "2026-08",
     kind: "down",
+    stage: "confirmed",
     state: "falling",
     previous_state: "slipping",
     score: 12.3,
@@ -182,6 +185,7 @@ export const alerts: Alert[] = [
     group_id: "GROUP_2",
     month: "2026-08",
     kind: "recovered",
+    stage: null,
     state: "stable",
     previous_state: "slipping",
     score: 55,
@@ -209,6 +213,7 @@ export const meta: Meta = {
   state_labels: { ...STATE_LABELS, falling: "en caída" },
   latest_month: "2026-08",
   holdout_groups: [],
+  gaps: { companies_with_gaps: 1, unobserved_months: 2, stale_companies: 0 },
 };
 
 export const backtest: Backtest = {
@@ -228,6 +233,24 @@ export const backtest: Backtest = {
     reverted_within_3_months: 0,
     revert_rate: 0.0,
     censored: 1,
+  },
+  alerts_by_stage: {
+    candidate: {
+      evaluated: 0,
+      false_alarms: 0,
+      false_alarm_rate: 0.0,
+      reverted_within_3_months: 0,
+      revert_rate: 0.0,
+      censored: 1,
+    },
+    confirmed: {
+      evaluated: 1,
+      false_alarms: 0,
+      false_alarm_rate: 0.0,
+      reverted_within_3_months: 0,
+      revert_rate: 0.0,
+      censored: 0,
+    },
   },
   definitions: { E1: "cash stress" },
 };

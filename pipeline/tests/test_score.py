@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from xray.events import backtest, cash_stress, debt_break, overdue_invoice_months, recovery
-from xray.export import alert_kind, build
+from xray.export import alert_kind, alert_stage, build
 from xray.load import read
 from xray.panel import monthly_panel
 from xray.score import (
@@ -40,6 +40,7 @@ def seed_dataset(
     tx_date_override: str | None = None,
     invoice_date_override: dict[str, str] | None = None,
     months: int = 3,
+    missing_months: tuple[int, ...] = (),
 ) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     _write_csv(folder / "companies.csv", [{"company_id": "C1", "group_id": "G1", "currency": "EUR"}])
@@ -47,6 +48,8 @@ def seed_dataset(
     _write_csv(folder / "banking_products.csv", [{"product_id": "P1", "currency": "EUR"}])
     txs: list[dict[str, object]] = []
     for index in range(months):
+        if index + 1 in missing_months:
+            continue
         month = f"2026-{index + 1:02d}-15"
         day = tx_date_override if tx_date_override and month == "2026-03-15" else month
         inflow, outflow = (300.0, -100.0) if index < 3 else (100.0, -300.0)
@@ -80,6 +83,7 @@ def seed_dataset(
         "pending_amount": 50.0,
         "issuance_date": "2026-01-01",
         "due_date": "2026-01-31",
+        "payment_date": "2026-01-31",
         "status": "open",
         "counterparty_id": "X1",
     }
@@ -97,6 +101,28 @@ def transactions(rows: list[tuple[str, float, str]]) -> pl.DataFrame:
             "category": [category for _, _, category in rows],
         }
     )
+
+
+def months_of(*amounts: tuple[float, float]) -> list[tuple[str, float, str]]:
+    rows: list[tuple[str, float, str]] = []
+    for index, (inflow, outflow) in enumerate(amounts):
+        month = f"2026-{index + 1:02d}"
+        rows.append((month, inflow, "collection"))
+        rows.append((month, -outflow, "payment"))
+    return rows
+
+
+def trajectory(rows: list[tuple[str, float, str]]) -> list[dict[str, object]]:
+    scored = score_panel(monthly_panel(transactions(rows))).to_dicts()
+    state_list = states(
+        [row["momentum"] for row in scored],
+        [row["level"] for row in scored],
+        [row["threshold"] for row in scored],
+    )
+    return [
+        {**row, "month": str(row["month"])[:7], "state": state}
+        for row, state in zip(scored, state_list, strict=True)
+    ]
 
 
 def test_level_is_the_share_of_operating_inflow_minus_fee_and_refund_penalties():
@@ -130,6 +156,92 @@ def test_falling_needs_three_persistent_months_and_slipping_comes_first():
     ]
 
 
+def test_a_hole_in_the_middle_nulls_exactly_the_windows_that_contain_it():
+    rows = [row for row in months_of(*([(300.0, 100.0)] * 7)) if row[0] != "2026-04"]
+    scored = {row["month"]: row for row in trajectory(rows)}
+    assert [scored[month]["observed"] for month in ("2026-03", "2026-04", "2026-05", "2026-06", "2026-07")] == [
+        True,
+        False,
+        True,
+        True,
+        True,
+    ]
+    assert [scored[month]["observed_3"] for month in ("2026-03", "2026-04", "2026-05", "2026-06", "2026-07")] == [
+        3,
+        2,
+        2,
+        2,
+        3,
+    ]
+    assert [scored[month]["level"] for month in ("2026-03", "2026-04", "2026-05", "2026-06", "2026-07")] == [
+        75.0,
+        None,
+        None,
+        None,
+        75.0,
+    ]
+    assert {row["state"] for row in scored.values()} == {"not_evaluable"}
+
+
+def test_insufficient_evidence_stays_not_evaluable():
+    two_months = trajectory(months_of((300.0, 100.0), (300.0, 100.0)))
+    assert [row["level"] for row in two_months] == [None, None]
+    assert {row["state"] for row in two_months} == {"not_evaluable"}
+
+    gapped = trajectory([row for row in months_of(*[(300.0, 100.0)] * 5) if row[0] != "2026-03"])
+    assert [row["level"] for row in gapped] == [None, None, None, None, None]
+    assert {row["state"] for row in gapped} == {"not_evaluable"}
+
+
+def test_improvement_reaches_improving_after_three_months_of_rising_level():
+    rising = [(100.0 + 50.0 * index, 100.0) for index in range(9)]
+    rows = trajectory(months_of(*rising))
+    assert [round(row["momentum"], 1) for row in rows[5:]] == [15.0, 11.1, 8.6, 6.8]
+    assert [round(row["level"], 1) for row in rows[5:]] == [75.0, 77.8, 80.0, 81.8]
+    assert [row["state"] for row in rows] == [
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "healthy",
+        "healthy",
+        "improving",
+        "improving",
+    ]
+
+
+def test_deterioration_slips_first_and_only_falls_after_three_persistent_months():
+    rows = trajectory(months_of(*([(300.0, 100.0)] * 3 + [(200.0, 200.0)] * 3 + [(100.0, 300.0)] * 3)))
+    assert [round(row["momentum"], 1) for row in rows[5:]] == [-25.0, -25.0, -25.0, -25.0]
+    assert [row["state"] for row in rows] == [
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "slipping",
+        "slipping",
+        "falling",
+        "falling",
+    ]
+
+
+def test_a_one_month_dip_returns_to_stable_without_ever_falling():
+    # The rebound needs three more up months before it counts as an improvement, so the dip settles back into stable.
+    rows = trajectory(months_of(*([(200.0, 200.0)] * 3 + [(0.0, 400.0)] + [(200.0, 200.0)] * 3)))
+    assert [round(row["momentum"], 1) for row in rows[5:]] == [-16.7, 16.7]
+    assert [row["state"] for row in rows] == [
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "not_evaluable",
+        "slipping",
+        "stable",
+    ]
+
+
 def test_cash_stress_and_debt_break_events():
     assert cash_stress([True] * 4, [50, 50, 50, 90], [80, 80, 80, 80]) == [False, False, True, False]
     assert debt_break([100] * 6 + [0, 100]) == [0, 0, 0, 0, 0, 0, 6, 0]
@@ -150,9 +262,23 @@ def test_overdue_invoice_months_uses_the_earliest_due_plus_ninety_days():
             "company_id": ["C1", "C1", "C2", "C3"],
             "pending_amount": [10.0, 5.0, 1.0, 0.0],
             "due_date": [date(2026, 1, 15), date(2026, 6, 3), date(2026, 6, 4), date(2026, 1, 1)],
+            "payment_date": [None, None, None, date(2026, 1, 1)],
         }
     )
     assert overdue_invoice_months(invoices) == {"C1": date(2026, 4, 1)}
+
+
+def test_e2_fires_for_a_late_payment_and_for_an_invoice_still_unpaid_ninety_days_past_due():
+    invoices = pl.DataFrame(
+        {
+            "company_id": ["C1", "C2", "C3", "C4"],
+            "due_date": [date(2026, 1, 31), date(2026, 1, 31), date(2026, 1, 31), date(2026, 6, 10)],
+            "payment_date": [date(2026, 5, 1), date(2026, 4, 30), None, None],
+            "pending_amount": [0.0, 0.0, 50.0, 100.0],
+        }
+    )
+    # C1 is exactly ninety days late; C2 is one day short; C3 is unpaid and due ninety days ago; C4 falls past the cutoff.
+    assert overdue_invoice_months(invoices) == {"C1": date(2026, 5, 1), "C3": date(2026, 5, 1)}
 
 
 def test_alert_kind_labels_down_up_and_recovered_transitions():
@@ -166,8 +292,122 @@ def test_alert_kind_labels_down_up_and_recovered_transitions():
     assert alert_kind("healthy", "stable") is None
 
 
-def backtest_rows(states: list[str], e1: list[bool]) -> list[dict[str, object]]:
-    return [{"state": state, "e1": flag, "e3": 0} for state, flag in zip(states, e1, strict=True)]
+def backtest_rows(
+    states: list[str], e1: list[bool], e2: list[bool] | None = None
+) -> list[dict[str, object]]:
+    late = e2 or [False] * len(states)
+    return [
+        {"state": state, "e1": flag, "e2": overdue, "e3": 0}
+        for state, flag, overdue in zip(states, e1, late, strict=True)
+    ]
+
+
+def test_alert_stage_labels_a_candidate_and_a_confirmed_decline():
+    assert alert_stage("down", "slipping") == "candidate"
+    assert alert_stage("down", "falling") == "confirmed"
+    assert alert_stage("up", "improving") is None
+    assert alert_stage("recovered", "stable") is None
+
+
+def test_backtest_splits_all_alerts_into_the_candidate_and_confirmed_blocks():
+    confirms = backtest_rows(
+        ["healthy"] * 4 + ["slipping", "slipping", "falling", "falling", "falling", "falling"] + ["stable"] * 3,
+        [False] * 13,
+    )
+    dips = backtest_rows(["healthy"] * 4 + ["slipping"] + ["stable"] * 8, [False] * 13)
+    summary = backtest({"confirms": confirms, "dips": dips})
+    assert summary["alerts"] == {
+        "evaluated": 2,
+        "false_alarms": 2,
+        "false_alarm_rate": 1.0,
+        "reverted_within_3_months": 1,
+        "revert_rate": 0.5,
+        "censored": 0,
+    }
+    assert summary["alerts_by_stage"] == {
+        "candidate": {
+            "evaluated": 1,
+            "false_alarms": 1,
+            "false_alarm_rate": 1.0,
+            "reverted_within_3_months": 1,
+            "revert_rate": 1.0,
+            "censored": 0,
+        },
+        "confirmed": {
+            "evaluated": 1,
+            "false_alarms": 1,
+            "false_alarm_rate": 1.0,
+            "reverted_within_3_months": 0,
+            "revert_rate": 0.0,
+            "censored": 0,
+        },
+    }
+
+
+def test_confirmed_alerts_are_anchored_on_the_month_the_decline_reaches_falling():
+    # The decline drops back to stable two months after it reaches falling, so anchoring the confirmed
+    # alert on the episode start would report no revert while anchoring it on the falling month reports one.
+    rows = backtest_rows(
+        ["healthy"] * 4 + ["slipping", "slipping", "falling", "falling"] + ["stable"] * 5,
+        [False] * 13,
+    )
+    summary = backtest({"C1": rows})
+    assert summary["alerts_by_stage"]["candidate"] == {
+        "evaluated": 0,
+        "false_alarms": 0,
+        "false_alarm_rate": None,
+        "reverted_within_3_months": 0,
+        "revert_rate": None,
+        "censored": 0,
+    }
+    assert summary["alerts_by_stage"]["confirmed"]["evaluated"] == 1
+    assert summary["alerts_by_stage"]["confirmed"]["reverted_within_3_months"] == 1
+    assert summary["alerts"]["reverted_within_3_months"] == 0
+
+
+def test_backtest_measures_the_lead_of_an_e2_event():
+    rows = backtest_rows(
+        ["falling", "falling", "falling", "stable"] + ["stable"] * 5,
+        [False] * 9,
+        [False] * 4 + [True] + [False] * 4,
+    )
+    summary = backtest({"C1": rows})
+    assert summary["events"]["E2"] == {
+        "events": 1,
+        "with_prior_alert": 1,
+        "coverage": 1.0,
+        "median_lead_months": 4,
+    }
+    assert summary["definitions"]["E2"].startswith("The month ninety days past the due date")
+
+
+def test_false_alarm_horizon_counts_an_event_inside_six_months_and_not_after():
+    inside = backtest_rows(["slipping"] + ["stable"] * 12, [False] * 6 + [True] + [False] * 6)
+    outside = backtest_rows(["slipping"] + ["stable"] * 12, [False] * 7 + [True] + [False] * 5)
+    summary = backtest({"inside": inside, "outside": outside})
+    assert summary["alerts"]["evaluated"] == 2
+    assert summary["alerts"]["false_alarms"] == 1
+    assert summary["events"]["E1"]["median_lead_months"] == 6.5
+
+
+def test_revert_horizon_counts_a_recovery_three_months_after_the_alert_but_not_four():
+    at_three = backtest_rows(["slipping", "falling", "falling", "stable"] + ["stable"] * 9, [False] * 13)
+    at_four = backtest_rows(["slipping", "falling", "falling", "falling", "stable"] + ["stable"] * 8, [False] * 13)
+    summary = backtest({"three": at_three, "four": at_four})
+    assert summary["alerts"]["evaluated"] == 2
+    assert summary["alerts"]["reverted_within_3_months"] == 1
+
+
+def test_lead_window_counts_an_alert_twelve_months_before_the_event_but_not_thirteen():
+    twelve = backtest_rows(["slipping"] + ["stable"] * 13, [False] * 12 + [True] + [False])
+    thirteen = backtest_rows(["slipping"] + ["stable"] * 13, [False] * 13 + [True])
+    summary = backtest({"twelve": twelve, "thirteen": thirteen})
+    assert summary["events"]["E1"] == {
+        "events": 2,
+        "with_prior_alert": 1,
+        "coverage": 0.5,
+        "median_lead_months": 12,
+    }
 
 
 def test_backtest_keeps_the_third_month_of_an_e1_run_as_a_hit():
@@ -199,7 +439,7 @@ def test_read_rejects_unparsable_transaction_dates(tmp_path: Path):
         read(tmp_path)
 
 
-@pytest.mark.parametrize("column", ["issuance_date", "due_date"])
+@pytest.mark.parametrize("column", ["issuance_date", "due_date", "payment_date"])
 def test_read_rejects_unparsable_invoice_dates(tmp_path: Path, column: str):
     seed_dataset(tmp_path, invoice_date_override={column: "not-a-date"})
     with pytest.raises(pl.exceptions.InvalidOperationError, match=rf"column '{column}' .*\"not-a-date\""):
@@ -291,29 +531,87 @@ def test_build_exports_score_deltas_from_three_and_six_entries_earlier(tmp_path:
 
 
 def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
-    data = seed_dataset(tmp_path / "data")
+    data = seed_dataset(tmp_path / "data", months=8)
     out = tmp_path / "out"
     summary = build(read(data), out, seed=42)
     assert summary["companies"] == 1
     assert summary["scorable"] == 1
+    assert summary["alerts"] == 1
     for name in ("companies.json", "alerts.json", "groups.json", "backtest.json", "meta.json"):
         assert (out / name).is_file()
     payload = json.loads((out / "scores" / "C1.json").read_text())
-    assert [entry["month"] for entry in payload["series"]] == ["2026-01", "2026-02", "2026-03"]
+    assert [entry["month"] for entry in payload["series"]] == [
+        "2026-01",
+        "2026-02",
+        "2026-03",
+        "2026-04",
+        "2026-05",
+        "2026-06",
+        "2026-07",
+        "2026-08",
+    ]
+    assert [entry["month"] for entry in payload["series"] if entry["events"]["E2"]] == ["2026-05"]
+    assert [entry["month"] for entry in payload["series"] if entry["events"]["E1"]] == ["2026-06", "2026-07", "2026-08"]
     last = payload["series"][-1]
     assert last["flows"] == {
-        "inflow": 300.0,
-        "outflow": 100.0,
+        "inflow": 100.0,
+        "outflow": 300.0,
         "financing_in": 0.0,
         "financing_out": 0.0,
         "debt_repayment": 0.0,
     }
-    assert last["level"] == 75.0
-    assert last["score"] == 75.0
-    assert last["momentum"] is None
-    assert last["state"] == "not_evaluable"
-    assert last["confidence"] == "low"
-    assert last["events"] == {"E1": False, "E2": False, "E3": False, "E4": False}
+    assert last["level"] == 25.0
+    assert last["score"] == 20.8
+    assert last["momentum"] == -16.7
+    assert last["state"] == "falling"
+    assert last["confidence"] == "medium"
+    assert last["events"] == {"E1": True, "E2": False, "E3": False, "E4": False}
+    assert json.loads((out / "alerts.json").read_text()) == [
+        {
+            "rule_version": RULE_VERSION,
+            "company_id": "C1",
+            "group_id": "G1",
+            "month": "2026-08",
+            "kind": "down",
+            "stage": "confirmed",
+            "state": "falling",
+            "previous_state": "slipping",
+            "score": 20.8,
+            "delta": 4.1,
+            "driver": "Cobros 300 € frente a pagos 900 € en 2026-06 a 2026-08: cobertura 0.33",
+        }
+    ]
     meta = json.loads((out / "meta.json").read_text())
-    assert meta["latest_month"] == "2026-03"
+    assert meta["latest_month"] == "2026-08"
     assert meta["state_labels"]["healthy"] == "sana"
+    assert meta["gaps"] == {"companies_with_gaps": 0, "unobserved_months": 0, "stale_companies": 0}
+
+
+def test_a_stale_company_reports_not_evaluable_as_its_latest_state(tmp_path: Path):
+    stale_data = seed_dataset(tmp_path / "stale", months=7)
+    fresh_data = seed_dataset(tmp_path / "fresh", months=8)
+    build(read(stale_data), tmp_path / "stale-out", seed=42)
+    build(read(fresh_data), tmp_path / "fresh-out", seed=42)
+    stale = json.loads((tmp_path / "stale-out" / "companies.json").read_text())[0]
+    assert stale["last_observed_month"] == "2026-07"
+    assert stale["stale"] is True
+    assert stale["latest"]["state"] == "not_evaluable"
+    assert stale["latest"]["level"] is not None
+    assert json.loads((tmp_path / "stale-out" / "alerts.json").read_text()) == []
+    series = json.loads((tmp_path / "stale-out" / "scores" / "C1.json").read_text())["series"]
+    assert [entry["state"] for entry in series][-2:] == ["slipping", "slipping"]
+    fresh = json.loads((tmp_path / "fresh-out" / "companies.json").read_text())[0]
+    assert fresh["last_observed_month"] == "2026-08"
+    assert fresh["stale"] is False
+    assert fresh["latest"]["state"] == "falling"
+
+
+def test_meta_gap_counts_match_the_fixture(tmp_path: Path):
+    gapped = seed_dataset(tmp_path / "gapped", months=8, missing_months=(4, 5))
+    stale = seed_dataset(tmp_path / "stale", months=7)
+    build(read(gapped), tmp_path / "gapped-out", seed=42)
+    build(read(stale), tmp_path / "stale-out", seed=42)
+    gapped_meta = json.loads((tmp_path / "gapped-out" / "meta.json").read_text())
+    assert gapped_meta["gaps"] == {"companies_with_gaps": 1, "unobserved_months": 2, "stale_companies": 0}
+    stale_meta = json.loads((tmp_path / "stale-out" / "meta.json").read_text())
+    assert stale_meta["gaps"] == {"companies_with_gaps": 0, "unobserved_months": 0, "stale_companies": 1}

@@ -13,6 +13,7 @@ from xray.panel import monthly_panel
 from xray.score import DOWN_STATES, NOT_EVALUABLE, RULE_VERSION, confidence, policy, score_panel, states
 
 HOLDOUT_SHARE = 0.2
+STALE_BEFORE = date(CUTOFF.year - 1, 12, 1) if CUTOFF.month == 1 else date(CUTOFF.year, CUTOFF.month - 1, 1)
 STATE_LABELS = {
     "healthy": "sana",
     "improving": "mejorando",
@@ -41,12 +42,20 @@ def alert_kind(before: str, now: str) -> str | None:
     return None
 
 
+def alert_stage(kind: str, state: str) -> str | None:
+    if kind != "down":
+        return None
+    return "confirmed" if state == "falling" else "candidate"
+
+
 def _write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
-def _rows_by_company(dataset: Dataset) -> dict[str, list[dict[str, Any]]]:
+def _rows_by_company(
+    dataset: Dataset, overdue_months: dict[str, date]
+) -> dict[str, list[dict[str, Any]]]:
     scored = score_panel(monthly_panel(dataset.transactions))
     company_rows: dict[str, list[dict[str, Any]]] = {}
     for (company_id,), frame in scored.group_by("company_id", maintain_order=True):
@@ -59,8 +68,15 @@ def _rows_by_company(dataset: Dataset) -> dict[str, list[dict[str, Any]]]:
         e1 = cash_stress([r["observed"] for r in rows], [r["inflow"] for r in rows], [r["outflow"] for r in rows])
         e4 = recovery([r["observed"] for r in rows], [r["inflow"] for r in rows], [r["outflow"] for r in rows], e1)
         e3 = debt_break([r["debt_repayment"] for r in rows])
+        overdue_month = overdue_months.get(company_id)
         for row, state, s1, s3, s4 in zip(rows, state_list, e1, e3, e4, strict=True):
-            row.update(state=state, e1=s1, e3=s3, e4=s4)
+            row.update(
+                state=state,
+                e1=s1,
+                e2=overdue_month is not None and month_key(overdue_month) == month_key(row["month"]),
+                e3=s3,
+                e4=s4,
+            )
         company_rows[company_id] = rows
     return company_rows
 
@@ -69,7 +85,6 @@ def _month_entry(
     row: dict[str, Any],
     previous: dict[str, Any] | None,
     sources: dict[str, bool],
-    e2: bool,
 ) -> dict[str, Any]:
     return {
         "month": month_key(row["month"]),
@@ -91,7 +106,7 @@ def _month_entry(
             "financing_out": round(row["financing_out"], 2),
             "debt_repayment": round(row["debt_repayment"], 2),
         },
-        "events": {"E1": row["e1"], "E2": e2, "E3": row["e3"] > 0, "E4": row["e4"]},
+        "events": {"E1": row["e1"], "E2": row["e2"], "E3": row["e3"] > 0, "E4": row["e4"]},
     }
 
 
@@ -106,6 +121,7 @@ def _company_record(
     invoice_facts: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     group_id = company_group.get(company_id)
+    last_observed = max(row["month"] for row in rows if row["observed"])
     return {
         "rule_version": RULE_VERSION,
         "company_id": company_id,
@@ -114,6 +130,8 @@ def _company_record(
         "scorable": latest["level"] is not None,
         "holdout": group_id in holdout_groups,
         "months_observed": rows[-1]["months_observed"],
+        "last_observed_month": month_key(last_observed),
+        "stale": last_observed < STALE_BEFORE,
         "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
         "invoice_facts": invoice_facts.get(company_id, {}),
         "latest": {key: latest[key] for key in ("month", "score", "delta_3", "delta_6", "level", "momentum", "state", "confidence")},
@@ -137,6 +155,7 @@ def _alert(
         "group_id": company_group.get(company_id),
         "month": latest["month"],
         "kind": kind,
+        "stage": alert_stage(kind, latest["state"]),
         "state": latest["state"],
         "previous_state": before["state"],
         "score": latest["score"],
@@ -162,6 +181,8 @@ def _unscorable(
             "scorable": False,
             "holdout": group_id in holdout_groups,
             "months_observed": 0,
+            "last_observed_month": None,
+            "stale": False,
             "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
             "invoice_facts": invoice_facts.get(company_id, {}),
             "latest": {
@@ -249,11 +270,11 @@ def _invoice_facts(invoices: pl.DataFrame) -> dict[str, dict[str, Any]]:
 
 
 def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
-    company_rows = _rows_by_company(dataset)
+    overdue_months = overdue_invoice_months(dataset.invoices)
+    company_rows = _rows_by_company(dataset, overdue_months)
     invoice_companies = set(dataset.invoices["company_id"].unique().to_list())
     debt_by_company = dict(dataset.debt.group_by("company_id").agg(pl.col("outstanding").sum()).iter_rows())
     invoice_facts = _invoice_facts(dataset.invoices)
-    e2_months = overdue_invoice_months(dataset.invoices)
     group_ids = sorted(dataset.groups["group_id"].to_list())
     holdout_groups = set(random.Random(seed).sample(group_ids, int(len(group_ids) * HOLDOUT_SHARE)))
     company_group = dict(
@@ -267,12 +288,10 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
     alerts: list[dict[str, Any]] = []
     for company_id, rows in company_rows.items():
         sources = {"invoices": company_id in invoice_companies, "debt": company_id in debt_by_company}
-        e2_month = e2_months.get(company_id)
         series: list[dict[str, Any]] = []
         previous = None
         for row in rows:
-            e2 = e2_month is not None and month_key(e2_month) == month_key(row["month"])
-            entry = _month_entry(row, previous, sources, e2)
+            entry = _month_entry(row, previous, sources)
             for horizon in (3, 6):
                 earlier_score = series[-horizon]["score"] if len(series) >= horizon else None
                 entry[f"delta_{horizon}"] = (
@@ -283,6 +302,8 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             series.append(entry)
             previous = row
         latest = series[-1]
+        if max(row["month"] for row in rows if row["observed"]) < STALE_BEFORE:
+            latest = {**latest, "state": NOT_EVALUABLE}
         before = series[-2] if len(series) > 1 else None
         record = _company_record(
             company_id,
@@ -322,11 +343,21 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             "state_labels": STATE_LABELS,
             "latest_month": max(c["latest"]["month"] or "" for c in companies_out),
             "holdout_groups": sorted(holdout_groups),
+            "gaps": {
+                "companies_with_gaps": sum(
+                    1 for rows in company_rows.values() if any(not row["observed"] for row in rows)
+                ),
+                "unobserved_months": sum(
+                    1 for rows in company_rows.values() for row in rows if not row["observed"]
+                ),
+                "stale_companies": sum(1 for company in companies_out if company["stale"]),
+            },
         },
     )
     return {
         "companies": len(companies_out),
         "scorable": sum(1 for c in companies_out if c["scorable"]),
+        "stale": sum(1 for c in companies_out if c["stale"]),
         "alerts": len(alerts),
         "groups": len(groups_out),
         "backtest": summary,

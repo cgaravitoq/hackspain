@@ -76,6 +76,7 @@ export const meta: Meta = {
   state_labels: {},
   latest_month: "2026-08",
   holdout_groups: [],
+  gaps: { companies_with_gaps: 1, unobserved_months: 3, stale_companies: 0 },
 };
 
 export const alerts: Alert[] = [
@@ -85,6 +86,7 @@ export const alerts: Alert[] = [
     group_id: "GROUP_1",
     month: "2026-08",
     kind: "down",
+    stage: "confirmed",
     state: "falling",
     previous_state: "slipping",
     score: 12.3,
@@ -97,6 +99,7 @@ export const alerts: Alert[] = [
     group_id: "GROUP_2",
     month: "2026-08",
     kind: "recovered",
+    stage: null,
     state: "stable",
     previous_state: "slipping",
     score: 55,
@@ -112,6 +115,7 @@ export function alert(companyId: string, kind: Alert["kind"] = "down"): Alert {
     group_id: "GROUP_1",
     month: "2026-08",
     kind,
+    stage: kind === "down" ? "candidate" : null,
     state: "falling",
     previous_state: "slipping",
     score: 12.3,
@@ -135,6 +139,8 @@ export function company(id: string, groupId: string): CompanyDetail {
     scorable: true,
     holdout: false,
     months_observed: 4,
+    last_observed_month: "2026-08",
+    stale: false,
     debt_outstanding: 0,
     invoice_facts: {
       overdue_count: 2,
