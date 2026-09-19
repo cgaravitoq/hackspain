@@ -292,7 +292,10 @@ function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
 
 .chat-header h2 {
   margin: 0;
-  color: var(--ink);
+  background: var(--embat-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-size: 15px;
 }
 

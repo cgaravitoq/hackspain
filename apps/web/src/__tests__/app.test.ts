@@ -421,9 +421,9 @@ describe("App", () => {
         .findAll(".chart-company i")
         .map((item) => item.attributes("style")),
     ).toEqual([
-      "background: rgb(29, 78, 216);",
-      "background: rgb(180, 83, 9);",
-      "background: rgb(15, 118, 110);",
+      "background: var(--series-1);",
+      "background: var(--series-2);",
+      "background: var(--series-3);",
     ]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "proyección por tendencia (3 meses)",

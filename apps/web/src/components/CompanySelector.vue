@@ -236,7 +236,7 @@ function leaveSearch(event: FocusEvent) {
 
 .compare-toggle[aria-pressed="true"] {
   border-color: var(--accent);
-  background: #eff6ff;
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
