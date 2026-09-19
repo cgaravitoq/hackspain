@@ -20,13 +20,13 @@ const previous = computed(() => {
   return scored.at(-2) ?? null;
 });
 
-const delta = computed(() =>
-  previous.value?.score !== null &&
-  previous.value !== null &&
-  props.explanation.score !== null
-    ? props.explanation.score - previous.value.score
-    : null,
-);
+const previousScore = computed(() => previous.value?.score ?? null);
+
+const delta = computed(() => {
+  const now = props.explanation.score;
+  const before = previousScore.value;
+  return now === null || before === null ? null : now - before;
+});
 
 const mainDrivers = computed(() =>
   props.explanation.drivers.filter((driver) => driver.contribution !== 0),
