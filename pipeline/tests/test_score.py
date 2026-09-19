@@ -80,6 +80,7 @@ def seed_dataset(
         "pending_amount": 50.0,
         "issuance_date": "2026-01-01",
         "due_date": "2026-01-31",
+        "payment_date": "2026-01-31",
         "status": "open",
         "counterparty_id": "X1",
     }
@@ -150,6 +151,7 @@ def test_overdue_invoice_months_uses_the_earliest_due_plus_ninety_days():
             "company_id": ["C1", "C1", "C2", "C3"],
             "pending_amount": [10.0, 5.0, 1.0, 0.0],
             "due_date": [date(2026, 1, 15), date(2026, 6, 3), date(2026, 6, 4), date(2026, 1, 1)],
+            "payment_date": [None, None, None, date(2026, 1, 1)],
         }
     )
     assert overdue_invoice_months(invoices) == {"C1": date(2026, 4, 1)}
@@ -166,8 +168,14 @@ def test_alert_kind_labels_down_up_and_recovered_transitions():
     assert alert_kind("healthy", "stable") is None
 
 
-def backtest_rows(states: list[str], e1: list[bool]) -> list[dict[str, object]]:
-    return [{"state": state, "e1": flag, "e3": 0} for state, flag in zip(states, e1, strict=True)]
+def backtest_rows(
+    states: list[str], e1: list[bool], e2: list[bool] | None = None
+) -> list[dict[str, object]]:
+    late = e2 or [False] * len(states)
+    return [
+        {"state": state, "e1": flag, "e2": overdue, "e3": 0}
+        for state, flag, overdue in zip(states, e1, late, strict=True)
+    ]
 
 
 def test_backtest_keeps_the_third_month_of_an_e1_run_as_a_hit():

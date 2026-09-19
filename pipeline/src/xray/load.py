@@ -55,11 +55,12 @@ def read(data_dir: Path) -> Dataset:
             schema_overrides={"amount": pl.Float64, "pending_amount": pl.Float64},
         )
         .filter((pl.col("document_type") == "invoice") & (pl.col("amount") > 0))
-        .with_columns(_to_date("issuance_date"), _to_date("due_date"))
+        .with_columns(_to_date("issuance_date"), _to_date("due_date"), _to_date("payment_date"))
         .select(
             "company_id",
             "issuance_date",
             "due_date",
+            "payment_date",
             "amount",
             "pending_amount",
             "status",

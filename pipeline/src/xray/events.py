@@ -13,7 +13,7 @@ OVERDUE_DAYS = 90
 FALSE_ALARM_HORIZON = 6
 REVERT_HORIZON = 3
 LEAD_WINDOW = 12
-EVENT_CODES = ("E1", "E3")
+EVENT_CODES = ("E1", "E2", "E3")
 ALERT_STAGES = ("candidate", "confirmed")
 
 
@@ -55,7 +55,11 @@ def debt_break(debt_repayment: list[float]) -> list[int]:
 def overdue_invoice_months(invoices: pl.DataFrame) -> dict[str, date]:
     limit = CUTOFF - timedelta(days=OVERDUE_DAYS)
     first = (
-        invoices.filter((pl.col("pending_amount") > 0) & (pl.col("due_date") <= limit))
+        invoices.filter(pl.col("due_date") <= limit)
+        .filter(
+            ((pl.col("payment_date") - pl.col("due_date")) >= pl.duration(days=OVERDUE_DAYS))
+            | (pl.col("pending_amount") > 0)
+        )
         .with_columns(event=(pl.col("due_date") + pl.duration(days=OVERDUE_DAYS)).dt.truncate("1mo"))
         .group_by("company_id")
         .agg(pl.col("event").min())
@@ -138,8 +142,9 @@ def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
                 if code == "E1" and ("E1", index - 1) in event_months:
                     continue
                 event_months.append((code, index))
+        labeled_months = event_months + [("E2", index) for index, row in enumerate(rows) if row["e2"]]
         first_of: dict[str, int] = {}
-        for code, index in event_months:
+        for code, index in labeled_months:
             first_of.setdefault(code, index)
         for code, index in first_of.items():
             events_total[code] += 1
@@ -164,6 +169,7 @@ def backtest(company_rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         "alerts_by_stage": {stage: _rates(totals[stage]) for stage in ALERT_STAGES},
         "definitions": {
             "E1": "Three consecutive observed months with operating inflow below operating outflow",
+            "E2": "The month ninety days past the due date of an invoice paid ninety days late or more, or still unpaid at extraction",
             "E3": "A month without debt repayment after six or more consecutive months with one",
             "alert": "First month the state enters slipping or falling",
             "candidate": "Episode that never reaches falling, anchored on the month it entered slipping",
