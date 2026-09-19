@@ -16,6 +16,7 @@ import AlertList from "./components/AlertList.vue";
 import ChatBubble from "./components/ChatBubble.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
+import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 
 const roles = [
   { value: "tesorero", label: ROLE_LABELS.tesorero },
@@ -192,36 +193,26 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 <template>
   <header class="topbar">
     <div class="brand">X Ray</div>
-    <nav class="route-tabs" aria-label="Pantalla">
-      <button
-        type="button"
-        :class="{ active: !onGraph }"
-        :aria-pressed="!onGraph"
-        @click="openRadiography"
-      >
-        Radiografía
-      </button>
-      <button
-        type="button"
-        :class="{ active: onGraph }"
-        :aria-pressed="onGraph"
-        @click="openGraph"
-      >
-        Grafo
-      </button>
-    </nav>
-    <nav class="role-tabs" aria-label="Perfil">
-      <button
+    <Tabs :model-value="onGraph ? GRAPH_ROUTE : 'radiography'">
+      <TabsList class="route-tabs" aria-label="Pantalla">
+        <TabsTrigger value="radiography" @click="openRadiography">
+          Radiografía
+        </TabsTrigger>
+        <TabsTrigger :value="GRAPH_ROUTE" @click="openGraph">Grafo</TabsTrigger>
+      </TabsList>
+    </Tabs>
+    <Tabs :model-value="role">
+      <TabsList class="role-tabs" aria-label="Perfil">
+        <TabsTrigger
         v-for="item in roles"
         :key="item.value"
-        type="button"
-        :class="{ active: role === item.value }"
-        :aria-pressed="role === item.value"
+        :value="item.value"
         @click="selectRole(item.value)"
       >
         {{ item.label }}
-      </button>
-    </nav>
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
   </header>
   <section v-if="role !== 'tesorero'" class="toolbar" aria-label="Herramientas de empresas">
     <form class="search" @submit.prevent="search">
@@ -297,7 +288,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   background: var(--chip-bg);
 }
 
-.route-tabs button {
+.route-tabs :deep([data-slot="tabs-trigger"]) {
   padding: 5px 10px;
   border: 0;
   border-radius: 6px;
@@ -305,7 +296,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   color: var(--ink-soft);
 }
 
-.route-tabs button.active {
+.route-tabs :deep([data-state="active"]) {
   background: var(--card);
   color: var(--accent);
   font-weight: 600;
@@ -327,7 +318,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   background: var(--chip-bg);
 }
 
-.role-tabs button {
+.role-tabs :deep([data-slot="tabs-trigger"]) {
   padding: 5px 10px;
   border: 0;
   border-radius: 6px;
@@ -335,7 +326,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   color: var(--ink-soft);
 }
 
-.role-tabs button.active {
+.role-tabs :deep([data-state="active"]) {
   background: var(--card);
   color: var(--accent);
   font-weight: 600;

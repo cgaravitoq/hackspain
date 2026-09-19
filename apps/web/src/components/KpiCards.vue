@@ -2,6 +2,8 @@
 import type { Alert, CompanyDetail, Explain } from "@hackspain/shared";
 import { computed } from "vue";
 import { monthLabel, points, STATE_COLORS } from "../format.ts";
+import { Badge } from "./ui/badge";
+import { Card } from "./ui/card";
 
 const props = defineProps<{
   company: CompanyDetail;
@@ -10,7 +12,7 @@ const props = defineProps<{
 }>();
 
 type Direction = "up" | "down" | "flat";
-type Card = {
+type KpiCard = {
   label: string;
   value: string;
   color?: string;
@@ -61,7 +63,11 @@ const monthDelta = computed(() => {
   return now === null || before === null ? null : now - before;
 });
 
-function deltaCard(label: string, value: number | null, months: number): Card {
+function deltaCard(
+  label: string,
+  value: number | null,
+  months: number,
+): KpiCard {
   const way = direction(value);
   return {
     label,
@@ -74,7 +80,7 @@ function deltaCard(label: string, value: number | null, months: number): Card {
   };
 }
 
-const cards = computed<Card[]>(() => {
+const cards = computed<KpiCard[]>(() => {
   const worsening = props.alerts.filter(
     (alert) => alert.kind === "down",
   ).length;
@@ -114,17 +120,19 @@ const cards = computed<Card[]>(() => {
 
 <template>
   <div class="kpis">
-    <article v-for="card in cards" :key="card.label" class="panel kpi">
+    <Card v-for="card in cards" :key="card.label" class="panel kpi">
       <header class="kpi-head">
         <span class="kpi-label">{{ card.label }}</span>
-        <span v-if="card.chip" class="chip" :style="{ background: card.chip.color }">{{ card.chip.text }}</span>
+        <Badge v-if="card.chip" class="chip" :style="{ background: card.chip.color }">
+          {{ card.chip.text }}
+        </Badge>
       </header>
       <span class="kpi-value" :class="{ score: card.label === 'Score' }" :style="{ color: card.color }">{{ card.value }}</span>
       <p class="kpi-trend">
         <span class="pill" :class="card.direction">{{ card.pill }}</span> {{ card.trend }}
       </p>
       <p class="kpi-caption">{{ card.caption }}</p>
-    </article>
+    </Card>
   </div>
 </template>
 

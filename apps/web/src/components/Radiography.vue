@@ -10,6 +10,7 @@ import { CONFIDENCE_LABELS, monthLabel } from "../format.ts";
 import DetailTabs from "./DetailTabs.vue";
 import KpiCards from "./KpiCards.vue";
 import Sparkline from "./Sparkline.vue";
+import { Card } from "./ui/card";
 
 defineProps<{
   company: CompanyDetail;
@@ -36,9 +37,9 @@ const emit = defineEmits<{ select: [companyId: string] }>();
 
     <KpiCards :company="company" :explanation="explanation" :alerts="alerts" />
 
-    <div class="chart-card">
+    <Card class="chart-card">
       <Sparkline :companies="comparison" />
-    </div>
+    </Card>
 
     <DetailTabs
       :company="company"
@@ -63,6 +64,9 @@ const emit = defineEmits<{ select: [companyId: string] }>();
 }
 
 .chart-card {
+  display: block;
+  gap: 0;
+  padding: 0;
   background: var(--card);
   border-radius: 10px;
 }

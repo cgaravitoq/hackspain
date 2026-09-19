@@ -191,9 +191,9 @@ describe("App", () => {
     expect(wrapper.find(".score").text()).toBe("12.3");
     expect(wrapper.find(".chip").text()).toBe("cayendo");
     expect(wrapper.text()).toContain("▼ -27,9 vs mes anterior");
-    expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
-      "Acción",
-    );
+    expect(
+      wrapper.find('.details [role="tab"][aria-selected="true"]').text(),
+    ).toBe("Acción");
     expect(wrapper.find('[role="tabpanel"]').text()).toBe(
       "Reclamar las 2 facturas vencidas desde Cuentas por cobrar",
     );
