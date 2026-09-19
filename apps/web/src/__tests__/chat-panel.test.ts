@@ -211,6 +211,58 @@ describe("ChatPanel", () => {
     expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
 
+  it("hides the role suggestions while and after the first answer streams", async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) {
+        controller = stream;
+      },
+    });
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response(body, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
+    });
+    const suggestions = wrapper.findAll(".suggestions button");
+    expect(suggestions).toHaveLength(3);
+
+    await suggestions[0]?.trigger("click");
+    await vi.waitFor(() =>
+      expect(wrapper.find(".suggestions").exists()).toBe(false),
+    );
+
+    controller.enqueue(encoder.encode('data: {"type":"start"}\n\n'));
+    controller.enqueue(
+      encoder.encode('data: {"type":"text-start","id":"t"}\n\n'),
+    );
+    controller.enqueue(
+      encoder.encode(
+        'data: {"type":"text-delta","id":"t","delta":"Respuesta lista."}\n\n',
+      ),
+    );
+    controller.enqueue(
+      encoder.encode('data: {"type":"text-end","id":"t"}\n\n'),
+    );
+    controller.enqueue(encoder.encode('data: {"type":"finish"}\n\n'));
+    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    controller.close();
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain("Respuesta lista."),
+    );
+    expect(wrapper.find(".suggestions").exists()).toBe(false);
+  });
+
   it("renders and emits the finished report as a PDF file", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(
