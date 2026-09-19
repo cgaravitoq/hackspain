@@ -4,15 +4,38 @@ import {
   DEMO_COMPANY_NAMES,
   type MonthEntry,
 } from "@hackspain/shared";
-import { computed } from "vue";
+import { computed, useId } from "vue";
 
 const props = defineProps<{ companies: CompanyDetail[] }>();
 
-const WIDTH = 520;
-const HEIGHT = 140;
-const PAD_X = 28;
-const PAD_Y = 14;
+const WIDTH = 960;
+const HEIGHT = 320;
+const PAD_LEFT = 44;
+const PAD_RIGHT = 24;
+const PAD_TOP = 24;
+const PAD_BOTTOM = 32;
+const GRID = [0, 25, 50, 75, 100];
+const FUTURE_STEPS = [1, 2, 3];
 const SERIES_COLORS = ["#1d4ed8", "#b45309", "#0f766e"];
+const SHORT_MONTHS = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
+
+type Point = { x: number; y: number };
+type Marker = Point & { score: number; entry: MonthEntry };
+
+const gradientId = useId();
 
 const observedMonths = computed(() =>
   [
@@ -31,7 +54,7 @@ const months = computed(() => {
   if (!last) {
     return [];
   }
-  const future = [1, 2, 3].map((offset) => {
+  const future = FUTURE_STEPS.map((offset) => {
     const date = new Date(`${last}-01T00:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + offset);
     return date.toISOString().slice(0, 7);
@@ -43,11 +66,24 @@ const todayX = computed(() => x(observedMonths.value.length - 1));
 
 function x(index: number): number {
   const span = Math.max(months.value.length - 1, 1);
-  return PAD_X + (index / span) * (WIDTH - PAD_X * 2);
+  return PAD_LEFT + (index / span) * (WIDTH - PAD_LEFT - PAD_RIGHT);
 }
 
 function y(score: number): number {
-  return PAD_Y + (1 - score / 100) * (HEIGHT - PAD_Y * 2);
+  return PAD_TOP + (1 - score / 100) * (HEIGHT - PAD_TOP - PAD_BOTTOM);
+}
+
+function futureX(step: number): number {
+  return x(observedMonths.value.length - 1 + step);
+}
+
+function clamp(score: number): number {
+  return Math.max(0, Math.min(100, score));
+}
+
+function shortMonth(name: string): string {
+  const [year, index] = name.split("-");
+  return `${SHORT_MONTHS[Number(index) - 1]} ${year?.slice(2)}`;
 }
 
 function companyLabel(companyId: string): string {
@@ -58,74 +94,177 @@ function companyLabel(companyId: string): string {
   );
 }
 
-function segments(entries: MonthEntry[]): string[] {
+function coordinate(point: Point): string {
+  return `${point.x},${point.y}`;
+}
+
+function sign(value: number): number {
+  return value < 0 ? -1 : 1;
+}
+
+function slope3(before: Point, point: Point, after: Point): number {
+  const h0 = point.x - before.x;
+  const h1 = after.x - point.x;
+  const s0 = (point.y - before.y) / h0;
+  const s1 = (after.y - point.y) / h1;
+  const p = (s0 * h1 + s1 * h0) / (h0 + h1);
+  return (
+    (sign(s0) + sign(s1)) *
+      Math.min(Math.abs(s0), Math.abs(s1), Math.abs(p) / 2) || 0
+  );
+}
+
+function slope2(from: Point, to: Point, tangent: number): number {
+  return ((3 * (to.y - from.y)) / (to.x - from.x) - tangent) / 2;
+}
+
+function bezier(from: Point, to: Point, t0: number, t1: number): string {
+  const dx = (to.x - from.x) / 3;
+  return `C${from.x + dx},${from.y + dx * t0} ${to.x - dx},${to.y - dx * t1} ${coordinate(to)}`;
+}
+
+function curve(points: Point[]): string {
+  const [first, second] = points;
+  const last = points.at(-1);
+  const penultimate = points.at(-2);
+  if (!(first && second && last && penultimate)) {
+    return "";
+  }
+  if (points.length === 2) {
+    return `M${coordinate(first)} L${coordinate(second)}`;
+  }
+  const tangents = points.map((point, index) => {
+    const before = points[index - 1];
+    const after = points[index + 1];
+    return before && after ? slope3(before, point, after) : 0;
+  });
+  tangents[0] = slope2(first, second, tangents[1] ?? 0);
+  tangents[tangents.length - 1] = slope2(
+    penultimate,
+    last,
+    tangents.at(-2) ?? 0,
+  );
+  return [
+    `M${coordinate(first)}`,
+    ...points
+      .slice(1)
+      .map((point, index) =>
+        bezier(
+          points[index] ?? first,
+          point,
+          tangents[index] ?? 0,
+          tangents[index + 1] ?? 0,
+        ),
+      ),
+  ].join(" ");
+}
+
+function runs(entries: MonthEntry[]): Marker[][] {
   const byMonth = new Map(entries.map((entry) => [entry.month, entry]));
-  const result: string[] = [];
-  let current: string[] = [];
-  observedMonths.value.forEach((month, index) => {
-    const entry = byMonth.get(month);
+  const result: Marker[][] = [];
+  let current: Marker[] = [];
+  observedMonths.value.forEach((name, index) => {
+    const entry = byMonth.get(name);
     if (!entry || entry.score === null) {
-      if (current.length > 1) {
-        result.push(current.join(" "));
+      if (current.length) {
+        result.push(current);
       }
       current = [];
       return;
     }
-    current.push(`${x(index)},${y(entry.score)}`);
+    current.push({ x: x(index), y: y(entry.score), score: entry.score, entry });
   });
-  if (current.length > 1) {
-    result.push(current.join(" "));
+  if (current.length) {
+    result.push(current);
   }
   return result;
 }
 
-function points(entries: MonthEntry[]) {
-  const byMonth = new Map(entries.map((entry) => [entry.month, entry]));
-  return observedMonths.value.flatMap((month, index) => {
-    const entry = byMonth.get(month);
-    return entry?.score === null || !entry
-      ? []
-      : [{ x: x(index), y: y(entry.score), entry }];
-  });
-}
-
-function projection(entries: MonthEntry[]): string {
-  const last = points(entries).at(-1);
-  if (!last || last.entry.score === null || last.entry.momentum === null) {
+function areaPath(run: Marker[]): string {
+  const first = run[0];
+  const last = run.at(-1);
+  if (!(first && last)) {
     return "";
   }
-  const { score, momentum } = last.entry;
-  return [
-    `${last.x},${last.y}`,
-    ...[1, 2, 3].map((step) => {
-      const projected = Math.max(
-        0,
-        Math.min(100, score + (momentum * step) / 3),
-      );
-      return `${x(observedMonths.value.length - 1 + step)},${y(projected)}`;
-    }),
-  ].join(" ");
+  return `${curve(run)} L${last.x},${y(0)} L${first.x},${y(0)} Z`;
+}
+
+function volatility(entries: MonthEntry[]): number {
+  const recent = new Set(observedMonths.value.slice(-12));
+  const scores = [...entries]
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .flatMap((entry) =>
+      recent.has(entry.month) && entry.score !== null ? [entry.score] : [],
+    );
+  const changes = scores
+    .slice(1)
+    .map((score, index) => score - (scores[index] ?? score));
+  if (changes.length < 3) {
+    return 0;
+  }
+  const mean =
+    changes.reduce((sum, change) => sum + change, 0) / changes.length;
+  const variance =
+    changes.reduce((sum, change) => sum + (change - mean) ** 2, 0) /
+    (changes.length - 1);
+  return Math.sqrt(variance);
+}
+
+function buildSeries(company: CompanyDetail, color: string) {
+  const segments = runs(company.series);
+  const drawable = segments.filter((run) => run.length > 1);
+  const markers = segments.flat();
+  const last = markers.at(-1);
+  const momentum = last?.entry.momentum ?? null;
+  const projected =
+    last && momentum !== null
+      ? FUTURE_STEPS.map((step) => clamp(last.score + (momentum * step) / 3))
+      : [];
+  const sigma = volatility(company.series);
+  const upper = projected.map((value, index) =>
+    clamp(value + sigma * Math.sqrt(index + 1)),
+  );
+  const lower = projected.map((value, index) =>
+    clamp(value - sigma * Math.sqrt(index + 1)),
+  );
+  const futurePoints = (values: number[]) =>
+    values.map((value, index) => `${futureX(index + 1)},${y(value)}`);
+  return {
+    companyId: company.company_id,
+    label: companyLabel(company.company_id),
+    color,
+    line: drawable.map(curve).join(" "),
+    area: drawable.map(areaPath).join(" "),
+    markers,
+    dots: markers.filter((marker) => marker === last || marker.entry.events.E1),
+    projected,
+    projection:
+      last && projected.length
+        ? [coordinate(last), ...futurePoints(projected)].join(" ")
+        : "",
+    band:
+      last && projected.length
+        ? [
+            coordinate(last),
+            ...futurePoints(upper),
+            ...futurePoints(lower).reverse(),
+          ].join(" ")
+        : "",
+  };
 }
 
 const chartSeries = computed(() =>
-  props.companies.slice(0, 3).map((company, index) => ({
-    companyId: company.company_id,
-    label: companyLabel(company.company_id),
-    color: SERIES_COLORS[index] ?? SERIES_COLORS[0],
-    segments: segments(company.series),
-    points: points(company.series),
-    projection: projection(company.series),
-  })),
+  props.companies
+    .slice(0, 3)
+    .map((company, index) =>
+      buildSeries(company, SERIES_COLORS[index] ?? SERIES_COLORS[0] ?? ""),
+    ),
 );
 
 const labels = computed(() =>
   months.value
-    .map((month, index) => ({ month, x: x(index) }))
-    .filter(
-      (_, index) =>
-        index === months.value.length - 1 ||
-        (index % 6 === 0 && index < months.value.length - 3),
-    ),
+    .map((name, index) => ({ name, x: x(index), text: shortMonth(name) }))
+    .filter((_, index) => (observedMonths.value.length - 1 - index) % 3 === 0),
 );
 </script>
 
@@ -137,33 +276,65 @@ const labels = computed(() =>
       role="img"
       aria-label="Evolución del score en 24 meses y proyección por tendencia a 3 meses"
     >
+      <defs>
+        <linearGradient
+          v-for="item in chartSeries"
+          :id="`${gradientId}-${item.companyId}`"
+          :key="item.companyId"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <stop offset="0" :stop-color="item.color" stop-opacity="0.35" />
+          <stop offset="1" :stop-color="item.color" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <template v-for="level in GRID" :key="level">
+        <line
+          :x1="PAD_LEFT"
+          :x2="WIDTH - PAD_RIGHT"
+          :y1="y(level)"
+          :y2="y(level)"
+          class="grid"
+        />
+        <text :x="PAD_LEFT - 10" :y="y(level) + 4" class="axis">{{ level }}</text>
+      </template>
       <template v-if="observedMonths.length">
         <rect
           :x="todayX"
-          :y="PAD_Y"
-          :width="WIDTH - PAD_X - todayX"
-          :height="HEIGHT - PAD_Y * 2"
+          :y="PAD_TOP"
+          :width="WIDTH - PAD_RIGHT - todayX"
+          :height="HEIGHT - PAD_TOP - PAD_BOTTOM"
           class="projection-area"
         />
         <line
           :x1="todayX"
           :x2="todayX"
-          :y1="PAD_Y"
-          :y2="HEIGHT - PAD_Y"
+          :y1="PAD_TOP"
+          :y2="HEIGHT - PAD_BOTTOM"
           stroke-dasharray="1 3"
           class="today-marker"
         />
-        <text :x="todayX" :y="PAD_Y - 4" class="axis today-label">hoy</text>
+        <text :x="todayX" :y="PAD_TOP - 8" class="axis today-label">hoy</text>
       </template>
-      <line :x1="PAD_X" :x2="WIDTH - PAD_X" :y1="y(50)" :y2="y(50)" class="guide" />
-      <text :x="PAD_X - 6" :y="y(100) + 4" class="axis">100</text>
-      <text :x="PAD_X - 6" :y="y(50) + 4" class="axis">50</text>
-      <text :x="PAD_X - 6" :y="y(0) + 4" class="axis">0</text>
       <template v-for="item in chartSeries" :key="item.companyId">
-        <polyline
-          v-for="(segment, index) in item.segments"
-          :key="`${item.companyId}-${index}`"
-          :points="segment"
+        <path
+          v-if="item.area"
+          :d="item.area"
+          :fill="`url(#${gradientId}-${item.companyId})`"
+          class="series-area"
+        />
+        <polygon
+          v-if="item.band"
+          :points="item.band"
+          :fill="item.color"
+          fill-opacity="0.12"
+          class="projection-band"
+        />
+        <path
+          v-if="item.line"
+          :d="item.line"
           :stroke="item.color"
           class="series-line"
         />
@@ -171,19 +342,19 @@ const labels = computed(() =>
           v-if="item.projection"
           :points="item.projection"
           :stroke="item.color"
-          stroke-dasharray="5 4"
-          opacity="0.6"
+          stroke-dasharray="6 5"
+          opacity="0.7"
           class="projection-line"
         />
         <circle
-          v-for="point in item.points"
+          v-for="point in item.dots"
           :key="`${item.companyId}-${point.entry.month}`"
           :cx="point.x"
           :cy="point.y"
-          :r="point.entry.events.E1 ? 4.5 : 3"
-          :fill="item.color"
-          :stroke="point.entry.events.E1 ? 'var(--falling)' : 'none'"
-          stroke-width="1.5"
+          :r="point.entry.events.E1 ? 5.5 : 4.5"
+          :fill="point.entry.events.E1 ? 'var(--falling)' : item.color"
+          stroke="var(--card)"
+          stroke-width="2"
         >
           <title>
             {{ item.label }} · {{ point.entry.month }}: {{ point.entry.score }} ·
@@ -193,12 +364,12 @@ const labels = computed(() =>
       </template>
       <text
         v-for="label in labels"
-        :key="label.month"
+        :key="label.name"
         :x="label.x"
-        :y="HEIGHT - 1"
+        :y="HEIGHT - 10"
         class="axis month"
       >
-        {{ label.month }}
+        {{ label.text }}
       </text>
     </svg>
     <div class="legend" aria-label="Empresas comparadas">
@@ -210,20 +381,33 @@ const labels = computed(() =>
         <i class="projection-sample" />
         proyección por tendencia (3 meses)
       </span>
+      <span>
+        <i class="band-sample" />
+        rango por tendencia
+      </span>
     </div>
   </div>
 </template>
 
 <style scoped>
+.chart {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .sparkline {
   width: 100%;
   height: auto;
   display: block;
 }
 
-.guide {
+.grid {
   stroke: var(--line);
-  stroke-dasharray: 4 4;
+  stroke-opacity: 0.7;
 }
 
 .projection-area {
@@ -233,17 +417,20 @@ const labels = computed(() =>
 
 .today-marker {
   stroke: var(--muted);
+  stroke-width: 1.5;
   stroke-linecap: round;
 }
 
 .series-line,
 .projection-line {
   fill: none;
-  stroke-width: 1.8;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .axis {
-  font-size: 9px;
+  font-size: 13px;
   fill: var(--muted);
   text-anchor: end;
 }
@@ -258,7 +445,6 @@ const labels = computed(() =>
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px 18px;
-  margin-top: 4px;
   color: var(--ink-soft);
   font-size: 12px;
 }
@@ -280,5 +466,12 @@ const labels = computed(() =>
   border-top: 2px dashed currentColor;
   border-radius: 0;
   opacity: 0.6;
+}
+
+.legend .band-sample {
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.18;
 }
 </style>

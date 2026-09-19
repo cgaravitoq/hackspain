@@ -85,7 +85,7 @@ describe("App", () => {
     );
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
-    expect(wrapper.findAll("svg circle")).toHaveLength(3);
+    expect(wrapper.findAll("svg circle")).toHaveLength(1);
     expect(wrapper.find(".chat-stub").text()).toBe("COMP_A financiero");
   });
 
@@ -158,6 +158,7 @@ describe("App", () => {
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "Talleres Ribera",
       "proyección por tendencia (3 meses)",
+      "rango por tendencia",
     ]);
   });
 
@@ -181,6 +182,7 @@ describe("App", () => {
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "Talleres Ribera",
       "proyección por tendencia (3 meses)",
+      "rango por tendencia",
     ]);
   });
 
@@ -208,6 +210,7 @@ describe("App", () => {
       "COMP_C",
       "COMP_D",
       "proyección por tendencia (3 meses)",
+      "rango por tendencia",
     ]);
   });
 
@@ -312,6 +315,7 @@ describe("App", () => {
       "COMP_A",
       "COMP_B",
       "proyección por tendencia (3 meses)",
+      "rango por tendencia",
     ]);
   });
 
