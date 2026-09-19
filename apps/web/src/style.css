@@ -12,6 +12,11 @@
   --slipping: #b45309;
   --falling: #b91c1c;
   --chip-bg: #eef1f5;
+  --group-1: #5b7cfa;
+  --group-2: #e0a33e;
+  --group-3: #3fa87a;
+  --group-4: #c264a0;
+  --group-5: #7a86d8;
   color-scheme: light;
 }
 
@@ -54,7 +59,7 @@ button {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   padding: 12px 20px;
   background: var(--card);
   border-bottom: 1px solid var(--line);
@@ -62,8 +67,10 @@ button {
 
 .brand {
   display: flex;
+  flex: none;
   align-items: baseline;
   gap: 10px;
+  white-space: nowrap;
   font-weight: 700;
   font-size: 18px;
   letter-spacing: 0.02em;
@@ -83,7 +90,7 @@ button {
 }
 
 .search input {
-  width: 200px;
+  width: 180px;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;

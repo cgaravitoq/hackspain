@@ -2,12 +2,20 @@ import {
   type Alert,
   type CompanyDetail,
   type Explain,
+  type Graph,
   type GroupMap,
+  graphSchema,
   type Meta,
   type MonthEntry,
+  type RelationEdge,
+  type RelationNode,
   type Report,
+  relationConfidenceSchema,
+  relationScopeSchema,
+  relationTypeSchema,
   roleSchema,
 } from "@hackspain/shared";
+import type { z } from "zod";
 
 export function month(
   name: string,
@@ -244,6 +252,193 @@ export const group: GroupMap = {
   ],
 };
 
+export function graphNode(
+  companyId: string,
+  groupId: string | null,
+  state: RelationNode["state"],
+  degree: number,
+): RelationNode {
+  return {
+    company_id: companyId,
+    group_id: groupId,
+    degree,
+    role: degree === 0 ? "isolated" : "connected",
+    intercompany_flow_volume_minor: 0,
+    score: 50,
+    state,
+    scorable: true,
+  };
+}
+
+export function graphEdge(
+  source: string,
+  target: string,
+  type: RelationEdge["relation_type"],
+  scope: RelationEdge["scope"],
+  confidence: RelationEdge["confidence"],
+): RelationEdge {
+  return {
+    source,
+    target,
+    relation_type: type,
+    subtype: "funds_transfer",
+    scope,
+    confidence,
+    claim_status: "inferred",
+    evidence_level: "bank_mirror",
+    matches: 12,
+    amount_minor: 123_456_789,
+    currency: "EUR",
+    first_date: "2026-01-05",
+    last_date: "2026-08-20",
+    evidence_ids: [],
+    detail: {},
+    example: "",
+    provider_identity_confirmed: false,
+  };
+}
+
+export const graph: Graph = {
+  meta: {
+    rule_version: "relations/0.1",
+    generated_at: "2026-09-19T10:00:00.000Z",
+    counts: {
+      INFERRED_PAYMENT_TO: 3,
+      OPEN_OBLIGATION_TO: 1,
+      SHARES_COUNTERPARTY_WITH: 1,
+    },
+  },
+  nodes: [
+    graphNode("COMP_A", "GROUP_1", "falling", 3),
+    graphNode("COMP_B", "GROUP_1", "stable", 2),
+    graphNode("COMP_C", "GROUP_1", "stable", 2),
+    graphNode("COMP_D", "GROUP_2", "slipping", 3),
+    graphNode("COMP_E", "GROUP_2", "not_evaluable", 0),
+    graphNode("COMP_F", null, "not_evaluable", 0),
+  ],
+  edges: [
+    {
+      ...graphEdge(
+        "COMP_A",
+        "COMP_B",
+        "INFERRED_PAYMENT_TO",
+        "intragroup",
+        "high",
+      ),
+      subtype: "funds_transfer",
+    },
+    {
+      ...graphEdge(
+        "COMP_B",
+        "COMP_C",
+        "OPEN_OBLIGATION_TO",
+        "intragroup",
+        "medium",
+      ),
+      subtype: "sale_to_purchase_invoice",
+      evidence_level: "invoice_mirror",
+      matches: 3,
+      amount_minor: 4_500_000,
+      first_date: "2026-02-11",
+      last_date: "2026-07-30",
+    },
+    {
+      ...graphEdge(
+        "COMP_C",
+        "COMP_D",
+        "SHARES_COUNTERPARTY_WITH",
+        "intergroup",
+        "low",
+      ),
+      subtype: "shared_supplier_or_client",
+      evidence_level: "shared_counterparty_id",
+      matches: 1,
+      amount_minor: 0,
+    },
+    {
+      ...graphEdge(
+        "COMP_D",
+        "COMP_A",
+        "INFERRED_PAYMENT_TO",
+        "intergroup",
+        "low",
+      ),
+      currency: "GBP",
+    },
+    graphEdge(
+      "COMP_A",
+      "COMP_D",
+      "INFERRED_PAYMENT_TO",
+      "intergroup",
+      "medium",
+    ),
+  ],
+};
+
+export function starGraph(stars: number, leaves: number): Graph {
+  const nodes: RelationNode[] = [];
+  const edges: RelationEdge[] = [];
+  for (let star = 0; star < stars; star += 1) {
+    const hub = `HUB_${String(star).padStart(3, "0")}`;
+    nodes.push({
+      ...graphNode(hub, `GROUP_${star}`, "stable", leaves),
+      role: "group_treasury_hub",
+    });
+    for (let leaf = 0; leaf < leaves; leaf += 1) {
+      const id = `${hub}_${leaf}`;
+      nodes.push(graphNode(id, `GROUP_${star}`, "healthy", 1));
+      edges.push(
+        graphEdge(hub, id, "INFERRED_PAYMENT_TO", "intragroup", "high"),
+      );
+    }
+  }
+  return { meta: graph.meta, nodes, edges };
+}
+
+const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
+
+function optionalParam<Schema extends z.ZodType>(
+  schema: Schema,
+  value: string | null,
+): z.infer<Schema> | undefined {
+  const parsed = schema.safeParse(value ?? undefined);
+  return parsed.success ? parsed.data : undefined;
+}
+
+export function filterGraph(url: URL): Graph {
+  const type = optionalParam(relationTypeSchema, url.searchParams.get("type"));
+  const scope = optionalParam(
+    relationScopeSchema,
+    url.searchParams.get("scope"),
+  );
+  const minimum =
+    optionalParam(
+      relationConfidenceSchema,
+      url.searchParams.get("confidence"),
+    ) ?? "low";
+  const group = url.searchParams.get("group_id");
+  const includeIsolated = url.searchParams.get("include_isolated") === "true";
+  const groupOf = new Map(
+    graph.nodes.map((node) => [node.company_id, node.group_id]),
+  );
+  const inGroup = (companyId: string) =>
+    group === null || groupOf.get(companyId) === group;
+  const edges = graph.edges.filter(
+    (edge) =>
+      (type === undefined || edge.relation_type === type) &&
+      CONFIDENCE_RANK[edge.confidence] >= CONFIDENCE_RANK[minimum] &&
+      (scope === undefined || edge.scope === scope) &&
+      inGroup(edge.source) &&
+      inGroup(edge.target),
+  );
+  const nodes = graph.nodes.filter(
+    (node) =>
+      (group === null || node.group_id === group) &&
+      (includeIsolated || node.degree > 0),
+  );
+  return graphSchema.parse({ meta: graph.meta, nodes, edges });
+}
+
 type Route = {
   pattern: RegExp;
   body: (match: RegExpMatchArray, url: URL) => object;
@@ -270,6 +465,7 @@ const routes: Route[] = [
     body: (match) => company(match[1] ?? "", "GROUP_1"),
   },
   { pattern: /^\/api\/groups\/(\w+)$/, body: () => group },
+  { pattern: /^\/api\/graph$/, body: (_match, url) => filterGraph(url) },
   {
     pattern: /^\/api\/compare$/,
     body: (_match, url) => {

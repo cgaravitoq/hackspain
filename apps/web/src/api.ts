@@ -9,10 +9,15 @@ import {
   compareSchema,
   type Explain,
   explainSchema,
+  type Graph,
   type GroupMap,
+  graphSchema,
   groupMapSchema,
   type Meta,
   metaSchema,
+  type RelationConfidence,
+  type RelationScope,
+  type RelationType,
   type Report,
   type Role,
   reportSchema,
@@ -35,6 +40,32 @@ const alertsSchema = z.object({ alerts: z.array(alertSchema) });
 
 export const ALERTS_LIMIT = 500;
 
+export type GraphQuery = {
+  type?: RelationType;
+  confidence?: RelationConfidence;
+  scope?: RelationScope;
+  group_id?: string;
+  include_isolated?: boolean;
+};
+
+function graphSearch(query: GraphQuery): string {
+  const search = new URLSearchParams();
+  if (query.type) {
+    search.set("type", query.type);
+  }
+  if (query.confidence) {
+    search.set("confidence", query.confidence);
+  }
+  if (query.scope) {
+    search.set("scope", query.scope);
+  }
+  if (query.group_id) {
+    search.set("group_id", query.group_id);
+  }
+  search.set("include_isolated", String(query.include_isolated ?? false));
+  return search.toString();
+}
+
 export const api = {
   meta: (): Promise<Meta> => get("/meta", metaSchema),
   companies: async (): Promise<CompanySummary[]> =>
@@ -52,6 +83,8 @@ export const api = {
       `/compare?${new URLSearchParams({ ids: ids.join(",") })}`,
       compareSchema,
     ),
+  graph: (query: GraphQuery = {}): Promise<Graph> =>
+    get(`/graph?${graphSearch(query)}`, graphSchema),
   report: (id: string, role: Role): Promise<Report> =>
     get(
       `/companies/${id}/report?${new URLSearchParams({ role })}`,

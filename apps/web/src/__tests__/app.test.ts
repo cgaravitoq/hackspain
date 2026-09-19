@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
 import { company, fakeApi } from "./fixtures.ts";
 
@@ -35,14 +35,28 @@ async function selectRole(wrapper: VueWrapper, label: string) {
   await flushPromises();
 }
 
+async function openRoute(wrapper: VueWrapper, label: string) {
+  const tab = wrapper
+    .findAll(".route-tabs button")
+    .find((button) => button.text() === label);
+  await tab?.trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
 function chips(wrapper: VueWrapper) {
   return wrapper
     .findAll(".compare-chip")
     .map((chip) => chip.text().replace("×", "").trim());
 }
 
+beforeEach(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+});
+
 afterEach(() => {
   mounted?.unmount();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.location.hash = "";
 });
@@ -456,6 +470,47 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_A");
     expect(seen).not.toContain("/api/companies/COMP_B");
     expect(window.location.hash).toBe("#COMP_A");
+  });
+
+  it("opens the relation graph on the graph route and the radiography on a company route", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    window.location.hash = "graph";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    expect(wrapper.find(".layout").exists()).toBe(false);
+    expect(seen).toContain("/api/graph");
+    expect(seen).not.toContain("/api/companies/COMP_A");
+    window.location.hash = "COMP_B";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-screen").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("points the browser at the graph route from the header", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await openRoute(wrapper, "Grafo");
+    expect(window.location.hash).toBe("#graph");
+  });
+
+  it("returns from the graph to the company that was on screen", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    window.location.hash = "COMP_B";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    await openRoute(wrapper, "Radiografía");
+    expect(window.location.hash).toBe("#COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
   it("shows the failing endpoint when the bootstrap requests fail", async () => {

@@ -16,6 +16,7 @@ import AlertList from "./components/AlertList.vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
+import RelationGraph from "./components/RelationGraph.vue";
 import ReportPanel from "./components/ReportPanel.vue";
 import { monthLabel } from "./format.ts";
 
@@ -25,12 +26,14 @@ const roles = [
   { value: "ventas", label: ROLE_LABELS.ventas },
 ] satisfies { value: Role; label: string }[];
 const TREASURER_COMPANY = "COMP_0176";
+const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
 const role = ref<Role>("financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
-const selected = ref(window.location.hash.slice(1));
+const onGraph = ref(window.location.hash === `#${GRAPH_ROUTE}`);
+const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
 const compareIds = ref<string[]>([]);
 const comparison = ref<CompanyDetail[]>([]);
 const company = ref<CompanyDetail | null>(null);
@@ -56,11 +59,30 @@ async function load(companyId: string) {
 }
 
 function select(companyId: string) {
+  if (companyId === GRAPH_ROUTE) {
+    return;
+  }
   if (role.value === "tesorero") {
     window.location.hash = TREASURER_COMPANY;
     return;
   }
   selected.value = companyId;
+}
+
+function openGraph() {
+  onGraph.value = true;
+  window.location.hash = GRAPH_ROUTE;
+}
+
+function openRadiography() {
+  onGraph.value = false;
+  select(
+    selected.value ||
+      alerts.value[0]?.company_id ||
+      companies.value[0]?.company_id ||
+      "",
+  );
+  window.location.hash = selected.value;
 }
 
 function addComparison(companyId: string) {
@@ -101,7 +123,11 @@ function selectRole(nextRole: Role) {
 }
 
 function syncHash() {
-  select(window.location.hash.slice(1));
+  const hash = window.location.hash.slice(1);
+  onGraph.value = hash === GRAPH_ROUTE;
+  if (!onGraph.value) {
+    select(hash);
+  }
 }
 
 function search() {
@@ -156,7 +182,7 @@ onMounted(async () => {
     error.value = cause instanceof Error ? cause.message : String(cause);
     return;
   }
-  if (!selected.value) {
+  if (!selected.value && !onGraph.value) {
     selected.value =
       alerts.value[0]?.company_id ?? companies.value[0]?.company_id ?? "";
   }
@@ -172,6 +198,24 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       X Ray
       <small>salud financiera de cada empresa, cada mes</small>
     </div>
+    <nav class="route-tabs" aria-label="Pantalla">
+      <button
+        type="button"
+        :class="{ active: !onGraph }"
+        :aria-pressed="!onGraph"
+        @click="openRadiography"
+      >
+        Radiografía
+      </button>
+      <button
+        type="button"
+        :class="{ active: onGraph }"
+        :aria-pressed="onGraph"
+        @click="openGraph"
+      >
+        Grafo
+      </button>
+    </nav>
     <nav class="role-tabs" aria-label="Perfil">
       <button
         v-for="item in roles"
@@ -198,7 +242,10 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       <button type="submit">Abrir</button>
     </form>
   </header>
-  <main class="layout" :class="{ 'without-alerts': role === 'tesorero' }">
+  <main v-if="onGraph" class="graph-layout">
+    <RelationGraph />
+  </main>
+  <main v-else class="layout" :class="{ 'without-alerts': role === 'tesorero' }">
     <AlertList
       v-if="role !== 'tesorero'"
       :alerts="alerts"
@@ -244,6 +291,36 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 </template>
 
 <style scoped>
+.route-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--chip-bg);
+}
+
+.route-tabs button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.route-tabs button.active {
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.graph-layout {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+
 .role-tabs {
   display: flex;
   gap: 4px;
@@ -274,6 +351,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 .month {
   font-size: 13px;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .compare-selector {
