@@ -67,7 +67,6 @@ describe("Sparkline", () => {
       "2025-07",
       "2026-01",
       "2026-07",
-      "2027-01",
       "2027-03",
     ]);
     expect(wrapper.findAll("circle")).toHaveLength(24);

@@ -121,7 +121,11 @@ const chartSeries = computed(() =>
 const labels = computed(() =>
   months.value
     .map((month, index) => ({ month, x: x(index) }))
-    .filter((_, index) => index % 6 === 0 || index === months.value.length - 1),
+    .filter(
+      (_, index) =>
+        index === months.value.length - 1 ||
+        (index % 6 === 0 && index < months.value.length - 3),
+    ),
 );
 </script>
 
