@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { env, SELF } from "cloudflare:test";
+import { commitmentEvaluationSchema } from "@hackspain/shared";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   addMonths,
   compareAdvances,
@@ -7,6 +9,9 @@ import {
   type Ledger,
 } from "../xray/commitment.ts";
 import oracle from "./fixtures/commitment-oracle.json";
+import { commitmentRequest, seed } from "./fixtures.ts";
+
+beforeAll(() => seed(env.DB));
 
 function ledger(changes: Partial<Ledger> = {}): Ledger {
   return {
@@ -246,5 +251,68 @@ describe("commitment simulation engine", () => {
     );
     expect(comparison.alternatives[0]?.advance_minor).toBe(expected);
     expect(comparison.alternatives[0]?.closing_minor).toBe(revenue);
+  });
+});
+
+function requestCommitment(companyId: string, body: string) {
+  return SELF.fetch(`https://agent.test/companies/${companyId}/commitment`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+}
+
+describe("POST /companies/:id/commitment", () => {
+  it("returns a labelled simulation under unverified user assumptions", async () => {
+    const response = await requestCommitment(
+      "COMP_0176",
+      JSON.stringify(commitmentRequest),
+    );
+    expect(response.status).toBe(200);
+    const evaluation = commitmentEvaluationSchema.parse(await response.json());
+    expect(evaluation).toMatchObject({
+      company_id: "COMP_0176",
+      readiness: "SIMULATION_ONLY",
+      basis: "USER_ASSUMPTION",
+      opening_verified: false,
+      coverage_verified: false,
+      assumptions: commitmentRequest,
+      minimum_tested_feasible_bps: 4000,
+    });
+  });
+
+  it("rejects caller-supplied verification and fractional cents", async () => {
+    const verified = await requestCommitment(
+      "COMP_0176",
+      JSON.stringify({ ...commitmentRequest, opening_verified: true }),
+    );
+    expect(verified.status).toBe(400);
+    expect(await verified.json()).toEqual({
+      error: "Solicitud de simulación no válida",
+    });
+    const fractional = await requestCommitment(
+      "COMP_0176",
+      JSON.stringify({ ...commitmentRequest, opening_minor: 4_000_000.5 }),
+    );
+    expect(fractional.status).toBe(400);
+  });
+
+  it("distinguishes unknown companies from insufficient history", async () => {
+    const unknown = await requestCommitment(
+      "COMP_MISSING",
+      JSON.stringify(commitmentRequest),
+    );
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toEqual({
+      error: "Unknown company COMP_MISSING",
+    });
+    const insufficient = await requestCommitment(
+      "COMP_SHORT",
+      JSON.stringify(commitmentRequest),
+    );
+    expect(insufficient.status).toBe(400);
+    expect(await insufficient.json()).toEqual({
+      error: "Histórico insuficiente para proyectar",
+    });
   });
 });

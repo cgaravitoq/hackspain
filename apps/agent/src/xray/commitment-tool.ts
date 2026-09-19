@@ -121,6 +121,11 @@ export async function simulateCommitment(
     alternatives: comparison.alternatives.map((alternative) => ({
       ...alternative,
       final_minor: request.revenue_minor - alternative.advance_minor,
+      min_cash_minor: alternative.min_cash_minor ?? null,
+      closing_minor: alternative.closing_minor ?? null,
+      shortfall_minor: alternative.shortfall_minor ?? null,
+      first_breach: alternative.first_breach ?? null,
+      path: alternative.path ?? [],
     })),
   });
 }
