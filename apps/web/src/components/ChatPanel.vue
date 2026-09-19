@@ -251,7 +251,7 @@ function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
       </article>
       <p v-if="chat.error" class="error">{{ chat.error.message }}</p>
     </div>
-    <div class="suggestions">
+    <div v-if="chat.messages.length === 0" class="suggestions">
       <button
         v-for="suggestion in suggestions"
         :key="suggestion"
