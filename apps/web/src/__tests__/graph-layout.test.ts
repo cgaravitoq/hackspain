@@ -82,6 +82,18 @@ describe("graph layout", () => {
     expect(nodeAt(layout, 0, 0)).toBeUndefined();
   });
 
+  it("hits a company only inside its drawn circle", () => {
+    const layout = layoutGraph(connected.nodes, connected.edges);
+    const { x, y, radius } = layout.positions.get("COMP_A") ?? {
+      x: 0,
+      y: 0,
+      radius: 0,
+    };
+    expect(radius).toBeGreaterThan(4);
+    expect(nodeAt(layout, x + radius - 1, y)?.company_id).toBe("COMP_A");
+    expect(nodeAt(layout, x + radius + 3, y)).toBeUndefined();
+  });
+
   it("hits the relation drawn between two companies", () => {
     const layout = layoutGraph(connected.nodes, connected.edges);
     const link = layout.links.find(
