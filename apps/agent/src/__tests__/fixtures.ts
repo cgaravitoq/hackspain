@@ -7,6 +7,7 @@ import {
   type MonthEntry,
   STATE_LABELS,
   type State,
+  type Treasury,
 } from "@hackspain/shared";
 
 type Month = {
@@ -14,6 +15,13 @@ type Month = {
   score: number | null;
   state: State;
   observed?: boolean;
+};
+
+export const TREASURY: Treasury = {
+  starting_cash: 150_000,
+  pending_receivables: 33_333.33,
+  credit_line_limit: 73_333.33,
+  credit_line_drawn: 40_000,
 };
 
 function entry(month: Month, previous: Month | undefined): MonthEntry {
@@ -78,6 +86,7 @@ export function company(
   id: string,
   groupId: string,
   months: Month[],
+  treasury: Treasury = TREASURY,
 ): CompanyDetail {
   const series = months.map((month, index) => entry(month, months[index - 1]));
   const latest = series.at(-1);
@@ -100,6 +109,7 @@ export function company(
       overdue_amount: 12_000,
       oldest_overdue_days: 45,
     },
+    treasury,
     latest: {
       month: latest.month,
       score: latest.score,
@@ -141,11 +151,22 @@ export const meridian = company("COMP_0909", "GROUP_2", [
   { month: "2026-08", score: 64.5, state: "stable" },
 ]);
 
+export const demo = company("COMP_0077", "GROUP_3", [
+  { month: "2026-06", score: 61.5, state: "healthy" },
+  { month: "2026-07", score: 61.5, state: "healthy" },
+  { month: "2026-08", score: 61.5, state: "healthy" },
+]);
+
 export const slipping = company("COMP_D", "GROUP_2", [
   { month: "2026-05", score: 70.0, state: "healthy" },
   { month: "2026-06", score: 45.0, state: "slipping" },
   { month: "2026-07", score: 42.0, state: "slipping" },
   { month: "2026-08", score: 40.0, state: "slipping" },
+]);
+
+export const short = company("COMP_G", "GROUP_2", [
+  { month: "2026-07", score: 55.0, state: "stable" },
+  { month: "2026-08", score: 54.0, state: "stable" },
 ]);
 
 export const group: Group = {
@@ -256,25 +277,31 @@ export const backtest: Backtest = {
 };
 
 export async function seed(db: D1Database): Promise<void> {
-  const statements = [falling, healthy, ribera, meridian, slipping].map(
-    (detail) => {
-      const { series: _series, ...summary } = detail;
-      return db
-        .prepare(
-          "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        )
-        .bind(
-          detail.company_id,
-          detail.group_id,
-          detail.scorable ? 1 : 0,
-          detail.latest.month,
-          detail.latest.score,
-          detail.latest.state,
-          JSON.stringify(summary),
-          JSON.stringify(detail),
-        );
-    },
-  );
+  const statements = [
+    falling,
+    healthy,
+    ribera,
+    meridian,
+    slipping,
+    short,
+    demo,
+  ].map((detail) => {
+    const { series: _series, ...summary } = detail;
+    return db
+      .prepare(
+        "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      )
+      .bind(
+        detail.company_id,
+        detail.group_id,
+        detail.scorable ? 1 : 0,
+        detail.latest.month,
+        detail.latest.score,
+        detail.latest.state,
+        JSON.stringify(summary),
+        JSON.stringify(detail),
+      );
+  });
   statements.push(
     db
       .prepare(
