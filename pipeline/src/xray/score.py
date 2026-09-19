@@ -14,6 +14,7 @@ PERSISTENCE_MONTHS = 3
 
 NOT_EVALUABLE = "not_evaluable"
 DOWN_STATES = ("slipping", "falling")
+WINDOW_COLUMNS = ("inflow", "outflow", "fees", "refunds", "withdrawals", "n_tx", "n_uncategorised")
 
 
 def policy() -> dict[str, Any]:
@@ -36,11 +37,23 @@ def policy() -> dict[str, Any]:
 
 
 def score_panel(panel: pl.DataFrame) -> pl.DataFrame:
+    observed_3 = (
+        pl.col("observed")
+        .cast(pl.Int32)
+        .rolling_sum(window_size=3, min_samples=3)
+        .over("company_id")
+    )
+    # A window holding a month nobody observed is an abstention, not a zero: its sums stay null so the level does too.
     windows = [
-        pl.col(column).rolling_sum(window_size=3, min_samples=3).over("company_id").alias(f"{column}_3")
-        for column in ("inflow", "outflow", "fees", "refunds", "withdrawals", "n_tx", "n_uncategorised")
+        pl.when(observed_3 == 3)
+        .then(
+            pl.col(column).rolling_sum(window_size=3, min_samples=3).over("company_id")
+        )
+        .otherwise(None)
+        .alias(f"{column}_3")
+        for column in WINDOW_COLUMNS
     ]
-    scored = panel.with_columns(windows)
+    scored = panel.with_columns(observed_3=observed_3).with_columns(windows)
 
     inflow, outflow = pl.col("inflow_3"), pl.col("outflow_3")
     enough = pl.col("months_observed") >= 3

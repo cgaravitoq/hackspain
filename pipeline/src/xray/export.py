@@ -13,6 +13,7 @@ from xray.panel import monthly_panel
 from xray.score import DOWN_STATES, NOT_EVALUABLE, RULE_VERSION, confidence, policy, score_panel, states
 
 HOLDOUT_SHARE = 0.2
+STALE_BEFORE = date(CUTOFF.year - 1, 12, 1) if CUTOFF.month == 1 else date(CUTOFF.year, CUTOFF.month - 1, 1)
 STATE_LABELS = {
     "healthy": "sana",
     "improving": "mejorando",
@@ -106,6 +107,7 @@ def _company_record(
     invoice_facts: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     group_id = company_group.get(company_id)
+    last_observed = max(row["month"] for row in rows if row["observed"])
     return {
         "rule_version": RULE_VERSION,
         "company_id": company_id,
@@ -114,6 +116,8 @@ def _company_record(
         "scorable": latest["level"] is not None,
         "holdout": group_id in holdout_groups,
         "months_observed": rows[-1]["months_observed"],
+        "last_observed_month": month_key(last_observed),
+        "stale": last_observed < STALE_BEFORE,
         "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
         "invoice_facts": invoice_facts.get(company_id, {}),
         "latest": {key: latest[key] for key in ("month", "score", "delta_3", "delta_6", "level", "momentum", "state", "confidence")},
@@ -162,6 +166,8 @@ def _unscorable(
             "scorable": False,
             "holdout": group_id in holdout_groups,
             "months_observed": 0,
+            "last_observed_month": None,
+            "stale": False,
             "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
             "invoice_facts": invoice_facts.get(company_id, {}),
             "latest": {
@@ -283,6 +289,8 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             series.append(entry)
             previous = row
         latest = series[-1]
+        if max(row["month"] for row in rows if row["observed"]) < STALE_BEFORE:
+            latest = {**latest, "state": NOT_EVALUABLE}
         before = series[-2] if len(series) > 1 else None
         record = _company_record(
             company_id,
@@ -322,11 +330,21 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             "state_labels": STATE_LABELS,
             "latest_month": max(c["latest"]["month"] or "" for c in companies_out),
             "holdout_groups": sorted(holdout_groups),
+            "gaps": {
+                "companies_with_gaps": sum(
+                    1 for rows in company_rows.values() if any(not row["observed"] for row in rows)
+                ),
+                "unobserved_months": sum(
+                    1 for rows in company_rows.values() for row in rows if not row["observed"]
+                ),
+                "stale_companies": sum(1 for company in companies_out if company["stale"]),
+            },
         },
     )
     return {
         "companies": len(companies_out),
         "scorable": sum(1 for c in companies_out if c["scorable"]),
+        "stale": sum(1 for c in companies_out if c["stale"]),
         "alerts": len(alerts),
         "groups": len(groups_out),
         "backtest": summary,
