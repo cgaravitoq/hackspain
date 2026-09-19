@@ -12,10 +12,11 @@ import {
 } from "@hackspain/shared";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
-import AlertList from "./components/AlertList.vue";
 import ChatBubble from "./components/ChatBubble.vue";
+import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
+import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 
 const roles = [
   { value: "tesorero", label: ROLE_LABELS.tesorero },
@@ -37,7 +38,6 @@ const company = ref<CompanyDetail | null>(null);
 const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
-const query = ref("");
 let compareRequest = 0;
 
 async function load(companyId: string) {
@@ -89,14 +89,13 @@ function addComparison(companyId: string) {
   compareIds.value = [...compareIds.value, companyId].slice(-MAX_COMPARED);
 }
 
-function removeComparison(companyId: string) {
-  if (compareIds.value.length === 1) {
-    return;
-  }
-  compareIds.value = compareIds.value.filter((id) => id !== companyId);
-  if (selected.value === companyId) {
-    select(compareIds.value[0] ?? "");
-  }
+function openCompany(companyId: string) {
+  compareIds.value = [companyId];
+  select(companyId);
+}
+
+function setComparison(companyIds: string[]) {
+  compareIds.value = companyIds;
 }
 
 function replaceComparison(companyIds: string[]) {
@@ -124,19 +123,6 @@ function syncHash() {
   onGraph.value = hash === GRAPH_ROUTE;
   if (!onGraph.value) {
     select(hash);
-  }
-}
-
-function search() {
-  const text = query.value.trim().toUpperCase();
-  if (!text) {
-    return;
-  }
-  const hit =
-    companies.value.find((item) => item.company_id === text) ??
-    companies.value.find((item) => item.company_id.startsWith(text));
-  if (hit) {
-    select(hit.company_id);
   }
 }
 
@@ -192,77 +178,42 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 <template>
   <header class="topbar">
     <div class="brand">X Ray</div>
-    <nav class="route-tabs" aria-label="Pantalla">
-      <button
-        type="button"
-        :class="{ active: !onGraph }"
-        :aria-pressed="!onGraph"
-        @click="openRadiography"
-      >
-        Radiografía
-      </button>
-      <button
-        type="button"
-        :class="{ active: onGraph }"
-        :aria-pressed="onGraph"
-        @click="openGraph"
-      >
-        Grafo
-      </button>
-    </nav>
-    <nav class="role-tabs" aria-label="Perfil">
-      <button
+    <Tabs :model-value="onGraph ? GRAPH_ROUTE : 'radiography'">
+      <TabsList class="route-tabs" aria-label="Pantalla">
+        <TabsTrigger value="radiography" @click="openRadiography">
+          Radiografía
+        </TabsTrigger>
+        <TabsTrigger :value="GRAPH_ROUTE" @click="openGraph">Grafo</TabsTrigger>
+      </TabsList>
+    </Tabs>
+    <Tabs :model-value="role">
+      <TabsList class="role-tabs" aria-label="Perfil">
+        <TabsTrigger
         v-for="item in roles"
         :key="item.value"
-        type="button"
-        :class="{ active: role === item.value }"
-        :aria-pressed="role === item.value"
+        :value="item.value"
         @click="selectRole(item.value)"
       >
         {{ item.label }}
-      </button>
-    </nav>
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+    <CompanySelector
+      v-if="role !== 'tesorero'"
+      :alerts="alerts"
+      :companies="companies"
+      :company="company"
+      :selected="selected"
+      :comparison="compareIds"
+      @open="openCompany"
+      @compare="setComparison"
+    />
   </header>
-  <section v-if="role !== 'tesorero'" class="toolbar" aria-label="Herramientas de empresas">
-    <form class="search" @submit.prevent="search">
-      <input
-        id="company-search"
-        v-model="query"
-        list="company-ids"
-        placeholder="Buscar empresa, p. ej. COMP_0077"
-      />
-      <datalist id="company-ids">
-        <option v-for="item in companies" :key="item.company_id" :value="item.company_id" />
-      </datalist>
-      <button type="submit">Abrir</button>
-    </form>
-    <div class="comparator">
-      <span class="compare-label">Comparar</span>
-      <span v-for="companyId in compareIds" :key="companyId" class="compare-chip">
-        {{ companyId }}
-        <button
-          type="button"
-          :aria-label="`Quitar ${companyId}`"
-          :disabled="compareIds.length === 1"
-          @click="removeComparison(companyId)"
-        >
-          ×
-        </button>
-      </span>
-      <span class="compare-hint">hasta 3</span>
-    </div>
-  </section>
   <main v-if="onGraph" class="graph-layout">
     <RelationGraph />
   </main>
   <main v-else class="layout">
     <div class="center">
-      <AlertList
-        v-if="role !== 'tesorero'"
-        :alerts="alerts"
-        :selected="selected"
-        @select="select"
-      />
       <p v-if="error" class="error panel">{{ error }}</p>
       <Radiography
         v-if="company && explanation"
@@ -297,7 +248,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   background: var(--chip-bg);
 }
 
-.route-tabs button {
+.route-tabs :deep([data-slot="tabs-trigger"]) {
   padding: 5px 10px;
   border: 0;
   border-radius: 6px;
@@ -305,7 +256,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   color: var(--ink-soft);
 }
 
-.route-tabs button.active {
+.route-tabs :deep([data-state="active"]) {
   background: var(--card);
   color: var(--accent);
   font-weight: 600;
@@ -327,7 +278,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   background: var(--chip-bg);
 }
 
-.role-tabs button {
+.role-tabs :deep([data-slot="tabs-trigger"]) {
   padding: 5px 10px;
   border: 0;
   border-radius: 6px;
@@ -335,70 +286,11 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   color: var(--ink-soft);
 }
 
-.role-tabs button.active {
+.role-tabs :deep([data-state="active"]) {
   background: var(--card);
   color: var(--accent);
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
-}
-
-.comparator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.compare-label {
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.compare-hint {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.compare-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 5px 3px 9px;
-  border-radius: 999px;
-  background: var(--chip-bg);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.compare-chip button {
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--ink-soft);
-  line-height: 1;
-}
-
-.compare-chip button:not(:disabled):hover {
-  background: var(--line);
-}
-
-.compare-chip button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.search button {
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--card);
 }
 
 .center {

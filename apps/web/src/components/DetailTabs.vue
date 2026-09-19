@@ -10,6 +10,7 @@ import {
 } from "../format.ts";
 import GroupStrip from "./GroupStrip.vue";
 import ReportPanel from "./ReportPanel.vue";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 const props = defineProps<{
   company: CompanyDetail;
@@ -63,27 +64,20 @@ const sources = computed(() =>
 </script>
 
 <template>
-  <section class="details">
-    <div class="tabs" role="tablist" aria-label="Detalle de la empresa">
-      <button
+  <Tabs :model-value="current" class="details">
+    <TabsList class="tabs" aria-label="Detalle de la empresa">
+      <TabsTrigger
         v-for="tab in tabs"
-        :id="`tab-${tab.id}`"
         :key="tab.id"
-        type="button"
-        role="tab"
-        :aria-selected="current === tab.id"
-        :aria-controls="`panel-${tab.id}`"
-        :class="{ active: current === tab.id }"
+        :value="tab.id"
         @click="active = tab.id"
       >
         {{ tab.label }}
-      </button>
-    </div>
+      </TabsTrigger>
+    </TabsList>
 
-    <div
-      :id="`panel-${current}`"
-      role="tabpanel"
-      :aria-labelledby="`tab-${current}`"
+    <TabsContent
+      :value="current"
       :class="{ panel: framed, body: framed }"
     >
       <p v-if="current === 'action'" class="action">{{ explanation.action }}</p>
@@ -135,8 +129,8 @@ const sources = computed(() =>
         :selected="selected"
         @select="emit('select', $event)"
       />
-    </div>
-  </section>
+    </TabsContent>
+  </Tabs>
 </template>
 
 <style scoped>
@@ -155,7 +149,7 @@ const sources = computed(() =>
   background: var(--chip-bg);
 }
 
-.tabs button {
+.tabs :deep([data-slot="tabs-trigger"]) {
   padding: 5px 12px;
   border: 0;
   border-radius: 6px;
@@ -163,7 +157,7 @@ const sources = computed(() =>
   color: var(--ink-soft);
 }
 
-.tabs button.active {
+.tabs :deep([data-state="active"]) {
   background: var(--card);
   color: var(--ink);
   font-weight: 600;
