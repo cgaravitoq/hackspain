@@ -30,7 +30,7 @@ pipeline/         Python 3.13+ scorer (uv + polars), outside `bun run verify`
 
 ## Data pipeline and D1
 
-From `pipeline/`, `uv run xray score --data <dir> --out artifacts` scores the nine Embat CSVs and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json`.
+From `pipeline/`, `uv run xray score --data <dir> --out artifacts` reads six Embat CSVs from `<dir>` (`companies`, `groups`, `banking_products`, `transactions`, `invoices`, `debt_products`) and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json`.
 `uv run pytest` runs the pipeline tests; `pipeline/data` and `pipeline/artifacts` are gitignored.
 
 The agent serves the artifacts from the D1 binding `DB` (migrations in `apps/agent/migrations/`, one row per company with the summary and the whole series as JSON).

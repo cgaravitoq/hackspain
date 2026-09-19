@@ -22,7 +22,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 | `bun run test` | Vitest per workspace, never reaches the network |
 | `bun --filter @hackspain/agent types` | Regenerates `worker-configuration.d.ts` after editing `wrangler.jsonc` |
 | `bun --filter @hackspain/agent load -- --local` | Validates `pipeline/artifacts` with the shared schemas, writes `artifacts/xray.sql`, applies migrations and loads the local D1 (`-- --env staging` targets staging) |
-| `cd pipeline && uv run xray score --data <dir> --out artifacts` | Scores the nine Embat CSVs and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json` |
+| `cd pipeline && uv run xray score --data <dir> --out artifacts` | Reads six Embat CSVs from `<dir>` (`companies`, `groups`, `banking_products`, `transactions`, `invoices`, `debt_products`) and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json` |
 | `cd pipeline && uv run pytest` | Pipeline tests |
 
 ## Layout
