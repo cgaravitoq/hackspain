@@ -6,7 +6,7 @@ import { company, fakeApi } from "./fixtures.ts";
 const sendConfirmation = vi.fn();
 
 const ChatPanelStub = {
-  props: ["companyId", "alerts", "role", "confirmedCommitment"],
+  props: ["companyId", "compareIds", "alerts", "role", "confirmedCommitment"],
   emits: ["close", "compare", "report", "commitment", "draft"],
   methods: { sendConfirmation },
   template:
@@ -565,6 +565,69 @@ describe("App", () => {
       expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_C"]),
     );
     expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("keeps the selected company on screen when chat compares it with another", async () => {
+    const seen: string[] = [];
+    const base = fakeApi(seen);
+    const chatBodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), "https://web.test");
+        if (url.pathname !== "/api/chat") {
+          return base(input);
+        }
+        chatBodies.push(String(init?.body));
+        return Promise.resolve(
+          sse([
+            { type: "start" },
+            {
+              type: "tool-input-available",
+              toolCallId: "compare-1",
+              toolName: "compare",
+              input: { company_ids: ["COMP_B", "COMP_A"] },
+            },
+            {
+              type: "tool-output-available",
+              toolCallId: "compare-1",
+              output: {
+                months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+                companies: [
+                  company("COMP_B", "GROUP_1"),
+                  company("COMP_A", "GROUP_1"),
+                ],
+              },
+            },
+            { type: "finish" },
+          ]),
+        );
+      },
+    );
+    mounted = mount(App, { attachTo: document.body });
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    await wrapper.find("#chat-input").setValue("Compara ambas");
+    await wrapper.find(".chat form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_A"]),
+    );
+    expect(JSON.parse(chatBodies[0] ?? "{}").compare_ids).toEqual([
+      "COMP_A",
+      "COMP_B",
+    ]);
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(window.location.hash).toBe("#COMP_A");
+    expect(seen.filter((path) => path === "/api/companies/COMP_A")).toEqual([
+      "/api/companies/COMP_A",
+    ]);
+    expect(seen).not.toContain("/api/companies/COMP_B");
   });
 
   it("opens the company and role returned by a report in chat", async () => {

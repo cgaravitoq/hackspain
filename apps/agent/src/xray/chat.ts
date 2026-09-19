@@ -119,9 +119,19 @@ Cita cada importe con el campo amount, ya expresado en su divisa (currency), con
 Responde solo con las relaciones que devolvió la herramienta relations; si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer.
 Para una pregunta de grupo («¿qué empresas mueven dinero con este grupo?»), llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo.`;
 
+function chartContext(compareIds: string[]): string[] {
+  if (compareIds.length < 2) {
+    return [];
+  }
+  return [
+    `Empresas en el gráfico: ${compareIds.join(", ")}. Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente esos ids en ese orden.`,
+  ];
+}
+
 async function context(
   tools: Tools,
   companyId: string | undefined,
+  compareIds: string[],
 ): Promise<string> {
   if (!companyId) {
     return "No hay empresa en pantalla. Usa las herramientas para consultar cifras.";
@@ -136,6 +146,7 @@ async function context(
     .join(" ");
   return [
     `Empresa en pantalla: ${companyId}.`,
+    ...chartContext(compareIds),
     `${explanation.state_label}, score ${explanation.score} en ${explanation.month}. ${drivers}`,
     `Acción: ${explanation.action}`,
   ].join("\n");
@@ -188,7 +199,7 @@ export async function chat(
       : {};
   const result = streamText({
     model,
-    system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}${confirmed && companyId ? `\n\n${confirmedContext(companyId, confirmed)}` : ""}`,
+    system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id, request.compare_ids ?? [])}${confirmed && companyId ? `\n\n${confirmedContext(companyId, confirmed)}` : ""}`,
     messages: await convertToModelMessages(messages),
     tools: {
       draft_commitment: tool({

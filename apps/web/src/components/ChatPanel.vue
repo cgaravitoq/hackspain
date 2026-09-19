@@ -21,6 +21,7 @@ import { ALERTS_LIMIT } from "../api.ts";
 const props = withDefaults(
   defineProps<{
     companyId: string;
+    compareIds: string[];
     alerts: Alert[];
     role: Role;
     confirmedCommitment?: CommitmentRequest | null;
@@ -43,6 +44,7 @@ const chat = new Chat({
     api: "/api/chat",
     body: () => ({
       company_id: props.companyId,
+      compare_ids: props.compareIds.length > 1 ? props.compareIds : undefined,
       role: props.role,
       confirmed_commitment: props.confirmedCommitment ?? undefined,
     }),

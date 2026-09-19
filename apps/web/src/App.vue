@@ -193,7 +193,9 @@ function setComparison(companyIds: string[]) {
 
 function replaceComparison(companyIds: string[]) {
   compareIds.value = companyIds;
-  selected.value = companyIds[0] ?? selected.value;
+  if (!companyIds.includes(selected.value)) {
+    selected.value = companyIds[0] ?? selected.value;
+  }
 }
 
 function openReport(
@@ -346,6 +348,7 @@ onUnmounted(() => {
       v-if="selected"
       ref="tellMe"
       :company-id="selected"
+      :compare-ids="compareIds"
       :alerts="alerts"
       :role="role"
       :confirmed-commitment="confirmedCommitment"

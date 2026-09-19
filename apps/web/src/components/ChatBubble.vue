@@ -16,6 +16,7 @@ type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
 
 const props = defineProps<{
   companyId: string;
+  compareIds: string[];
   alerts: Alert[];
   role: Role;
   confirmedCommitment?: CommitmentRequest | null;
@@ -93,6 +94,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
     <ChatPanel
       ref="chatPanel"
       :company-id="props.companyId"
+      :compare-ids="props.compareIds"
       :alerts="props.alerts"
       :role="props.role"
       :confirmed-commitment="props.confirmedCommitment"

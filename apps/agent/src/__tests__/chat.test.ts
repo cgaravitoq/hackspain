@@ -82,7 +82,7 @@ function toolCall(
 
 function ask(
   model: MockLanguageModelV4,
-  body: { company_id?: string; role?: Role },
+  body: { company_id?: string; compare_ids?: string[]; role?: Role },
 ) {
   return createApp({ model: () => model }).request(
     "/chat",
@@ -196,6 +196,27 @@ describe("POST /chat", () => {
     expect(system).not.toContain("Radiografía:");
     expect(system).not.toContain("Qué cambió:");
     expect(system).not.toContain('"state_label"');
+  });
+
+  it("tells the model which companies the chart compares, in order", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    const response = await ask(model, {
+      company_id: "COMP_A",
+      compare_ids: ["COMP_A", "COMP_B"],
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("ok");
+    const system = systemPrompt(model, 0);
+    expect(system).toContain("Empresa en pantalla: COMP_A");
+    expect(system).toContain(
+      'Empresas en el gráfico: COMP_A, COMP_B. Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente esos ids en ese orden.',
+    );
+  });
+
+  it("names no chart companies when the request carries none", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    await ask(model, { company_id: "COMP_A" });
+    expect(systemPrompt(model, 0)).not.toContain("Empresas en el gráfico");
   });
 
   it("adds the selected financial role guidance to the system prompt", async () => {
