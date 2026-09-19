@@ -1,5 +1,6 @@
 import {
   type Alert,
+  type Backtest,
   type CompanyDetail,
   type Group,
   type Meta,
@@ -82,6 +83,7 @@ export function company(
     throw new Error("a company needs at least one month");
   }
   return {
+    rule_version: "xray-score/0.1",
     company_id: id,
     group_id: groupId,
     currency: "EUR",
@@ -158,6 +160,7 @@ export const group: Group = {
 
 export const alerts: Alert[] = [
   {
+    rule_version: "xray-score/0.1",
     company_id: "COMP_A",
     group_id: "GROUP_1",
     month: "2026-08",
@@ -170,6 +173,7 @@ export const alerts: Alert[] = [
       "Cobros 40.000 € frente a pagos 100.000 € en 2026-08: cobertura 0.40",
   },
   {
+    rule_version: "xray-score/0.1",
     company_id: "COMP_C",
     group_id: "GROUP_2",
     month: "2026-08",
@@ -183,9 +187,45 @@ export const alerts: Alert[] = [
 ];
 
 export const meta: Meta = {
+  rule_version: "xray-score/0.1",
+  generated_at: "2026-09-19T13:04:05+00:00",
+  policy: {
+    lambda: 0.25,
+    adjustment_cap: 10,
+    momentum_threshold: 5,
+    volatility_factor: 0.75,
+    exit_factor: 0.5,
+    penalty_cap: 15,
+    healthy_level: 60,
+    persistence_months: 3,
+    window_months: 3,
+    min_months: 3,
+    momentum_min_months: 6,
+  },
   state_labels: { ...STATE_LABELS, falling: "en caída" },
   latest_month: "2026-08",
   holdout_groups: [],
+};
+
+export const backtest: Backtest = {
+  rule_version: "xray-score/0.1",
+  events: {
+    E1: {
+      events: 2,
+      with_prior_alert: 0,
+      coverage: 0.0,
+      median_lead_months: null,
+    },
+  },
+  alerts: {
+    evaluated: 1,
+    false_alarms: 0,
+    false_alarm_rate: 0.0,
+    reverted_within_3_months: 0,
+    revert_rate: 0.0,
+    censored: 1,
+  },
+  definitions: { E1: "cash stress" },
 };
 
 export async function seed(db: D1Database): Promise<void> {
@@ -230,6 +270,9 @@ export async function seed(db: D1Database): Promise<void> {
     db
       .prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)")
       .bind("meta", JSON.stringify(meta)),
+    db
+      .prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)")
+      .bind("backtest", JSON.stringify(backtest)),
   );
   await db.batch(statements);
 }
