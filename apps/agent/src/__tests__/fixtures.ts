@@ -127,7 +127,7 @@ export const ribera = company("COMP_0176", "GROUP_3", [
 
 export const meridian = company("COMP_0909", "GROUP_2", [
   { month: "2026-04", score: null, state: "not_evaluable", observed: false },
-  { month: "2026-05", score: 60.0, state: "stable" },
+  { month: "2026-05", score: null, state: "not_evaluable" },
   { month: "2026-06", score: null, state: "not_evaluable", observed: false },
   { month: "2026-07", score: 66.0, state: "stable" },
   { month: "2026-08", score: 64.5, state: "stable" },

@@ -49,6 +49,9 @@ describe("GET /compare", () => {
     expect(observedMonths(first)).toEqual(["2026-05", "2026-07", "2026-08"]);
     expect(observedMonths(second)).toEqual(["2026-06", "2026-07", "2026-08"]);
     expect(first?.series.map((entry) => entry.month)).toContain("2026-04");
+    expect(
+      first?.series.find((entry) => entry.month === "2026-05")?.score,
+    ).toBeNull();
     expect(comparison.months).toEqual([
       "2026-05",
       "2026-06",
