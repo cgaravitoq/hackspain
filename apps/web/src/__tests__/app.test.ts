@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
 import { company, fakeApi } from "./fixtures.ts";
 
@@ -30,8 +30,13 @@ function chips(wrapper: VueWrapper) {
     .map((chip) => chip.text().replace("×", "").trim());
 }
 
+beforeEach(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+});
+
 afterEach(() => {
   mounted?.unmount();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.location.hash = "";
 });
@@ -384,6 +389,37 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_A");
     expect(seen).not.toContain("/api/companies/COMP_B");
     expect(window.location.hash).toBe("#COMP_A");
+  });
+
+  it("opens the relation graph on the graph route and the radiography on a company route", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    window.location.hash = "graph";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-screen").exists()).toBe(true);
+    expect(wrapper.find(".layout").exists()).toBe(false);
+    expect(seen).toContain("/api/graph");
+    expect(seen).not.toContain("/api/companies/COMP_A");
+    window.location.hash = "COMP_B";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-screen").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("points the browser at the graph route from the header", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const graphTab = wrapper
+      .findAll(".route-tabs button")
+      .find((button) => button.text() === "Grafo");
+    await graphTab?.trigger("click");
+    expect(window.location.hash).toBe("#graph");
   });
 
   it("shows the failing endpoint when the bootstrap requests fail", async () => {
