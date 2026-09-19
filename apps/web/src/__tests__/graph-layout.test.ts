@@ -8,6 +8,7 @@ import {
   NODE_GAP,
   nodeAt,
   nodeRadius,
+  PADDING,
 } from "../graph-layout.ts";
 import { filterGraph, starGraph } from "./fixtures.ts";
 
@@ -53,6 +54,21 @@ describe("graph layout", () => {
       const gap = distance - link.source.radius - link.target.radius;
       expect(gap).toBeGreaterThanOrEqual((LINK_GAP - 6) * scale);
       expect(gap).toBeGreaterThan(2 * NODE_GAP * scale);
+    }
+  });
+
+  it("brings a graph wider than the canvas back inside the padding", () => {
+    const { layout, scale } = crowded();
+    expect(scale).toBeLessThan(1);
+    for (const { x, y, radius } of layout.positions.values()) {
+      expect(Math.round(x - radius)).toBeGreaterThanOrEqual(PADDING);
+      expect(Math.round(x + radius)).toBeLessThanOrEqual(
+        LAYOUT_WIDTH - PADDING,
+      );
+      expect(Math.round(y - radius)).toBeGreaterThanOrEqual(PADDING);
+      expect(Math.round(y + radius)).toBeLessThanOrEqual(
+        LAYOUT_HEIGHT - PADDING,
+      );
     }
   });
 
