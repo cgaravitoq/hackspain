@@ -17,7 +17,14 @@ const draft = ref("");
 const list = ref<HTMLElement | null>(null);
 
 watch(
-  () => chat.messages.flatMap((message) => message.parts).length,
+  () =>
+    chat.messages
+      .map((message) =>
+        message.parts
+          .map((part) => (part.type === "text" ? part.text : part.type))
+          .join(""),
+      )
+      .join(""),
   async () => {
     await nextTick();
     if (list.value) {

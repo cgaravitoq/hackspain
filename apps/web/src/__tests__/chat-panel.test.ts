@@ -63,4 +63,47 @@ describe("ChatPanel", () => {
     expect(body.messages[0].parts[0].text).toBe("¿Cómo está COMP_B?");
     expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
+
+  it("scrolls the message list down as the answer streams", async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) {
+        controller = stream;
+      },
+    });
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response(body, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts },
+    });
+    const list = wrapper.find(".messages").element;
+    let height = 0;
+    Object.defineProperty(list, "scrollHeight", { get: () => height });
+    await wrapper.find("input").setValue("hola");
+    await wrapper.find("form").trigger("submit");
+    controller.enqueue(
+      encoder.encode('data: {"type":"text-start","id":"t"}\n\n'),
+    );
+    await flushPromises();
+    height = 100;
+    controller.enqueue(
+      encoder.encode('data: {"type":"text-delta","id":"t","delta":"uno"}\n\n'),
+    );
+    await flushPromises();
+    await vi.waitFor(() => expect(list.scrollTop).toBe(100));
+    height = 400;
+    controller.enqueue(
+      encoder.encode('data: {"type":"text-delta","id":"t","delta":" dos"}\n\n'),
+    );
+    await flushPromises();
+    await vi.waitFor(() => expect(list.scrollTop).toBe(400));
+    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    controller.close();
+  });
 });
