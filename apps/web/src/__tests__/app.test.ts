@@ -1,18 +1,37 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
-import { fakeApi } from "./fixtures.ts";
+import { company, fakeApi } from "./fixtures.ts";
 
 const ChatPanelStub = {
-  props: ["companyId", "alerts"],
-  template: "<div class='chat-stub'>{{ companyId }}</div>",
+  props: ["companyId", "alerts", "role"],
+  template: "<div class='chat-stub'>{{ companyId }} {{ role }}</div>",
 };
 
+let mounted: VueWrapper | undefined;
+
 function mountApp() {
-  return mount(App, { global: { stubs: { ChatPanel: ChatPanelStub } } });
+  mounted = mount(App, { global: { stubs: { ChatPanel: ChatPanelStub } } });
+  return mounted;
+}
+
+async function selectRole(wrapper: VueWrapper, label: string) {
+  const tab = wrapper
+    .findAll(".role-tabs button")
+    .find((button) => button.text() === label);
+  await tab?.trigger("click");
+  await flushPromises();
+  await flushPromises();
+}
+
+function chips(wrapper: VueWrapper) {
+  return wrapper
+    .findAll(".compare-chip")
+    .map((chip) => chip.text().replace("×", "").trim());
 }
 
 afterEach(() => {
+  mounted?.unmount();
   vi.unstubAllGlobals();
   window.location.hash = "";
 });
@@ -42,7 +61,186 @@ describe("App", () => {
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
     expect(wrapper.findAll("svg circle")).toHaveLength(3);
-    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A");
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A financiero");
+  });
+
+  it("pins the treasurer to its company without search, alerts or comparison", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const before = seen.length;
+    await selectRole(wrapper, "Tesorero");
+    expect(seen).toContain("/api/companies/COMP_0176");
+    expect(seen.slice(before)).not.toContain("/api/compare");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.find(".search").exists()).toBe(false);
+    expect(wrapper.find(".alerts").exists()).toBe(false);
+    expect(wrapper.find(".compare-selector").exists()).toBe(false);
+    expect(wrapper.find(".compare-chip").exists()).toBe(false);
+  });
+
+  it("keeps the treasurer on its company when the hash changes", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await selectRole(wrapper, "Tesorero");
+    window.location.hash = "COMP_B";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(window.location.hash).toBe("#COMP_0176");
+  });
+
+  it("keeps the treasurer on its company when a group member is clicked", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await selectRole(wrapper, "Tesorero");
+    await wrapper.findAll(".group button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(window.location.hash).toBe("#COMP_0176");
+    expect(seen).not.toContain("/api/companies/COMP_B");
+    await selectRole(wrapper, "Financiero");
+    expect(chips(wrapper)).toEqual(["COMP_0176"]);
+  });
+
+  it("draws one series when the treasurer takes over the company already on screen", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    window.location.hash = "COMP_0176";
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    window.location.hash = "COMP_0176";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_0176", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    await selectRole(wrapper, "Tesorero");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "Talleres Ribera",
+    ]);
+  });
+
+  it("draws only the treasurer's series after comparing three companies", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(3);
+    await selectRole(wrapper, "Tesorero");
+    expect(wrapper.find("h1").text()).toBe("COMP_0176");
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "Talleres Ribera",
+    ]);
+  });
+
+  it("replaces the oldest chip when a fourth company is opened", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    window.location.hash = "COMP_D";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_D");
+    expect(chips(wrapper)).toEqual(["COMP_B", "COMP_C", "COMP_D"]);
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "COMP_B",
+      "COMP_C",
+      "COMP_D",
+    ]);
+  });
+
+  it("keeps the newest comparison when an earlier response arrives late", async () => {
+    const base = fakeApi([]);
+    const pending: { ids: string[]; answer: (response: Response) => void }[] =
+      [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      if (url.pathname !== "/api/compare") {
+        return base(input);
+      }
+      return new Promise((answer) => {
+        pending.push({
+          ids: url.searchParams.get("ids")?.split(",") ?? [],
+          answer,
+        });
+      });
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(pending.map((request) => request.ids)).toEqual([
+      ["COMP_A"],
+      ["COMP_A", "COMP_B"],
+    ]);
+    for (const request of [...pending].reverse()) {
+      request.answer(
+        Response.json({
+          months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+          companies: request.ids.map((id) => company(id, "GROUP_1")),
+        }),
+      );
+      await flushPromises();
+    }
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "COMP_A",
+      "COMP_B",
+    ]);
+  });
+
+  it("does not duplicate a chip when the company on screen is opened again", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    await wrapper.findAll(".alerts button")[0]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(2);
   });
 
   it("opens the company named in the URL hash", async () => {
@@ -73,6 +271,88 @@ describe("App", () => {
     expect(wrapper.find(".score").text()).toBe("12.3");
     expect(wrapper.find(".error").text()).toBe("/groups/GROUP_1 answered 500");
     expect(wrapper.text()).not.toContain("grupo en tensión");
+  });
+
+  it("adds companies from search and alerts and removes their chart series", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(3);
+    await wrapper.find('button[aria-label="Quitar COMP_B"]').trigger("click");
+    await flushPromises();
+    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    expect(seen).toContain("/api/compare");
+  });
+
+  it("renders the role report with figures and a PDF export", async () => {
+    const requested: string[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      requested.push(String(input));
+      return base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".report-summary").text()).toBe(
+      "La tesorería necesita atención inmediata.",
+    );
+    expect(wrapper.find(".report-section h3").text()).toBe("Situación actual");
+    expect(
+      wrapper.findAll(".report-body p").map((item) => item.text()),
+    ).toEqual([
+      "Los cobros han caído.",
+      "Las facturas vencidas presionan la caja.",
+    ]);
+    expect(wrapper.find(".report-section table").text()).toContain(
+      "Cobros40.000EUR",
+    );
+    const exportLink = wrapper.find(".report-export");
+    expect(exportLink.attributes("href")).toBe(
+      "/api/companies/COMP_A/report.pdf?role=financiero",
+    );
+    expect(exportLink.attributes("target")).toBe("_blank");
+    const salesTab = wrapper
+      .findAll(".role-tabs button")
+      .find((button) => button.text() === "Ventas");
+    await salesTab?.trigger("click");
+    await flushPromises();
+    expect(requested).toContain("/api/companies/COMP_A/report?role=ventas");
+    expect(wrapper.find(".report-export").attributes("href")).toBe(
+      "/api/companies/COMP_A/report.pdf?role=ventas",
+    );
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_A ventas");
+  });
+
+  it("keeps the radiography visible when its report fails", async () => {
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      return url.pathname.endsWith("/report")
+        ? Promise.resolve(new Response("down", { status: 500 }))
+        : base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(wrapper.find(".report .error p").text()).toBe(
+      "No se pudo generar el informe",
+    );
+    expect(wrapper.find(".report .error small").text()).toBe(
+      "/companies/COMP_A/report?role=financiero answered 500",
+    );
   });
 
   it("opens the first company matching a typed id prefix", async () => {
@@ -140,6 +420,7 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
     expect(seen).toContain("/api/companies/COMP_C");
+    expect(seen).toContain("/api/companies/COMP_C/report");
     expect(wrapper.find("h1").text()).toBe("COMP_C");
     expect(window.location.hash).toBe("#COMP_C");
   });

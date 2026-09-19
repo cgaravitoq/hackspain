@@ -13,7 +13,11 @@ import {
 } from "../format.ts";
 import Sparkline from "./Sparkline.vue";
 
-const props = defineProps<{ company: CompanyDetail; explanation: Explain }>();
+const props = defineProps<{
+  company: CompanyDetail;
+  explanation: Explain;
+  comparison: CompanyDetail[];
+}>();
 
 const previous = computed(() => {
   const scored = props.company.series.filter((entry) => entry.score !== null);
@@ -64,7 +68,7 @@ const contextDrivers = computed(() =>
       </div>
     </header>
 
-    <Sparkline :series="company.series" />
+    <Sparkline :companies="comparison" />
 
     <div class="columns">
       <div>
