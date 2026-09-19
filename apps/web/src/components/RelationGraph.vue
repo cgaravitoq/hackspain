@@ -183,6 +183,17 @@ const layout = computed(() =>
   layoutGraph(visible.value.nodes, visible.value.edges),
 );
 
+const nodeNames = computed(
+  () =>
+    new Map(
+      (graph.value?.nodes ?? []).map((node) => [node.company_id, node.name]),
+    ),
+);
+
+function nodeName(companyId: string): string {
+  return nodeNames.value.get(companyId) ?? companyId;
+}
+
 const counter = computed(() => {
   const { nodes, edges } = visible.value;
   const companies = nodes.length === 1 ? "empresa" : "empresas";
@@ -197,7 +208,7 @@ const tooltip = computed(() => {
   if (hover.value.kind === "node") {
     const { node } = hover.value;
     return {
-      title: node.company_id,
+      title: node.name,
       lines: [
         `Grupo ${node.group_id ?? "sin grupo"} · ${node.degree} ${node.degree === 1 ? "relación" : "relaciones"}`,
         `Score ${node.score === null ? "–" : node.score} · ${STATE_LABELS[node.state]}`,
@@ -206,7 +217,7 @@ const tooltip = computed(() => {
   }
   const { edge } = hover.value;
   return {
-    title: `${edge.source} → ${edge.target}`,
+    title: `${nodeName(edge.source)} → ${nodeName(edge.target)}`,
     lines: [
       `${TYPE_LABELS[edge.relation_type]} · ${SUBTYPE_LABELS[edge.subtype]}`,
       `confianza ${CONFIDENCE_LABELS[edge.confidence]} · ${edge.matches} coincidencias · ${SCOPE_LABELS[edge.scope]}`,
@@ -299,8 +310,7 @@ function paintLabels(
   context.textAlign = "center";
   context.textBaseline = "middle";
   for (const { node, x, y, radius } of hubs) {
-    const width =
-      context.measureText(node.company_id).width + LABEL_PADDING * 2;
+    const width = context.measureText(node.name).width + LABEL_PADDING * 2;
     const box = {
       left: x - width / 2,
       right: x + width / 2,
@@ -316,7 +326,7 @@ function paintLabels(
     context.fillRect(box.left, box.top, width, LABEL_HEIGHT);
     context.globalAlpha = 1;
     context.fillStyle = palette.inkSoft;
-    context.fillText(node.company_id, x, (box.top + box.bottom) / 2);
+    context.fillText(node.name, x, (box.top + box.bottom) / 2);
   }
 }
 
@@ -684,7 +694,7 @@ onUnmounted(() => resizeObserver?.disconnect());
           id="graph-search"
           v-model="query"
           type="text"
-          placeholder="COMP_0077"
+          placeholder="Buscar por nombre"
         />
       </label>
       <label class="graph-toggle">
@@ -745,7 +755,7 @@ onUnmounted(() => resizeObserver?.disconnect());
           :style="panelStyle"
         >
           <header class="graph-panel-header">
-            <strong>{{ selectedNode.company_id }}</strong>
+            <strong>{{ selectedNode.name }}</strong>
             <button type="button" class="graph-panel-close" aria-label="Cerrar" @click="closePanel">
               ×
             </button>
@@ -772,8 +782,8 @@ onUnmounted(() => resizeObserver?.disconnect());
                   {{ edge.source === selectedNode.company_id ? "→" : "←" }}
                   {{
                     edge.source === selectedNode.company_id
-                      ? edge.target
-                      : edge.source
+                      ? nodeName(edge.target)
+                      : nodeName(edge.source)
                   }}
                 </span>
                 <span class="graph-panel-type">{{ TYPE_LABELS[edge.relation_type] }}</span>

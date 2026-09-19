@@ -22,7 +22,7 @@ const emit = defineEmits<{ select: [companyId: string] }>();
           :style="{ borderColor: STATE_COLORS[member.state] }"
           @click="emit('select', member.company_id)"
         >
-          <span class="id">{{ member.company_id }}</span>
+          <span class="id">{{ member.name }}</span>
           <span class="score">{{ member.score ?? "–" }}</span>
           <span class="state" :style="{ color: STATE_COLORS[member.state] }">{{ member.state_label }}</span>
           <span v-if="member.debt_share && member.debt_share >= 0.01" class="share">{{ Math.round(member.debt_share * 100) }} % deuda</span>

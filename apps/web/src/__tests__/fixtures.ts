@@ -152,7 +152,7 @@ export function company(id: string, groupId: string): CompanyDetail {
   return {
     rule_version: "xray-score/0.1",
     company_id: id,
-    name: id,
+    name: id === "COMP_0176" ? "Talleres Ribera" : id,
     group_id: groupId,
     currency: "EUR",
     scorable: true,
@@ -245,7 +245,7 @@ export function explain(id: string, groupId: string): Explain {
   };
 }
 
-export const companies = ["COMP_B", "COMP_A"].map((id) => {
+export const companies = ["COMP_B", "COMP_A", "COMP_C"].map((id) => {
   const { series: _series, ...summary } = company(id, "GROUP_1");
   return summary;
 });

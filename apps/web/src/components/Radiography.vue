@@ -33,9 +33,10 @@ const emit = defineEmits<{
 <template>
   <section class="radiography">
     <header class="head">
-      <h1>{{ company.company_id }}</h1>
+      <h1>{{ company.name }}</h1>
       <p class="meta">
-        {{ monthLabel(explanation.month) }} · {{ company.months_observed }} meses observados ·
+        {{ company.company_id }} · {{ monthLabel(explanation.month) }} ·
+        {{ company.months_observed }} meses observados ·
         {{ CONFIDENCE_LABELS[explanation.confidence] }}
         <span v-if="company.holdout" class="holdout">held-out</span>
       </p>
