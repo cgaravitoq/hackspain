@@ -107,19 +107,23 @@ describe("POST /mcp", () => {
     expect(changed.state_since).toBe("2026-06");
   });
 
-  it("compares up to three companies in request order", async () => {
+  it("compares up to three companies in request order on their observed months", async () => {
     const response = await rpc("tools/call", {
       name: "compare",
-      arguments: { company_ids: ["COMP_B", "COMP_A"] },
+      arguments: { company_ids: ["COMP_0909", "COMP_0176"] },
     });
     const body = rpcResult.parse(await response.json());
     const comparison = compareSchema.parse(
       JSON.parse(body.result.content[0]?.text ?? ""),
     );
     expect(comparison.companies.map((company) => company.company_id)).toEqual([
-      "COMP_B",
-      "COMP_A",
+      "COMP_0909",
+      "COMP_0176",
     ]);
+    expect(
+      comparison.companies[0]?.series.find((entry) => entry.month === "2026-04")
+        ?.observed,
+    ).toBe(false);
     expect(comparison.months).toEqual([
       "2026-05",
       "2026-06",

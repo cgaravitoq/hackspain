@@ -8,7 +8,12 @@ import {
   type State,
 } from "@hackspain/shared";
 
-type Month = { month: string; score: number | null; state: State };
+type Month = {
+  month: string;
+  score: number | null;
+  state: State;
+  observed?: boolean;
+};
 
 function entry(month: Month, previous: Month | undefined): MonthEntry {
   const score = month.score;
@@ -20,7 +25,7 @@ function entry(month: Month, previous: Month | undefined): MonthEntry {
   const scored = score !== null;
   return {
     month: month.month,
-    observed: true,
+    observed: month.observed ?? true,
     level: score,
     momentum: delta,
     adjustment: scored ? 0 : null,
@@ -82,7 +87,7 @@ export function company(
     currency: "EUR",
     scorable: latest.score !== null,
     holdout: false,
-    months_observed: months.length,
+    months_observed: months.filter((month) => month.observed !== false).length,
     debt_outstanding: 0,
     invoice_facts: {
       overdue_count: 2,
@@ -114,13 +119,16 @@ export const healthy = company("COMP_B", "GROUP_1", [
   { month: "2026-08", score: 91.0, state: "healthy" },
 ]);
 
-export const ribera = company("COMP_0176", "GROUP_1", [
+export const ribera = company("COMP_0176", "GROUP_3", [
   { month: "2026-06", score: 70.0, state: "stable" },
   { month: "2026-07", score: 72.5, state: "stable" },
   { month: "2026-08", score: 74.1, state: "stable" },
 ]);
 
 export const meridian = company("COMP_0909", "GROUP_2", [
+  { month: "2026-04", score: null, state: "not_evaluable", observed: false },
+  { month: "2026-05", score: 60.0, state: "stable" },
+  { month: "2026-06", score: null, state: "not_evaluable", observed: false },
   { month: "2026-07", score: 66.0, state: "stable" },
   { month: "2026-08", score: 64.5, state: "stable" },
 ]);

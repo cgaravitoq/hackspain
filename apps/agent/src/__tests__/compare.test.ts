@@ -1,5 +1,9 @@
 import { env, SELF } from "cloudflare:test";
-import { compareSchema, explainSchema } from "@hackspain/shared";
+import {
+  type CompanyDetail,
+  compareSchema,
+  explainSchema,
+} from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seed } from "./fixtures.ts";
@@ -8,17 +12,25 @@ beforeAll(() => seed(env.DB));
 
 const errorBody = z.object({ error: z.string() });
 
+function observedMonths(company: CompanyDetail | undefined) {
+  return company?.series
+    .filter((entry) => entry.observed)
+    .map((entry) => entry.month);
+}
+
 describe("GET /compare", () => {
   it("returns the companies in request order aligned on the union of observed months", async () => {
     const response = await SELF.fetch(
-      "https://agent.test/compare?ids=COMP_B,COMP_A",
+      "https://agent.test/compare?ids=COMP_0909,COMP_0176",
     );
     expect(response.status).toBe(200);
     const comparison = compareSchema.parse(await response.json());
-    expect(comparison.companies.map((company) => company.company_id)).toEqual([
-      "COMP_B",
-      "COMP_A",
-    ]);
+    const [first, second] = comparison.companies;
+    expect(first?.company_id).toBe("COMP_0909");
+    expect(second?.company_id).toBe("COMP_0176");
+    expect(observedMonths(first)).toEqual(["2026-05", "2026-07", "2026-08"]);
+    expect(observedMonths(second)).toEqual(["2026-06", "2026-07", "2026-08"]);
+    expect(first?.series.map((entry) => entry.month)).toContain("2026-04");
     expect(comparison.months).toEqual([
       "2026-05",
       "2026-06",
