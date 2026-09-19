@@ -1,13 +1,15 @@
 import type { Explain, State } from "@hackspain/shared";
 
-const euroFormat = new Intl.NumberFormat("es-ES", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
+export function money(value: number, currency: string): string {
+  return new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 export function euro(value: number): string {
-  return euroFormat.format(value);
+  return money(value, "EUR");
 }
 
 export function points(value: number | null): string {

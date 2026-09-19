@@ -11,7 +11,7 @@ import {
 } from "@hackspain/shared";
 import { computed, onMounted, ref, watch } from "vue";
 import { api } from "../api.ts";
-import { euro, STATE_COLORS } from "../format.ts";
+import { money, STATE_COLORS } from "../format.ts";
 import {
   edgeAt,
   LAYOUT_HEIGHT,
@@ -59,6 +59,10 @@ const EVIDENCE_LABELS: Record<RelationEdge["evidence_level"], string> = {
   invoice_mirror: "espejo de facturas",
   debt_balance_mirror: "espejo de deuda",
   shared_counterparty_id: "contraparte compartida",
+};
+
+const CLAIM_LABELS: Record<RelationEdge["claim_status"], string> = {
+  inferred: "inferida",
 };
 
 const TYPE_COLORS: Record<RelationType, string> = {
@@ -178,8 +182,8 @@ const tooltip = computed(() => {
     lines: [
       `${TYPE_LABELS[edge.relation_type]} · ${SUBTYPE_LABELS[edge.subtype]}`,
       `confianza ${CONFIDENCE_LABELS[edge.confidence]} · ${edge.matches} coincidencias · ${SCOPE_LABELS[edge.scope]}`,
-      `${euro(edge.amount_minor / 100)} · ${edge.first_date} a ${edge.last_date}`,
-      `evidencia ${EVIDENCE_LABELS[edge.evidence_level]} · inferida, identidad del proveedor sin confirmar`,
+      `${money(edge.amount_minor / 100, edge.currency)} · ${edge.first_date} a ${edge.last_date}`,
+      `evidencia ${EVIDENCE_LABELS[edge.evidence_level]} · ${CLAIM_LABELS[edge.claim_status]}, identidad del proveedor ${edge.provider_identity_confirmed ? "confirmada" : "sin confirmar"}`,
     ],
   };
 });
