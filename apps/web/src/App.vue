@@ -37,6 +37,7 @@ const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
 const query = ref("");
+let compareRequest = 0;
 
 async function load(companyId: string) {
   error.value = "";
@@ -116,12 +117,16 @@ watch(
 );
 
 watch(compareIds, async (ids) => {
+  const request = ++compareRequest;
   if (role.value === "tesorero" || ids.length === 0) {
     comparison.value = [];
     return;
   }
   try {
-    comparison.value = (await api.compare(ids)).companies;
+    const result = await api.compare(ids);
+    if (request === compareRequest) {
+      comparison.value = result.companies;
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   }

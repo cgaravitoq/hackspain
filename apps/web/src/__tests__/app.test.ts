@@ -1,7 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
-import { fakeApi } from "./fixtures.ts";
+import { company, fakeApi } from "./fixtures.ts";
 
 const ChatPanelStub = {
   props: ["companyId", "alerts", "role"],
@@ -180,6 +180,48 @@ describe("App", () => {
       "COMP_B",
       "COMP_C",
       "COMP_D",
+    ]);
+  });
+
+  it("keeps the newest comparison when an earlier response arrives late", async () => {
+    const base = fakeApi([]);
+    const pending: { ids: string[]; answer: (response: Response) => void }[] =
+      [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      if (url.pathname !== "/api/compare") {
+        return base(input);
+      }
+      return new Promise((answer) => {
+        pending.push({
+          ids: url.searchParams.get("ids")?.split(",") ?? [],
+          answer,
+        });
+      });
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(pending.map((request) => request.ids)).toEqual([
+      ["COMP_A"],
+      ["COMP_A", "COMP_B"],
+    ]);
+    for (const request of [...pending].reverse()) {
+      request.answer(
+        Response.json({
+          months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+          companies: request.ids.map((id) => company(id, "GROUP_1")),
+        }),
+      );
+      await flushPromises();
+    }
+    expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
+      "COMP_A",
+      "COMP_B",
     ]);
   });
 
