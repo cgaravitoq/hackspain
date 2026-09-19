@@ -126,10 +126,11 @@ export async function seedRelations(
       const { series: _series, ...summary } = detail;
       return db
         .prepare(
-          "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+          "INSERT INTO companies (company_id, name, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(
           detail.company_id,
+          detail.name,
           detail.group_id,
           detail.scorable ? 1 : 0,
           detail.latest.month,

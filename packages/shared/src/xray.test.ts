@@ -184,6 +184,7 @@ const demoMeta = {
 const demoReport = {
   schema_version: "human-v2",
   company_id: "COMP_0176",
+  company_name: "Talleres Ribera",
   month: "2026-08",
   role: "tesorero",
   rule_version: "xray-report/0.1",
@@ -454,6 +455,7 @@ describe("xray contracts", () => {
   it("rejects an explanation whose changed entry uses a code the pipeline does not emit", () => {
     const result = explainSchema.safeParse({
       company_id: "COMP_0001",
+      name: "Transportes Navarro",
       group_id: null,
       month: "2026-08",
       score: 50,
@@ -942,6 +944,7 @@ describe("xray contracts", () => {
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["schema_version"],
       ["company_id"],
+      ["company_name"],
       ["month"],
       ["role"],
       ["rule_version"],

@@ -190,6 +190,7 @@ export function company(id: string, groupId: string): CompanyDetail {
 export function explain(id: string, groupId: string): Explain {
   return {
     company_id: id,
+    name: id,
     group_id: groupId,
     month: "2026-08",
     score: 12.3,
@@ -252,6 +253,7 @@ export const companies = ["COMP_B", "COMP_A"].map((id) => {
 export const report: Report = {
   schema_version: "human-v2",
   company_id: "COMP_A",
+  company_name: "Industrias Ebro",
   month: "2026-08",
   role: "financiero",
   rule_version: "xray-score/0.1",

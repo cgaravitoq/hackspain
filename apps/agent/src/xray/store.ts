@@ -28,6 +28,11 @@ import type { z } from "zod";
 
 type PayloadRow = { payload: string };
 
+type CompanyNameRow = {
+  company_id: string;
+  name: string;
+};
+
 type AlertKind = Alert["kind"];
 
 type CompanyFilter = {
@@ -72,6 +77,14 @@ const RELATION_NODES_QUERY =
 const COMPANY_RELATIONS_QUERY =
   "SELECT relations.payload AS payload, counterpart.company_id AS counterpart_company_id, counterpart.group_id AS counterpart_group_id, counterpart_company.score AS counterpart_score, counterpart_company.state AS counterpart_state FROM relations JOIN relation_nodes AS counterpart ON counterpart.company_id = CASE WHEN relations.source = ?1 THEN relations.target ELSE relations.source END JOIN companies AS counterpart_company ON counterpart_company.company_id = counterpart.company_id WHERE (relations.source = ?1 OR relations.target = ?1) AND (?2 IS NULL OR relations.relation_type = ?2) ORDER BY relations.position";
 
+function normalizeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
 function nodeOf(row: RelationNodeRow): RelationNode {
   return relationNodeSchema.parse({
     ...JSON.parse(row.payload),
@@ -94,6 +107,31 @@ export function createStore(db: D1Database) {
   }
 
   return {
+    async resolveCompany(value: string): Promise<string> {
+      const requested = value.trim();
+      if (/^COMP_[A-Z0-9]+$/u.test(requested)) {
+        return requested;
+      }
+      const normalized = normalizeName(requested);
+      const { results } = await db
+        .prepare("SELECT company_id, name FROM companies ORDER BY company_id")
+        .all<CompanyNameRow>();
+      return (
+        results.find(
+          (company) =>
+            normalized !== "" && normalizeName(company.name) === normalized,
+        )?.company_id ??
+        results.find(
+          (company) =>
+            normalized !== "" &&
+            normalizeName(company.name).startsWith(normalized),
+        )?.company_id ??
+        results.find((company) => company.company_id === requested)
+          ?.company_id ??
+        requested
+      );
+    },
+
     async companies(filter: CompanyFilter): Promise<CompanySummary[]> {
       const { results } = await db
         .prepare(

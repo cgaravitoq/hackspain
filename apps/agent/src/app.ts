@@ -28,7 +28,7 @@ import {
 import { createReportTool } from "./xray/report-tool.ts";
 import { simulateCompany, simulateQuery } from "./xray/simulate.ts";
 import { createStore } from "./xray/store.ts";
-import { createTools, resolveCompanyId } from "./xray/tools.ts";
+import { createTools } from "./xray/tools.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
@@ -101,8 +101,9 @@ export function createApp(options: AppOptions = {}) {
   });
 
   app.get("/companies/:id/commitment-context", async (context) => {
-    const company = await createStore(context.env.DB).company(
-      resolveCompanyId(context.req.param("id")),
+    const store = createStore(context.env.DB);
+    const company = await store.company(
+      await store.resolveCompany(context.req.param("id")),
     );
     return company
       ? context.json(commitmentContext(company))

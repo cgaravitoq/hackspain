@@ -1,9 +1,4 @@
-import {
-  DEMO_COMPANY_NAMES,
-  type Report,
-  type Role,
-  reportSchema,
-} from "@hackspain/shared";
+import { type Report, type Role, reportSchema } from "@hackspain/shared";
 import { generateText, type LanguageModel, Output } from "ai";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -30,24 +25,9 @@ const narrativeSchema = z.strictObject({
   next_steps: z.array(z.string().min(1).max(300)).max(2),
 });
 
-export function resolveCompany(company: string): string {
-  return (
-    Object.entries(DEMO_COMPANY_NAMES).find(
-      ([name]) => name === company,
-    )?.[1] ?? company
-  );
-}
-
-export function companyName(companyId: string): string {
-  return (
-    Object.entries(DEMO_COMPANY_NAMES).find(
-      ([, id]) => id === companyId,
-    )?.[0] ?? companyId
-  );
-}
-
-export async function reportSources(db: D1Database, companyId: string) {
+export async function reportSources(db: D1Database, requested: string) {
   const store = createStore(db);
+  const companyId = await store.resolveCompany(requested);
   const company = await store.company(companyId);
   if (!company) {
     throw new HTTPException(404, { message: "Unknown company" });
@@ -129,6 +109,7 @@ function assemble(
   return reportSchema.parse({
     schema_version: "human-v2",
     company_id: e.company_id,
+    company_name: sources.company.name,
     month: e.month,
     role,
     rule_version: e.evidence.rule_version,
@@ -151,10 +132,11 @@ function cachedReport(body: string): Report | null {
 export async function loadReport(
   db: D1Database,
   model: () => LanguageModel,
-  companyId: string,
+  requested: string,
   role: Role,
 ): Promise<Report> {
-  const sources = await reportSources(db, companyId);
+  const sources = await reportSources(db, requested);
+  const companyId = sources.company.company_id;
   const { month, evidence } = sources.explanation;
   const cacheVersion = reportCacheVersion(
     evidence.rule_version,
@@ -170,7 +152,7 @@ export async function loadReport(
   if (hit) {
     return hit;
   }
-  const facts = reportFacts(sources, companyName(companyId));
+  const facts = reportFacts(sources, sources.company.name);
   let narrative: Narrative | null = null;
   try {
     narrative = await narrate(model(), role, facts);

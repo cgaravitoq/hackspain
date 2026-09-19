@@ -6,7 +6,6 @@ import type {
   SimulateScenario,
 } from "@hackspain/shared";
 import { z } from "zod";
-import { resolveCompany } from "./report.ts";
 import type { Store } from "./store.ts";
 
 const OBSERVED_MONTHS = 3;
@@ -309,7 +308,9 @@ export async function simulateCompany(
   store: Store,
   input: SimulateInput,
 ): Promise<Simulate | { error: string }> {
-  const company = await store.company(resolveCompany(input.company));
+  const company = await store.company(
+    await store.resolveCompany(input.company),
+  );
   if (!company) {
     return { error: "Unknown company" };
   }

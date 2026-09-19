@@ -274,6 +274,7 @@ export type Diagnosis = z.infer<typeof diagnosisSchema>;
 
 export const explainSchema = z.object({
   company_id: z.string(),
+  name: z.string().min(1),
   group_id: z.string().nullable(),
   month: z.string(),
   score: z.number().nullable(),
@@ -394,6 +395,7 @@ export type CommitmentResponse = z.infer<typeof commitmentResponseSchema>;
 export const reportSchema = z.object({
   schema_version: z.literal("human-v2"),
   company_id: z.string(),
+  company_name: z.string().min(1),
   month: z.string(),
   role: roleSchema,
   rule_version: z.string(),

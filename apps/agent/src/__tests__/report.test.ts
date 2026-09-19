@@ -214,7 +214,7 @@ describe("GET /companies/:id/report.pdf", () => {
       ]) {
         expect(request.html).not.toContain(technical);
       }
-      expect(request.pdfOptions.headerTemplate).toContain("COMP_A");
+      expect(request.pdfOptions.headerTemplate).toContain("Industrias Ebro");
       expect(request.pdfOptions.footerTemplate).toContain('class="pageNumber"');
       expect(request.pdfOptions.footerTemplate).toContain('class="totalPages"');
       expect(request.rejectRequestPattern).toEqual([".*"]);
@@ -601,9 +601,14 @@ describe("GET /companies/:id/report", () => {
     detail.invoice_facts = {};
     detail.group_id = null;
     await env.DB.prepare(
-      "INSERT INTO companies SELECT ?, NULL, 0, '2026-08', NULL, 'not_evaluable', ?, ? FROM companies WHERE company_id = 'COMP_A'",
+      "INSERT INTO companies SELECT ?, NULL, 0, '2026-08', NULL, 'not_evaluable', ?, ?, ? FROM companies WHERE company_id = 'COMP_A'",
     )
-      .bind(detail.company_id, JSON.stringify(detail), JSON.stringify(detail))
+      .bind(
+        detail.company_id,
+        JSON.stringify(detail),
+        JSON.stringify(detail),
+        detail.name,
+      )
       .run();
     const model = new MockLanguageModelV4({
       doGenerate: () => Promise.reject(new Error("offline")),
@@ -624,7 +629,7 @@ describe("GET /companies/:id/report", () => {
 
   it("separates cached reports by role, rule version and month", async () => {
     await env.DB.prepare(
-      "INSERT INTO companies SELECT 'COMP_CACHE', group_id, scorable, month, score, state, json_set(summary, '$.company_id', 'COMP_CACHE'), json_set(detail, '$.company_id', 'COMP_CACHE') FROM companies WHERE company_id = 'COMP_A'",
+      "INSERT INTO companies SELECT 'COMP_CACHE', group_id, scorable, month, score, state, json_set(summary, '$.company_id', 'COMP_CACHE'), json_set(detail, '$.company_id', 'COMP_CACHE'), 'Cache Company' FROM companies WHERE company_id = 'COMP_A'",
     ).run();
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),

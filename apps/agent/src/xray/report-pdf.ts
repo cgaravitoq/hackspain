@@ -1,6 +1,6 @@
 import type { Report } from "@hackspain/shared";
 import { HTTPException } from "hono/http-exception";
-import { companyName, reportCacheVersion } from "./report.ts";
+import { reportCacheVersion } from "./report.ts";
 import { escapeHtml, renderReportHtml, reportId } from "./report-html.ts";
 
 export type ReportBrowser = {
@@ -47,7 +47,7 @@ export async function reportPdf(
       format: "a4",
       printBackground: true,
       displayHeaderFooter: true,
-      headerTemplate: `<div style="font-family:Arial;font-size:8px;width:100%;padding:0 16mm;color:#4d6470">X RAY · ${escapeHtml(companyName(report.company_id))} · ${escapeHtml(report.month)}</div>`,
+      headerTemplate: `<div style="font-family:Arial;font-size:8px;width:100%;padding:0 16mm;color:#4d6470">X RAY · ${escapeHtml(report.company_name)} · ${escapeHtml(report.month)}</div>`,
       footerTemplate: `<div style="font-family:Arial;font-size:8px;width:100%;padding:0 16mm;color:#4d6470;display:flex;justify-content:space-between"><span>${escapeHtml(reportId(report))} · Confidencial</span><span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span></div>`,
       margin: { top: "22mm", bottom: "18mm", left: "16mm", right: "16mm" },
     },

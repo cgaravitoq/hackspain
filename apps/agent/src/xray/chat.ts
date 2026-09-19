@@ -18,7 +18,6 @@ import {
   validateUIMessages,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import { resolveCompany } from "./report.ts";
 import {
   type ReportTool,
   reportDescription,
@@ -32,8 +31,6 @@ import {
 import type { Store } from "./store.ts";
 import {
   createTools,
-  draftCommitment,
-  resolveCompanyId,
   type Tools,
   toolDescriptions,
   toolInputs,
@@ -119,12 +116,12 @@ Cita cada importe con el campo amount, ya expresado en su divisa (currency), con
 Responde solo con las relaciones que devolvió la herramienta relations; si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer.
 Para una pregunta de grupo («¿qué empresas mueven dinero con este grupo?»), llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo.`;
 
-function chartContext(compareIds: string[]): string[] {
+function chartContext(companies: string[], compareIds: string[]): string[] {
   if (compareIds.length < 2) {
     return [];
   }
   return [
-    `Empresas en el gráfico: ${compareIds.join(", ")}. Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente esos ids en ese orden.`,
+    `Empresas en el gráfico: ${companies.join(", ")}. Si piden comparar las empresas del gráfico o "ambas", llama a compare con exactamente estos ids en este orden: ${compareIds.join(", ")}.`,
   ];
 }
 
@@ -144,9 +141,19 @@ async function context(
     .slice(0, 3)
     .map((driver) => driver.text)
     .join(" ");
+  const comparison =
+    compareIds.length >= 2
+      ? await tools.compare({ company_ids: compareIds })
+      : null;
+  const comparedNames =
+    comparison && !("error" in comparison)
+      ? comparison.companies.map(
+          (company) => `${company.name} (${company.company_id})`,
+        )
+      : compareIds;
   return [
-    `Empresa en pantalla: ${companyId}.`,
-    ...chartContext(compareIds),
+    `Empresa en pantalla: ${explanation.name} (${explanation.company_id}).`,
+    ...chartContext(comparedNames, compareIds),
     `${explanation.state_label}, score ${explanation.score} en ${explanation.month}. ${drivers}`,
     `Acción: ${explanation.action}`,
   ].join("\n");
@@ -163,7 +170,7 @@ export async function chat(
   const messages = await validateUIMessages({ messages: request.messages });
   const confirmed = request.confirmed_commitment;
   const companyId = request.company_id
-    ? resolveCompanyId(request.company_id)
+    ? await store.resolveCompany(request.company_id)
     : undefined;
   if (
     confirmed &&
@@ -181,7 +188,7 @@ export async function chat(
             execute: async (input) => {
               const { company_id: requested, ...proposed } = input;
               if (
-                resolveCompanyId(requested) !== companyId ||
+                (await store.resolveCompany(requested)) !== companyId ||
                 !sameOperation(proposed, confirmed)
               ) {
                 return {
@@ -199,13 +206,13 @@ export async function chat(
       : {};
   const result = streamText({
     model,
-    system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id, request.compare_ids ?? [])}${confirmed && companyId ? `\n\n${confirmedContext(companyId, confirmed)}` : ""}`,
+    system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, companyId, request.compare_ids ?? [])}${confirmed && companyId ? `\n\n${confirmedContext(companyId, confirmed)}` : ""}`,
     messages: await convertToModelMessages(messages),
     tools: {
       draft_commitment: tool({
         description: toolDescriptions.draft_commitment,
         inputSchema: toolInputs.draft_commitment,
-        execute: async (input) => draftCommitment(input),
+        execute: tools.draft_commitment,
       }),
       ...simulation,
       report: tool({
@@ -213,7 +220,7 @@ export async function chat(
         inputSchema: chatReportInput,
         execute: async (input) => {
           const reportRole = input.role ?? role;
-          const companyId = resolveCompany(input.company);
+          const companyId = await store.resolveCompany(input.company);
           const { url } = await report({ ...input, role: reportRole });
           return {
             company_id: companyId,

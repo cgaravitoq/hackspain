@@ -1,16 +1,11 @@
 import { roleSchema } from "@hackspain/shared";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
-import { loadReport, resolveCompany } from "./report.ts";
+import { loadReport } from "./report.ts";
 import { type ReportBrowser, reportFilename, reportPdf } from "./report-pdf.ts";
 
 export const reportInput = z.object({
-  company: z
-    .string()
-    .min(1)
-    .describe(
-      "Company id or exact demo name: Talleres Ribera, Bodegas Altamira, Meridian Logística",
-    ),
+  company: z.string().min(1).describe("Company name or Embat id"),
   role: roleSchema,
 });
 
@@ -24,8 +19,8 @@ export function createReportTool(
   baseUrl: string,
 ) {
   return async (input: z.infer<typeof reportInput>) => {
-    const companyId = resolveCompany(input.company);
-    const report = await loadReport(db, model, companyId, input.role);
+    const report = await loadReport(db, model, input.company, input.role);
+    const companyId = report.company_id;
     const pdf = await reportPdf(db, browser, report);
     return {
       url: `${baseUrl}/companies/${encodeURIComponent(companyId)}/report.pdf?role=${input.role}`,

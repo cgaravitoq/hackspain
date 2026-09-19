@@ -22,6 +22,7 @@ describe("GET /companies/:id", () => {
     const response = await SELF.fetch("https://agent.test/companies/COMP_A");
     expect(response.status).toBe(200);
     const company = companyDetailSchema.parse(await response.json());
+    expect(company.name).toBe("Industrias Ebro");
     expect(company.series.map((entry) => entry.state)).toEqual([
       "not_evaluable",
       "healthy",
