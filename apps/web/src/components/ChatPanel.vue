@@ -3,6 +3,7 @@ import { Chat } from "@ai-sdk/vue";
 import type { Alert } from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
 import { computed, nextTick, ref, watch } from "vue";
+import { z } from "zod";
 import { ALERTS_LIMIT } from "../api.ts";
 
 const props = defineProps<{ companyId: string; alerts: Alert[] }>();
@@ -54,6 +55,11 @@ const busy = computed(
   () => chat.status === "submitted" || chat.status === "streaming",
 );
 
+const toolEntity = z.object({
+  company_id: z.string().optional(),
+  group_id: z.string().optional(),
+});
+
 function send(text: string) {
   const question = text.trim();
   if (!question || busy.value) {
@@ -68,11 +74,10 @@ function toolLabel(part: UIMessage["parts"][number]): string | null {
     return null;
   }
   const name = part.type.slice("tool-".length);
-  // SAFETY: the agent's tool inputs always carry the entity they query.
-  const input = part.input as
-    | { company_id?: string; group_id?: string }
-    | undefined;
-  const target = input?.company_id ?? input?.group_id;
+  const entity = toolEntity.safeParse(part.input);
+  const target = entity.success
+    ? (entity.data.company_id ?? entity.data.group_id)
+    : undefined;
   return target ? `${name} ${target}` : name;
 }
 </script>

@@ -75,6 +75,46 @@ describe("ChatPanel", () => {
     expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
 
+  it("labels each tool chip with the entity it queries, or the bare name without one", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        sse([
+          { type: "start" },
+          {
+            type: "tool-input-available",
+            toolCallId: "c1",
+            toolName: "score",
+            input: { company_id: "COMP_B" },
+          },
+          {
+            type: "tool-input-available",
+            toolCallId: "c2",
+            toolName: "group_map",
+            input: { group_id: "GROUP_1" },
+          },
+          {
+            type: "tool-input-available",
+            toolCallId: "c3",
+            toolName: "alerts",
+            input: { kind: "down", limit: 20 },
+          },
+          { type: "finish" },
+        ]),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts },
+    });
+    await wrapper.find("input").setValue("¿Cómo está el grupo?");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() => expect(wrapper.findAll(".tool")).toHaveLength(3));
+    expect(wrapper.findAll(".tool").map((chip) => chip.text())).toEqual([
+      "score COMP_B",
+      "group_map GROUP_1",
+      "alerts",
+    ]);
+  });
+
   it("scrolls the message list down as the answer streams", async () => {
     const encoder = new TextEncoder();
     let controller!: ReadableStreamDefaultController<Uint8Array>;
