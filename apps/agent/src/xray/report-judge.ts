@@ -6,11 +6,11 @@ export type Narrative = {
 };
 
 const RED_LINE_IDS = [
-  "asserts_solvency",
+  "solvency_judgement",
+  "default_or_fraud",
   "causal_language",
   "forbidden_action",
   "forecast",
-  "amount_in_words",
 ] as const;
 
 export type RedLine = (typeof RED_LINE_IDS)[number];
@@ -22,26 +22,36 @@ type RedLineRule = {
 };
 
 export const RED_LINES: Record<RedLine, RedLineRule> = {
-  asserts_solvency: {
+  solvency_judgement: {
     instructions:
-      "Does the report text (Spanish) assert or deny the company's solvency, creditworthiness, risk of default (impago), fraud, contagion to other companies, or its future capacity to pay?",
+      "Does the report text (Spanish) judge the company to be solvent or insolvent, creditworthy or not creditworthy, or assign it a credit rating?",
     criteria: {
-      true: "It states or implies such a judgement about the company, positively or negatively.",
+      true: "It states or implies that the company is, or is not, solvent or creditworthy, or grades its credit quality.",
       false:
-        "It only describes observed treasury figures, their coverage and the checks to perform.",
+        "It describes the treasury index and its components (inflows versus outflows, momentum, fees, refunds), names the product's state labels (sana, saludable, mejorando, estable, torciéndose, cayendo, deterioro, caída) or the data coverage. Those are observations, not a solvency judgement.",
     },
-    retry:
-      "afirma o niega solvencia, crédito, impago, fraude, contagio o capacidad futura de pago",
+    retry: "afirma o niega solvencia o calidad crediticia",
+  },
+  default_or_fraud: {
+    instructions:
+      "Does the report text claim anything about whether the company has defaulted, will default or is at risk of default on payments (impago), commits fraud, or spreads risk to other companies (contagio)?",
+    criteria: {
+      true: "It asserts or rules out default, fraud or contagion as a fact about the company.",
+      false:
+        "Naming overdue invoices, their age or concentration, or the debt concentration inside a group, is not a default or fraud claim; disclaimers such as 'no se trata de un cliente moroso' or 'las señales no prueban impagos' frame the review and are allowed.",
+    },
+    retry: "afirma o descarta impago, fraude o contagio",
   },
   causal_language: {
     instructions:
-      "Does the report text attribute a change in the figures to a cause (for example 'se debe a', 'a causa de', 'provocado por', 'porque') instead of describing what changed?",
+      "Does the report text state, as a fact, an economic or business cause behind the figures (for example a lost client, a market change, seasonality, a management decision or a supplier problem)?",
     criteria: {
-      true: "It explains why a figure moved.",
+      true: "It explains the figures with a real-world cause presented as fact, such as 'a causa de la pérdida de un cliente'.",
       false:
-        "It describes what moved and when, or names arithmetic contributions, without a cause.",
+        "Saying which component of the index moved, or that inflows below outflows lower the coverage, is arithmetic attribution and allowed; open questions about possible causes are allowed.",
     },
-    retry: "explica causas en lugar de describir cambios",
+    retry:
+      "explica los cambios con causas económicas en lugar de aportaciones aritméticas",
   },
   forbidden_action: {
     instructions:
@@ -56,23 +66,13 @@ export const RED_LINES: Record<RedLine, RedLineRule> = {
   },
   forecast: {
     instructions:
-      "Does the report text predict the company's future figures, states or events?",
+      "Does the report text predict the company's future figures, states or events, or whether it will be able to pay its obligations in the future?",
     criteria: {
-      true: "It forecasts what will happen.",
+      true: "It forecasts what will happen or what the company will be able to pay.",
       false:
         "It stays with observed months and what to verify; naming a forecasting module to check against is not a prediction.",
     },
-    retry: "hace previsiones",
-  },
-  amount_in_words: {
-    instructions:
-      "Does the report text spell out a money amount, percentage, ratio, score or invoice count in words (for example 'veinte por ciento', 'tres millones de euros')? Durations such as 'tres meses' do not count.",
-    criteria: {
-      true: "A quantity is written out in words.",
-      false: "Quantities are only referred to the figure tables.",
-    },
-    retry:
-      "escribe cantidades con palabras en lugar de remitir al cuadro de cifras",
+    retry: "hace previsiones o afirma capacidad futura de pago",
   },
 };
 

@@ -559,7 +559,7 @@ describe("GET /companies/:id/report", () => {
     const judge = vi.fn((text: Narrative) =>
       Promise.resolve<Verdict>(
         text.summary === solvent.summary
-          ? { verdict: "rejected", failed: ["asserts_solvency"] }
+          ? { verdict: "rejected", failed: ["solvency_judgement"] }
           : { verdict: "accepted" },
       ),
     );

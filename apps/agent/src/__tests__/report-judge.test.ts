@@ -19,11 +19,11 @@ const narrative = {
 };
 
 const redLines = [
-  "asserts_solvency",
+  "solvency_judgement",
+  "default_or_fraud",
   "causal_language",
   "forbidden_action",
   "forecast",
-  "amount_in_words",
 ] as const;
 
 const wireRequest = z.strictObject({
@@ -90,13 +90,13 @@ describe("report judge", () => {
       fetcher(async (request) => {
         const { state } = wireRequest.parse(await request.json());
         return state.summary.includes("solvente")
-          ? answers({ asserts_solvency: 0.51, forecast: 0.5 })
-          : answers({ forecast: 0.5, amount_in_words: 0.5 });
+          ? answers({ solvency_judgement: 0.51, forecast: 0.5 })
+          : answers({ forecast: 0.5, default_or_fraud: 0.5 });
       }),
     );
     expect(
       await judge({ ...narrative, summary: "La empresa es solvente." }),
-    ).toEqual({ verdict: "rejected", failed: ["asserts_solvency"] });
+    ).toEqual({ verdict: "rejected", failed: ["solvency_judgement"] });
     expect(await judge(narrative)).toEqual({ verdict: "accepted" });
   });
 
@@ -111,7 +111,7 @@ describe("report judge", () => {
       () =>
         Promise.resolve(
           Response.json({
-            answers: { asserts_solvency: { type: "noul", noul: 0.99 } },
+            answers: { solvency_judgement: { type: "noul", noul: 0.99 } },
           }),
         ),
       () => Promise.resolve(new Response("not json")),
