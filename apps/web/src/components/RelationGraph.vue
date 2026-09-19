@@ -66,26 +66,33 @@ const TYPE_COLORS: Record<RelationType, string> = {
   SHARES_COUNTERPARTY_WITH: "#0f766e",
 };
 
-const STATE_VARIABLES: Record<State, string> = {
-  healthy: "--healthy",
-  improving: "--improving",
-  stable: "--stable",
-  slipping: "--slipping",
-  falling: "--falling",
-  not_evaluable: "--muted",
+const STATE_VARIABLES: Record<State, [string, string]> = {
+  healthy: ["--healthy", "#1f7a4d"],
+  improving: ["--improving", "#0f766e"],
+  stable: ["--stable", "#475569"],
+  slipping: ["--slipping", "#b45309"],
+  falling: ["--falling", "#b91c1c"],
+  not_evaluable: ["--muted", "#94a3b8"],
 };
 
-const STATE_FALLBACKS: Record<State, string> = {
-  healthy: "#1f7a4d",
-  improving: "#0f766e",
-  stable: "#475569",
-  slipping: "#b45309",
-  falling: "#b91c1c",
-  not_evaluable: "#94a3b8",
-};
+const GROUP_VARIABLES: [string, string][] = [
+  ["--group-1", "#5b7cfa"],
+  ["--group-2", "#e0a33e"],
+  ["--group-3", "#3fa87a"],
+  ["--group-4", "#c264a0"],
+  ["--group-5", "#7a86d8"],
+];
 
-const GROUP_BANDS = ["#5b7cfa", "#e0a33e", "#3fa87a", "#c264a0", "#7a86d8"];
 const HUB_LABEL_DEGREE = 25;
+const ISOLATED_ALPHA = 0.45;
+
+type Palette = {
+  card: string;
+  ink: string;
+  inkSoft: string;
+  states: Map<State, string>;
+  groups: string[];
+};
 
 const types: RelationType[] = [
   "INFERRED_PAYMENT_TO",
@@ -177,23 +184,25 @@ const tooltipStyle = computed(() => ({
   top: `${(pointer.value.y / LAYOUT_HEIGHT) * 100}%`,
 }));
 
-function cssColor(variable: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(variable)
-    .trim();
-  return value || fallback;
+function readPalette(): Palette {
+  const style = getComputedStyle(document.documentElement);
+  const read = ([variable, fallback]: [string, string]) =>
+    style.getPropertyValue(variable).trim() || fallback;
+  return {
+    card: read(["--card", "#ffffff"]),
+    ink: read(["--ink", "#16202a"]),
+    inkSoft: read(["--ink-soft", "#4b5865"]),
+    states: new Map(states.map((item) => [item, read(STATE_VARIABLES[item])])),
+    groups: GROUP_VARIABLES.map(read),
+  };
 }
 
-function stateColor(state_: State): string {
-  return cssColor(STATE_VARIABLES[state_], STATE_FALLBACKS[state_]);
-}
-
-function bandColor(group: string | null): string {
+function bandColor(palette: Palette, group: string | null): string {
   const index = [...(group ?? "")].reduce(
     (total, character) => total + character.charCodeAt(0),
     0,
   );
-  return GROUP_BANDS[index % GROUP_BANDS.length] ?? GROUP_BANDS[0] ?? "#5b7cfa";
+  return palette.groups[index % palette.groups.length] ?? palette.ink;
 }
 
 function paint() {
@@ -205,8 +214,9 @@ function paint() {
   if (!context) {
     return;
   }
+  const palette = readPalette();
   context.clearRect(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT);
-  context.fillStyle = cssColor("--card", "#ffffff");
+  context.fillStyle = palette.card;
   context.fillRect(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT);
   context.lineWidth = 1.2;
   for (const link of layout.value.links) {
@@ -227,24 +237,22 @@ function paint() {
     const { node, x, y, radius } = position;
     context.beginPath();
     context.arc(x, y, radius + 1.5, 0, Math.PI * 2);
-    context.strokeStyle = bandColor(node.group_id);
+    context.strokeStyle = bandColor(palette, node.group_id);
     context.lineWidth = node.role === "group_treasury_hub" ? 2 : 1;
     context.stroke();
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     const hovered = hover.value?.kind === "node" && hover.value.node === node;
-    context.fillStyle =
-      node.role === "isolated"
-        ? cssColor("--card", "#ffffff")
-        : stateColor(node.state);
+    context.globalAlpha = node.role === "isolated" ? ISOLATED_ALPHA : 1;
+    const fill = palette.states.get(node.state) ?? palette.ink;
+    context.fillStyle = fill;
     context.fill();
-    context.strokeStyle = hovered
-      ? cssColor("--ink", "#16202a")
-      : stateColor(node.state);
+    context.strokeStyle = hovered ? palette.ink : fill;
     context.lineWidth = hovered ? 2 : 1.4;
     context.stroke();
+    context.globalAlpha = 1;
     if (node.degree >= HUB_LABEL_DEGREE) {
-      context.fillStyle = cssColor("--ink-soft", "#4b5865");
+      context.fillStyle = palette.inkSoft;
       context.fillText(node.company_id, x, y - radius - 7);
     }
   }
