@@ -82,6 +82,8 @@ export const monthEntrySchema = z.object({
   momentum: z.number().nullable(),
   adjustment: z.number().nullable(),
   score: z.number().nullable(),
+  delta_3: z.number().nullable(),
+  delta_6: z.number().nullable(),
   state: stateSchema,
   confidence: confidenceSchema,
   components: z.partialRecord(componentCodeSchema, z.number()),
@@ -108,6 +110,8 @@ export type MonthEntry = z.infer<typeof monthEntrySchema>;
 export const latestSchema = z.object({
   month: z.string().nullable(),
   score: z.number().nullable(),
+  delta_3: z.number().nullable(),
+  delta_6: z.number().nullable(),
   level: z.number().nullable(),
   momentum: z.number().nullable(),
   state: stateSchema,
