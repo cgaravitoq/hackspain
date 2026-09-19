@@ -3,6 +3,7 @@ import {
   chatRequestSchema,
   environmentSchema,
   type HealthResponse,
+  roleSchema,
   stateSchema,
 } from "@hackspain/shared";
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -11,6 +12,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { chat, workersAiModel } from "./xray/chat.ts";
 import { createMcpServer } from "./xray/mcp.ts";
+import { loadReport } from "./xray/report.ts";
 import { createStore } from "./xray/store.ts";
 import { createTools } from "./xray/tools.ts";
 
@@ -66,6 +68,20 @@ export function createApp(options: AppOptions = {}) {
     return "error" in explanation
       ? context.json(explanation, 404)
       : context.json(explanation);
+  });
+
+  app.get("/companies/:id/report", async (context) => {
+    const role = roleSchema.safeParse(context.req.query("role"));
+    if (!role.success) {
+      return context.json({ error: "Unknown role" }, 400);
+    }
+    const report = await loadReport(
+      context.env.DB,
+      () => model(context.env),
+      context.req.param("id"),
+      role.data,
+    );
+    return context.json(report);
   });
 
   app.get("/groups/:id", async (context) => {
