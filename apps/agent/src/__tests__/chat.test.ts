@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import {
+  companyRelationEdgeSchema,
   companyRelationsSchema,
   compareSchema,
   type Role,
@@ -138,6 +139,10 @@ function toolCallSentToModel(model: MockLanguageModelV4) {
   return calls;
 }
 
+const chatRelationsSchema = companyRelationsSchema.extend({
+  edges: z.array(companyRelationEdgeSchema.extend({ amount: z.number() })),
+});
+
 const RELATIONS_PREAMBLE =
   "Establece únicamente relaciones respaldadas por los registros recibidos.";
 
@@ -160,7 +165,7 @@ const RELATION_ANSWER_RULES = [
   "Toda relación que devuelve la herramienta relations está inferida de movimientos espejo (claim_status: inferred) y provider_identity_confirmed es siempre false",
   "Nunca presentes un vínculo inferido como una obligación verificada ni como una deuda actual",
   "solo los vínculos OPEN_OBLIGATION_TO describen un saldo pendiente",
-  "Cita cada importe con su divisa, su periodo (first_date a last_date) y su número de coincidencias (matches); nombra como tal un vínculo de confianza low.",
+  "Cita cada importe con el campo amount, ya expresado en su divisa (currency), con su periodo (first_date a last_date) y su número de coincidencias (matches); amount_minor está en céntimos y no se cita; nombra como tal un vínculo de confianza low.",
   "si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer",
   "llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo",
 ];
@@ -308,7 +313,7 @@ describe("POST /chat", () => {
     const { toolName, output } = toolResult(model);
     expect(toolName).toBe("relations");
     const parsed = z
-      .object({ type: z.literal("json"), value: companyRelationsSchema })
+      .object({ type: z.literal("json"), value: chatRelationsSchema })
       .parse(JSON.parse(output)).value;
     expect(parsed.company_id).toBe("COMP_A");
     expect(parsed.edges.map((edge) => edge.counterpart_company_id)).toEqual([
@@ -317,6 +322,16 @@ describe("POST /chat", () => {
     ]);
     expect(parsed.edges[0]?.counterpart_state).toBe("healthy");
     expect(parsed.edges[0]?.counterpart_score).toBe(91);
+    expect(
+      parsed.edges.map((edge) => [
+        edge.amount_minor,
+        edge.amount,
+        edge.currency,
+      ]),
+    ).toEqual([
+      [1_234_500, 12_345, "EUR"],
+      [426_457, 4264.57, "EUR"],
+    ]);
   });
 
   it("carries Miguel's twelve evidence rules and the relations answer rules", async () => {

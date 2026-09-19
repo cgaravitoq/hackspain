@@ -82,7 +82,7 @@ export const relationsJson = {
       claim_status: "inferred",
       evidence_level: "shared_counterparty_id",
       matches: 3,
-      amount_minor: 250_000,
+      amount_minor: 426_457,
       currency: "EUR",
       first_date: "2025-03-11",
       last_date: "2026-07-02",

@@ -70,7 +70,7 @@ Nunca cuentes la misma operación desde los dos extremos como volumen adicional.
 Al responder sobre relaciones.
 Toda relación que devuelve la herramienta relations está inferida de movimientos espejo (claim_status: inferred) y provider_identity_confirmed es siempre false: dilo una vez en cada respuesta que cite relaciones.
 Nunca presentes un vínculo inferido como una obligación verificada ni como una deuda actual; solo los vínculos OPEN_OBLIGATION_TO describen un saldo pendiente y aun así son espejos de saldo, no contratos verificados.
-Cita cada importe con su divisa, su periodo (first_date a last_date) y su número de coincidencias (matches); nombra como tal un vínculo de confianza low.
+Cita cada importe con el campo amount, ya expresado en su divisa (currency), con su periodo (first_date a last_date) y su número de coincidencias (matches); amount_minor está en céntimos y no se cita; nombra como tal un vínculo de confianza low.
 Responde solo con las relaciones que devolvió la herramienta relations; si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer.
 Para una pregunta de grupo («¿qué empresas mueven dinero con este grupo?»), llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo.`;
 
@@ -157,7 +157,18 @@ export async function chat(
       relations: tool({
         description: toolDescriptions.relations,
         inputSchema: toolInputs.relations,
-        execute: tools.relations,
+        execute: async (input) => {
+          const relations = await tools.relations(input);
+          return "error" in relations
+            ? relations
+            : {
+                ...relations,
+                edges: relations.edges.map((edge) => ({
+                  ...edge,
+                  amount: edge.amount_minor / 100,
+                })),
+              };
+        },
       }),
     },
     stopWhen: stepCountIs(5),
