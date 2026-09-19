@@ -4,6 +4,7 @@ from pathlib import Path
 
 from xray.export import build
 from xray.load import read
+from xray.relations import build as build_relations
 
 
 def main() -> None:
@@ -13,6 +14,12 @@ def main() -> None:
     score.add_argument("--data", type=Path, required=True, help="folder with the nine Embat CSV files")
     score.add_argument("--out", type=Path, required=True, help="folder that receives the JSON artifacts")
     score.add_argument("--seed", type=int, default=42, help="seed that picks the held-out groups")
+    relations = commands.add_parser("relations", help="detect inter-company relations and write relations.json")
+    relations.add_argument("--data", type=Path, required=True, help="folder with the nine Embat CSV files")
+    relations.add_argument("--out", type=Path, required=True, help="folder that receives relations.json")
     args = parser.parse_args()
-    summary = build(read(args.data), args.out, args.seed)
+    if args.command == "relations":
+        summary = build_relations(args.data, args.out)
+    else:
+        summary = build(read(args.data), args.out, args.seed)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
