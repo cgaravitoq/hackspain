@@ -17,6 +17,7 @@ import { chat, workersAiModel } from "./xray/chat.ts";
 import { createMcpServer } from "./xray/mcp.ts";
 import { loadReport, reportSources } from "./xray/report.ts";
 import { renderReportHtml } from "./xray/report-html.ts";
+import { createJudge, type Judge } from "./xray/report-judge.ts";
 import {
   type ReportBrowser,
   reportFilename,
@@ -29,6 +30,7 @@ import { createTools } from "./xray/tools.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
+  judge?: (env: Env) => Judge;
   browser?: ReportBrowser;
 };
 
@@ -60,6 +62,8 @@ const graphQuerySchema = z.object({
 
 export function createApp(options: AppOptions = {}) {
   const model = options.model ?? ((env: Env) => workersAiModel(env.AI));
+  const judge =
+    options.judge ?? ((env: Env) => createJudge(env.TYPESAFE_API_KEY));
   const app = new Hono<{ Bindings: Env }>();
 
   app.get("/health", (context) => {
@@ -138,6 +142,7 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
+      judge(context.env),
       context.req.param("id"),
       role.data,
     );
@@ -152,6 +157,7 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
+      judge(context.env),
       context.req.param("id"),
       role.data,
     );
@@ -178,6 +184,7 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
+      judge(context.env),
       context.req.param("id"),
       role.data,
     );
@@ -252,6 +259,7 @@ export function createApp(options: AppOptions = {}) {
       createReportTool(
         context.env.DB,
         () => model(context.env),
+        judge(context.env),
         options.browser ?? context.env.BROWSER,
         "/api",
       ),
@@ -265,6 +273,7 @@ export function createApp(options: AppOptions = {}) {
       createReportTool(
         context.env.DB,
         () => model(context.env),
+        judge(context.env),
         options.browser ?? context.env.BROWSER,
         new URL(context.req.url).origin,
       ),

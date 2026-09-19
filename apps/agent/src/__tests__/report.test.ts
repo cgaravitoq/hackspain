@@ -5,6 +5,7 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
+import type { Narrative, Verdict } from "../xray/report-judge.ts";
 import { company, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
@@ -526,19 +527,90 @@ describe("GET /companies/:id/report", () => {
     "returns 502 after two invalid outputs and leaves no cached report",
     async (text) => {
       const model = new MockLanguageModelV4({ doGenerate: reply(text) });
-      const response = await createApp({ model: () => model }).request(
-        "/companies/COMP_A/report?role=tesorero",
-        undefined,
-        env,
+      const judge = vi.fn(() =>
+        Promise.resolve<Verdict>({ verdict: "accepted" }),
       );
+      const response = await createApp({
+        model: () => model,
+        judge: () => judge,
+      }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
       expect(response.status).toBe(502);
       expect(model.doGenerateCalls).toHaveLength(2);
+      expect(judge).not.toHaveBeenCalled();
       const row = await env.DB.prepare(
         "SELECT count(*) AS count FROM reports",
       ).first<{ count: number }>();
       expect(row?.count).toBe(0);
     },
   );
+
+  it("rewrites a narrative the judge rejects once, naming the red line, and stores the rewrite", async () => {
+    const solvent = {
+      ...narrative,
+      summary:
+        "La empresa es solvente y su capacidad de pago está garantizada.",
+    };
+    const model = new MockLanguageModelV4({
+      doGenerate: [
+        reply(JSON.stringify(solvent)),
+        reply(JSON.stringify(narrative)),
+      ],
+    });
+    const judge = vi.fn((text: Narrative) =>
+      Promise.resolve<Verdict>(
+        text.summary === solvent.summary
+          ? { verdict: "rejected", failed: ["solvency_judgement"] }
+          : { verdict: "accepted" },
+      ),
+    );
+    const response = await createApp({
+      model: () => model,
+      judge: () => judge,
+    }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
+    expect(response.status).toBe(200);
+    const report = reportSchema.parse(await response.json());
+    expect(report.summary).toBe(narrative.summary);
+    expect(judge).toHaveBeenCalledTimes(2);
+    expect(judge.mock.calls[0]?.[0]).toMatchObject({
+      summary: solvent.summary,
+      sections: solvent.sections.map(({ title, body }) => ({ title, body })),
+    });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    const retry = JSON.stringify(model.doGenerateCalls[1]?.prompt);
+    expect(retry).toContain("líneas rojas");
+    expect(retry).toContain("solvencia");
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).not.toContain(
+      "líneas rojas",
+    );
+    const cached = await env.DB.prepare(
+      "SELECT body FROM reports WHERE company_id = 'COMP_A'",
+    ).first<{ body: string }>();
+    expect(JSON.parse(cached?.body ?? "null")).toEqual(report);
+    expect(cached?.body).not.toContain("solvente");
+  });
+
+  it("returns 502 after two rejected narratives and leaves no cached report", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const judge = vi.fn(() =>
+      Promise.resolve<Verdict>({ verdict: "rejected", failed: ["forecast"] }),
+    );
+    const response = await createApp({
+      model: () => model,
+      judge: () => judge,
+    }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
+    expect(response.status).toBe(502);
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(judge).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain(
+      "previsiones",
+    );
+    const row = await env.DB.prepare(
+      "SELECT count(*) AS count FROM reports",
+    ).first<{ count: number }>();
+    expect(row?.count).toBe(0);
+  });
 
   it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
     const detail = company("COMP_GAP", "GROUP_1", [
