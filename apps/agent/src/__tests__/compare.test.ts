@@ -32,8 +32,18 @@ describe("GET /compare", () => {
       "https://agent.test/compare?ids=COMP_A,COMP_MISSING",
     );
     expect(response.status).toBe(404);
-    expect(errorBody.parse(await response.json()).error).toContain(
-      "COMP_MISSING",
+    expect(errorBody.parse(await response.json()).error).toBe(
+      "Unknown company COMP_MISSING",
+    );
+  });
+
+  it("answers 404 naming every unknown company", async () => {
+    const response = await SELF.fetch(
+      "https://agent.test/compare?ids=COMP_A,COMP_MISSING,COMP_ALSO_MISSING",
+    );
+    expect(response.status).toBe(404);
+    expect(errorBody.parse(await response.json()).error).toBe(
+      "Unknown companies COMP_MISSING, COMP_ALSO_MISSING",
     );
   });
 

@@ -93,6 +93,13 @@ function unknownCompany(id: string): Unknown {
   return { error: `Unknown company ${id}` };
 }
 
+function unknownCompanies(ids: string[]): Unknown {
+  const [only, ...rest] = ids;
+  return only !== undefined && rest.length === 0
+    ? unknownCompany(only)
+    : { error: `Unknown companies ${ids.join(", ")}` };
+}
+
 function latestScored(company: CompanyDetail): MonthEntry | undefined {
   return company.series.findLast((entry) => entry.score !== null);
 }
@@ -281,7 +288,7 @@ export function createTools(store: Store) {
       const found = new Set(companies.map((company) => company.company_id));
       const unknown = ids.filter((id) => !found.has(id));
       return unknown.length > 0
-        ? { error: `Unknown companies ${unknown.join(", ")}` }
+        ? unknownCompanies(unknown)
         : compareOf(companies);
     },
 
