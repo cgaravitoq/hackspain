@@ -4,6 +4,7 @@ import type {
   CompanyDetail,
   Explain,
   GroupMap,
+  ReportSection,
   Role,
 } from "@hackspain/shared";
 import { CONFIDENCE_LABELS, monthLabel } from "../format.ts";
@@ -20,6 +21,7 @@ defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  decisionSection?: ReportSection;
 }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
 </script>
@@ -47,6 +49,7 @@ const emit = defineEmits<{ select: [companyId: string] }>();
       :group="group"
       :selected="selected"
       :role="role"
+      :decision-section="decisionSection"
       @select="emit('select', $event)"
     />
   </section>

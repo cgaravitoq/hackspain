@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { CompanyDetail, Explain, GroupMap, Role } from "@hackspain/shared";
-import { computed, ref } from "vue";
+import type {
+  CompanyDetail,
+  Explain,
+  GroupMap,
+  ReportSection,
+  Role,
+} from "@hackspain/shared";
+import { computed, ref, watch } from "vue";
 import {
   COMPONENT_CODES,
   componentLabel,
@@ -18,8 +24,19 @@ const props = defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  decisionSection?: ReportSection;
 }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
+
+watch(
+  () => props.decisionSection,
+  (section) => {
+    if (section) {
+      active.value = "report";
+    }
+  },
+  { immediate: true },
+);
 
 const TABS = [
   { id: "action", label: "Acción" },
@@ -121,7 +138,12 @@ const sources = computed(() =>
         <p v-else class="quiet">Sin cambios frente al mes anterior.</p>
       </template>
 
-      <ReportPanel v-else-if="current === 'report'" :company-id="selected" :role="role" />
+      <ReportPanel
+        v-else-if="current === 'report'"
+        :company-id="selected"
+        :role="role"
+        :decision-section="decisionSection"
+      />
 
       <GroupStrip
         v-else-if="group"

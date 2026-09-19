@@ -653,7 +653,7 @@ def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
     assert last["state"] == "falling"
     assert last["confidence"] == "medium"
     assert last["events"] == {"E1": True, "E2": False, "E3": False, "E4": False}
-    assert json.loads((out / "alerts.json").read_text()) == [
+    assert json.loads((out / "alerts.json").read_text(encoding="utf-8")) == [
         {
             "rule_version": RULE_VERSION,
             "company_id": "C1",
@@ -679,6 +679,13 @@ def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
     assert meta["latest_month"] == "2026-08"
     assert meta["state_labels"]["healthy"] == "sana"
     assert meta["gaps"] == {"companies_with_gaps": 0, "unobserved_months": 0, "stale_companies": 0}
+
+
+def test_build_writes_utf8_whatever_the_platform_locale(tmp_path: Path):
+    out = tmp_path / "out"
+    build(read(seed_dataset(tmp_path / "data")), out, seed=42)
+    meta = json.loads((out / "meta.json").read_bytes().decode("utf-8"))
+    assert meta["state_labels"]["slipping"] == "torciéndose"
 
 
 def test_a_stale_company_reports_not_evaluable_as_its_latest_state(tmp_path: Path):

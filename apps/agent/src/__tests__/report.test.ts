@@ -5,26 +5,21 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
-import type { Narrative, Verdict } from "../xray/report-judge.ts";
 import { company, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
 
 const narrative = {
-  summary: "Revisar los hechos observados con las personas autorizadas.",
-  sections: [
-    { code: "resumen", title: "Situación" },
-    { code: "por_que", title: "Qué cambió" },
-    { code: "por_que", title: "Qué mueve el índice" },
-    { code: "que_hacer", title: "Qué revisar" },
-    { code: "grupo", title: "Mi grupo" },
-    { code: "datos_y_limites", title: "Calidad del análisis" },
-    { code: "que_hacer", title: "Acciones posibles" },
-  ].map((section) => ({
-    ...section,
-    body: "Contrastar los datos disponibles antes de actuar.",
-  })),
+  headline: "Los pagos de agosto casi triplican a los cobros de COMP_A",
+  summary:
+    "COMP_A tiene una salud de tesorería de 12 sobre 100 en agosto de 2026: entraron 40.000 € y salieron 100.000 €.",
+  score_explanation:
+    "Los cobros cubrieron el 40 % de los pagos, y esa diferencia es lo que más pesa en la lectura.",
+  outlook:
+    "Mientras los pagos sigan por encima de los cobros, la lectura seguirá débil.",
+  caveat: "",
+  next_steps: ["Revisar qué pagos explican la diferencia con los cobros."],
 };
 
 function reply(text: string) {
@@ -92,15 +87,12 @@ describe("GET /companies/:id/report.pdf", () => {
     expect(quickAction).toHaveBeenCalledTimes(1);
   });
 
-  it("escapes model HTML and removes executable links and external images before rendering", async () => {
+  it("escapes model HTML before rendering", async () => {
     const unsafe = {
       ...narrative,
-      summary: '<script>alert("unsafe")</script>',
-      sections: narrative.sections.map((section) => ({
-        ...section,
-        title: "<img src=x onerror=alert()>",
-        body: '[click](javascript:alert()) ![image](https://untrusted.example/image.png) <iframe src="https://untrusted.example"></iframe>',
-      })),
+      headline: '<script>alert("unsafe")</script>',
+      summary:
+        '<img src=x onerror=alert()> <iframe src="https://untrusted.example"></iframe>',
     };
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(unsafe)),
@@ -108,7 +100,7 @@ describe("GET /companies/:id/report.pdf", () => {
     const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
       expect(action).toBe("pdf");
       const { html } = pdfRequest.parse(input);
-      expect(html).not.toMatch(/<script|<img|<iframe|href="javascript:/);
+      expect(html).not.toMatch(/<script|<img|<iframe/);
       expect(html).toContain("&lt;script&gt;");
       expect(html).toContain("default-src 'none'");
       return Promise.resolve(
@@ -125,26 +117,36 @@ describe("GET /companies/:id/report.pdf", () => {
     expect(quickAction).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the role sections and disclaimer once and caches PDF bytes in D1", async () => {
+  it("renders the one-page role report without technical appendices and caches PDF bytes in D1", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });
     const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
       expect(action).toBe("pdf");
       const request = pdfRequest.parse(input);
-      expect(request.html).toContain("Indicadores históricos de tesorería");
-      expect(request.html).toContain(
-        "No constituye una calificación crediticia, una certificación de solvencia",
-      );
-      expect(request.html).toContain(
-        "El índice mensual, de 0 a 100, combina nivel y momentum acotado.",
-      );
-      for (const section of narrative.sections) {
-        expect(request.html).toContain(section.title);
+      expect(request.html).toContain(narrative.headline);
+      expect(request.html).toContain(narrative.summary);
+      expect(request.html).toContain(narrative.next_steps[0]);
+      for (const heading of [
+        "Qué ha cambiado",
+        "Qué podemos esperar",
+        "Qué conviene revisar",
+      ]) {
+        expect(request.html).toContain(heading);
       }
-      expect(request.html).toContain("debt_repayment_break");
-      expect(request.html).toContain("No disponible");
-      expect(request.html).toContain("12000");
+      expect(request.html).toContain(
+        "Índice orientativo de salud de tesorería; no constituye una evaluación crediticia.",
+      );
+      for (const technical of [
+        "Anexo",
+        "Metodología",
+        "Glosario",
+        "momentum",
+        "rule_version",
+        "Ten en cuenta",
+      ]) {
+        expect(request.html).not.toContain(technical);
+      }
       expect(request.pdfOptions.headerTemplate).toContain("COMP_A");
       expect(request.pdfOptions.footerTemplate).toContain('class="pageNumber"');
       expect(request.pdfOptions.footerTemplate).toContain('class="totalPages"');
@@ -359,6 +361,13 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
+  it("requests all receivables and only the undrawn line for the decision", () => {
+    const simulation = decisionSimulation(falling);
+    expect(simulation?.scenarios.map((scenario) => scenario.requested)).toEqual(
+      [33_333.33, 33_333.33],
+    );
+  });
+
   it("reserves the output budget for narrative rather than model reasoning", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) =>
@@ -382,57 +391,19 @@ describe("GET /companies/:id/report", () => {
   it.each([
     {
       role: "financiero",
-      titles: [
-        "Cartera a revisar",
-        "Trayectoria del cliente",
-        "Atribución verificable",
-        "Hechos pendientes de contraste",
-        "Contexto del grupo",
-        "Cobertura y reproducibilidad",
-        "Seguimiento humano",
-      ],
-      codes: [
-        "resumen",
-        "por_que",
-        "por_que",
-        "que_hacer",
-        "grupo",
-        "datos_y_limites",
-        "que_hacer",
-      ],
+      heading: "Por qué tiene esta puntuación",
+      steps: narrative.next_steps,
     },
     {
       role: "ventas",
-      titles: [
-        "Contexto de conversación",
-        "Hechos relevantes",
-        "Preguntas de descubrimiento",
-        "Alcance del grupo",
-        "Capacidades pertinentes",
-        "Qué sabemos y qué falta",
-      ],
-      codes: [
-        "resumen",
-        "por_que",
-        "que_hacer",
-        "grupo",
-        "que_hacer",
-        "datos_y_limites",
-      ],
+      heading: "Cómo abordar la conversación",
+      steps: ["¿Cómo prevén equilibrar cobros y pagos este trimestre?"],
     },
   ])(
-    "uses the $role editorial structure without accepting model figures",
-    async ({ role, titles, codes }) => {
-      const output = {
-        summary: narrative.summary,
-        sections: titles.map((title, index) => ({
-          code: codes[index],
-          title,
-          body: "Verificar con las personas autorizadas.",
-        })),
-      };
+    "returns the $role human-v2 report written by the model",
+    async ({ role, heading, steps }) => {
       const model = new MockLanguageModelV4({
-        doGenerate: reply(JSON.stringify(output)),
+        doGenerate: reply(JSON.stringify({ ...narrative, next_steps: steps })),
       });
       const response = await createApp({ model: () => model }).request(
         `/companies/COMP_A/report?role=${role}`,
@@ -441,20 +412,17 @@ describe("GET /companies/:id/report", () => {
       );
       expect(response.status).toBe(200);
       const report = reportSchema.parse(await response.json());
-      expect(report.role).toBe(role);
-      expect(report.sections.map((section) => section.code)).toEqual(codes);
-      const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
-      for (const title of titles) {
-        expect(prompt).toContain(title);
-      }
-      expect(prompt).toContain(role);
-      expect(
-        report.sections.flatMap((section) => section.figures),
-      ).toContainEqual({
-        label: "balance.value · 2026-08 a 2026-08 · explain.drivers",
-        value: 0.4,
-        unit: "ratio",
+      expect(report).toMatchObject({
+        schema_version: "human-v2",
+        role,
+        score: 12,
+        source: "llm",
+        headline: narrative.headline,
+        export_url: `/api/companies/COMP_A/report.pdf?role=${role}`,
       });
+      expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain(
+        heading,
+      );
     },
   );
 
@@ -483,14 +451,8 @@ describe("GET /companies/:id/report", () => {
     },
   );
 
-  it("retries invalid model figures once and stores only deterministic figures", async () => {
-    const invented = {
-      ...narrative,
-      sections: narrative.sections.map((section) => ({
-        ...section,
-        figures: [{ label: "invented", value: 999999, unit: "EUR" }],
-      })),
-    };
+  it("sends the violations back once and caches the corrected model report", async () => {
+    const invented = { ...narrative, outlook: "Cerrará el año con 999.999 €." };
     const model = new MockLanguageModelV4({
       doGenerate: [
         reply(JSON.stringify(invented)),
@@ -504,10 +466,11 @@ describe("GET /companies/:id/report", () => {
     );
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
-    expect(JSON.stringify(report)).not.toContain("999999");
+    expect(report.source).toBe("llm");
+    expect(JSON.stringify(report)).not.toContain("999.999");
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain(
-      "respuesta anterior",
+      "unsourced number: 999.999",
     );
     const cached = await env.DB.prepare(
       "SELECT body FROM reports WHERE company_id = 'COMP_A'",
@@ -516,30 +479,24 @@ describe("GET /companies/:id/report", () => {
   });
 
   it.each([
-    JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
-    JSON.stringify({ ...narrative, sections: narrative.sections.slice(0, 2) }),
-    JSON.stringify({
-      ...narrative,
-      sections: [
-        ...narrative.sections,
-        { code: "decision", title: "Decisión", body: "Comparar escenarios." },
-      ],
-    }),
+    JSON.stringify({ ...narrative, outlook: "El momentum sigue cayendo." }),
+    JSON.stringify({ ...narrative, next_steps: ["uno", "dos", "tres"] }),
     "not JSON",
   ])(
-    "returns 502 after two invalid outputs and leaves no cached report",
+    "falls back to the deterministic template after two invalid outputs and caches nothing",
     async (text) => {
       const model = new MockLanguageModelV4({ doGenerate: reply(text) });
-      const judge = vi.fn(() =>
-        Promise.resolve<Verdict>({ verdict: "accepted" }),
+      const response = await createApp({ model: () => model }).request(
+        "/companies/COMP_A/report?role=tesorero",
+        undefined,
+        env,
       );
-      const response = await createApp({
-        model: () => model,
-        judge: () => judge,
-      }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
-      expect(response.status).toBe(502);
+      expect(response.status).toBe(200);
+      const report = reportSchema.parse(await response.json());
+      expect(report.source).toBe("template");
+      expect(report.summary).toContain("12 sobre 100");
+      expect(JSON.stringify(report)).not.toContain("momentum");
       expect(model.doGenerateCalls).toHaveLength(2);
-      expect(judge).not.toHaveBeenCalled();
       const row = await env.DB.prepare(
         "SELECT count(*) AS count FROM reports",
       ).first<{ count: number }>();
@@ -547,75 +504,22 @@ describe("GET /companies/:id/report", () => {
     },
   );
 
-  it("rewrites a narrative the judge rejects once, naming the red line, and stores the rewrite", async () => {
-    const solvent = {
-      ...narrative,
-      summary:
-        "La empresa es solvente y su capacidad de pago está garantizada.",
-    };
+  it("falls back to the template when the model is unavailable", async () => {
     const model = new MockLanguageModelV4({
-      doGenerate: [
-        reply(JSON.stringify(solvent)),
-        reply(JSON.stringify(narrative)),
-      ],
+      doGenerate: () => Promise.reject(new Error("5035: not on this plan")),
     });
-    const judge = vi.fn((text: Narrative) =>
-      Promise.resolve<Verdict>(
-        text.summary === solvent.summary
-          ? { verdict: "rejected", failed: ["solvency_judgement"] }
-          : { verdict: "accepted" },
-      ),
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_A/report?role=ventas",
+      undefined,
+      env,
     );
-    const response = await createApp({
-      model: () => model,
-      judge: () => judge,
-    }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
-    expect(report.summary).toBe(narrative.summary);
-    expect(judge).toHaveBeenCalledTimes(2);
-    expect(judge.mock.calls[0]?.[0]).toMatchObject({
-      summary: solvent.summary,
-      sections: solvent.sections.map(({ title, body }) => ({ title, body })),
-    });
-    expect(model.doGenerateCalls).toHaveLength(2);
-    const retry = JSON.stringify(model.doGenerateCalls[1]?.prompt);
-    expect(retry).toContain("líneas rojas");
-    expect(retry).toContain("solvencia");
-    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).not.toContain(
-      "líneas rojas",
-    );
-    const cached = await env.DB.prepare(
-      "SELECT body FROM reports WHERE company_id = 'COMP_A'",
-    ).first<{ body: string }>();
-    expect(JSON.parse(cached?.body ?? "null")).toEqual(report);
-    expect(cached?.body).not.toContain("solvente");
+    expect(report.source).toBe("template");
+    expect(report.next_steps.join(" ")).not.toMatch(/riesgo/i);
   });
 
-  it("returns 502 after two rejected narratives and leaves no cached report", async () => {
-    const model = new MockLanguageModelV4({
-      doGenerate: reply(JSON.stringify(narrative)),
-    });
-    const judge = vi.fn(() =>
-      Promise.resolve<Verdict>({ verdict: "rejected", failed: ["forecast"] }),
-    );
-    const response = await createApp({
-      model: () => model,
-      judge: () => judge,
-    }).request("/companies/COMP_A/report?role=tesorero", undefined, env);
-    expect(response.status).toBe(502);
-    expect(model.doGenerateCalls).toHaveLength(2);
-    expect(judge).toHaveBeenCalledTimes(2);
-    expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain(
-      "previsiones",
-    );
-    const row = await env.DB.prepare(
-      "SELECT count(*) AS count FROM reports",
-    ).first<{ count: number }>();
-    expect(row?.count).toBe(0);
-  });
-
-  it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
+  it("explains that a company has no valid reading instead of inventing a score", async () => {
     const detail = company("COMP_GAP", "GROUP_1", [
       { month: "2026-07", score: 60, state: "healthy" },
       { month: "2026-08", score: null, state: "not_evaluable" },
@@ -628,7 +532,7 @@ describe("GET /companies/:id/report", () => {
       .bind(detail.company_id, JSON.stringify(detail), JSON.stringify(detail))
       .run();
     const model = new MockLanguageModelV4({
-      doGenerate: reply(JSON.stringify(narrative)),
+      doGenerate: () => Promise.reject(new Error("offline")),
     });
     const response = await createApp({ model: () => model }).request(
       "/companies/COMP_GAP/report?role=tesorero",
@@ -638,13 +542,10 @@ describe("GET /companies/:id/report", () => {
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
     expect(report.month).toBe("2026-08");
-    expect(report.sections[0]?.figures).toEqual([]);
-    expect(report.sections[3]?.figures).toEqual([]);
-    expect(report.sections[4]?.figures).toEqual([]);
-    const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
-    expect(prompt).toContain("not_evaluable");
-    expect(prompt).toContain("none");
-    expect(prompt).toContain("insuficiencia de datos");
+    expect(report.score).toBeNull();
+    expect(report.headline).toBe(
+      "No hay datos suficientes para valorar la tesorería este mes",
+    );
   });
 
   it("separates cached reports by role, rule version and month", async () => {
@@ -676,7 +577,7 @@ describe("GET /companies/:id/report", () => {
       "xray-score/0.2",
     );
     await env.DB.prepare(
-      "UPDATE companies SET detail = json_set(detail, '$.series[#-1].month', '2026-09') WHERE company_id = 'COMP_CACHE'",
+      "UPDATE companies SET detail = json_set(detail, '$.series[#-1].month', '2026-09', '$.series[#-1].evidence.window', '2026-09 a 2026-09') WHERE company_id = 'COMP_CACHE'",
     ).run();
     const updatedMonth = await app.request(
       "/companies/COMP_CACHE/report?role=tesorero",
@@ -691,7 +592,7 @@ describe("GET /companies/:id/report", () => {
     expect(row?.count).toBe(4);
   });
 
-  it("grounds the role sections and figures in D1 and reuses the stored report", async () => {
+  it("grounds the prompt in plain-language facts from D1 and reuses the stored report", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });
@@ -706,34 +607,16 @@ describe("GET /companies/:id/report", () => {
     );
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
-    expect(report.sections.map((section) => section.title)).toEqual(
-      narrative.sections.map((section) => section.title),
-    );
-    expect(report.sections.at(-1)?.code).not.toBe("decision");
-    expect(report.sections[0]?.figures).toContainEqual({
-      label: "score · 2026-08 · explain",
-      value: 12.3,
-      unit: "points",
-    });
-    expect(report.sections[1]?.figures).toContainEqual({
-      label: "delta · 2026-07 → 2026-08 · what_changed",
-      value: -27.9,
-      unit: "points",
-    });
-    expect(report.sections[4]?.figures).toContainEqual({
-      label: "n_companies · 2026-08 · group_map",
-      value: 2,
-      unit: "companies",
-    });
-    expect(judge).toHaveBeenCalledTimes(1);
-    expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
-    expect(prompt).toContain("tesorero");
-    for (const section of narrative.sections) {
-      expect(prompt).toContain(section.title);
+    for (const fact of [
+      "40.000 €",
+      "100.000 €",
+      "agosto de 2026",
+      "Qué ha cambiado",
+    ]) {
+      expect(prompt).toContain(fact);
     }
-    expect(prompt).toContain("12.3");
-    expect(prompt).toContain("-27.9");
+    expect(prompt).not.toContain("xray-score");
     const repeated = await app.request(
       "/companies/COMP_A/report?role=tesorero",
       undefined,

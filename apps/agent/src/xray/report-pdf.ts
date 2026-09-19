@@ -1,6 +1,6 @@
 import type { Report } from "@hackspain/shared";
 import { HTTPException } from "hono/http-exception";
-import { companyName, reportSources } from "./report.ts";
+import { companyName } from "./report.ts";
 import { escapeHtml, renderReportHtml, reportId } from "./report-html.ts";
 
 export type ReportBrowser = {
@@ -37,9 +37,8 @@ export async function reportPdf(
   if (cached?.pdf) {
     return new Uint8Array(cached.pdf).buffer;
   }
-  const sources = await reportSources(db, report.company_id);
   const options: BrowserRunPDFOptions = {
-    html: renderReportHtml(report, sources),
+    html: renderReportHtml(report),
     rejectRequestPattern: [".*"],
     pdfOptions: {
       format: "a4",

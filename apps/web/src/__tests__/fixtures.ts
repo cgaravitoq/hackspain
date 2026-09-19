@@ -230,23 +230,23 @@ export const companies = ["COMP_B", "COMP_A"].map((id) => {
 });
 
 export const report: Report = {
+  schema_version: "human-v2",
   company_id: "COMP_A",
   month: "2026-08",
   role: "financiero",
   rule_version: "xray-score/0.1",
   generated_at: "2026-09-19T12:00:00.000Z",
+  score: 12,
+  state: "falling",
+  state_label: "cayendo",
+  headline: "Los pagos superan con claridad a los cobros",
   summary: "La tesorería necesita atención inmediata.",
-  sections: [
-    {
-      code: "resumen",
-      title: "Situación actual",
-      body: "Los cobros han caído.\n\nLas facturas vencidas presionan la caja.",
-      figures: [
-        { label: "Cobros", value: 40_000, unit: "EUR" },
-        { label: "Pagos", value: 100_000, unit: "EUR" },
-      ],
-    },
-  ],
+  score_explanation:
+    "Los cobros han caído.\n\nLas facturas vencidas presionan la caja.",
+  outlook: "Si nada cambia, la lectura seguirá débil.",
+  caveat: "La actividad registrada es escasa.",
+  next_steps: ["Revisar las facturas vencidas."],
+  source: "llm",
   export_url: "/companies/COMP_A/report.pdf?role=financiero",
 };
 

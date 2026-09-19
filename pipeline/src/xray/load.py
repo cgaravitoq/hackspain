@@ -1,8 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import polars as pl
+
+from xray.treasury import read_treasury
 
 CUTOFF = date(2026, 9, 1)
 FINANCING = ("transfer", "investment_deployment", "investment_return")
@@ -17,6 +20,7 @@ class Dataset:
     invoices: pl.DataFrame
     debt: pl.DataFrame
     balances: pl.DataFrame
+    treasury_snapshots: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _to_date(column: str) -> pl.Expr:
@@ -83,4 +87,6 @@ def read(data_dir: Path) -> Dataset:
         columns=["product_id", "company_id", "balance"],
         schema_overrides={"balance": pl.Float64},
     ).filter(pl.col("product_id").is_in(eur_products.implode()))
-    return Dataset(companies, groups, transactions, invoices, debt, balances)
+    return Dataset(
+        companies, groups, transactions, invoices, debt, balances, read_treasury(data_dir, CUTOFF)
+    )
