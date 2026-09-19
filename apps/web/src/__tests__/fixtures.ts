@@ -221,7 +221,10 @@ export const group: GroupMap = {
   ],
 };
 
-type Route = { pattern: RegExp; body: (match: RegExpMatchArray) => object };
+type Route = {
+  pattern: RegExp;
+  body: (match: RegExpMatchArray, url: URL) => object;
+};
 
 const routes: Route[] = [
   { pattern: /^\/api\/meta$/, body: () => meta },
@@ -236,17 +239,29 @@ const routes: Route[] = [
     body: (match) => company(match[1] ?? "", "GROUP_1"),
   },
   { pattern: /^\/api\/groups\/(\w+)$/, body: () => group },
+  {
+    pattern: /^\/api\/compare$/,
+    body: (_match, url) => {
+      const ids = url.searchParams.get("ids")?.split(",") ?? [];
+      return {
+        months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+        companies: ids.map((id) => company(id, "GROUP_1")),
+      };
+    },
+  },
 ];
 
 export function fakeApi(seen: string[]) {
   return (input: RequestInfo | URL): Promise<Response> => {
-    const path = new URL(String(input), "https://web.test").pathname;
-    seen.push(path);
-    const route = routes.find((candidate) => candidate.pattern.test(path));
-    const match = path.match(route?.pattern ?? /$^/);
+    const url = new URL(String(input), "https://web.test");
+    seen.push(url.pathname);
+    const route = routes.find((candidate) =>
+      candidate.pattern.test(url.pathname),
+    );
+    const match = url.pathname.match(route?.pattern ?? /$^/);
     return Promise.resolve(
       route && match
-        ? Response.json(route.body(match))
+        ? Response.json(route.body(match, url))
         : new Response("not found", { status: 404 }),
     );
   };

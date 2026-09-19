@@ -93,6 +93,36 @@ describe("App", () => {
     expect(wrapper.text()).not.toContain("grupo en tensión");
   });
 
+  it("adds companies from search and alerts and removes their chart series", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("COMP_B");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    await wrapper.findAll(".alerts button")[1]?.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(
+      wrapper
+        .findAll(".compare-chip")
+        .map((chip) => chip.text().replace("×", "").trim()),
+    ).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(3);
+    await wrapper.find('button[aria-label="Quitar COMP_B"]').trigger("click");
+    await flushPromises();
+    expect(
+      wrapper
+        .findAll(".compare-chip")
+        .map((chip) => chip.text().replace("×", "").trim()),
+    ).toEqual(["COMP_A", "COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    expect(seen).toContain("/api/compare");
+  });
+
   it("opens the first company matching a typed id prefix", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));

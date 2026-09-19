@@ -27,6 +27,8 @@ const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
 const selected = ref(window.location.hash.slice(1));
+const compareIds = ref<string[]>([]);
+const comparison = ref<CompanyDetail[]>([]);
 const company = ref<CompanyDetail | null>(null);
 const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
@@ -42,6 +44,9 @@ async function load(companyId: string) {
     ]);
     company.value = detail;
     explanation.value = why;
+    if (role.value === "tesorero") {
+      comparison.value = [detail];
+    }
     group.value = detail.group_id ? await api.group(detail.group_id) : null;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
@@ -52,9 +57,30 @@ function select(companyId: string) {
   selected.value = companyId;
 }
 
+function addComparison(companyId: string) {
+  if (role.value === "tesorero") {
+    compareIds.value = [companyId];
+    return;
+  }
+  if (!compareIds.value.includes(companyId) && compareIds.value.length < 3) {
+    compareIds.value = [...compareIds.value, companyId];
+  }
+}
+
+function removeComparison(companyId: string) {
+  if (compareIds.value.length === 1) {
+    return;
+  }
+  compareIds.value = compareIds.value.filter((id) => id !== companyId);
+  if (selected.value === companyId) {
+    select(compareIds.value[0] ?? "");
+  }
+}
+
 function selectRole(nextRole: Role) {
   role.value = nextRole;
   if (nextRole === "tesorero") {
+    addComparison("COMP_0176");
     select("COMP_0176");
   }
 }
@@ -82,11 +108,23 @@ watch(
   (companyId) => {
     if (companyId) {
       window.location.hash = companyId;
+      addComparison(companyId);
       load(companyId);
     }
   },
   { immediate: true },
 );
+
+watch(compareIds, async (ids) => {
+  if (role.value === "tesorero" || ids.length === 0) {
+    return;
+  }
+  try {
+    comparison.value = (await api.compare(ids)).companies;
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause);
+  }
+});
 
 onMounted(async () => {
   try {
@@ -149,9 +187,27 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       @select="select"
     />
     <div class="center">
+      <div v-if="role !== 'tesorero' && compareIds.length" class="compare-selector panel">
+        <span>Comparar</span>
+        <span v-for="companyId in compareIds" :key="companyId" class="compare-chip">
+          {{ companyId }}
+          <button
+            type="button"
+            :aria-label="`Quitar ${companyId}`"
+            :disabled="compareIds.length === 1"
+            @click="removeComparison(companyId)"
+          >
+            ×
+          </button>
+        </span>
+      </div>
       <p v-if="error" class="error panel">{{ error }}</p>
       <template v-if="company && explanation">
-        <Radiography :company="company" :explanation="explanation" />
+        <Radiography
+          :company="company"
+          :explanation="explanation"
+          :comparison="comparison.length ? comparison : [company]"
+        />
         <GroupStrip v-if="group" :group="group" :selected="selected" @select="select" />
       </template>
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
@@ -191,6 +247,46 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 .month {
   font-size: 13px;
   color: var(--ink-soft);
+}
+
+.compare-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px 3px 9px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.compare-chip button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  line-height: 1;
+}
+
+.compare-chip button:not(:disabled):hover {
+  background: var(--line);
+}
+
+.compare-chip button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .search button {

@@ -3,8 +3,10 @@ import {
   alertSchema,
   type CompanyDetail,
   type CompanySummary,
+  type Compare,
   companyDetailSchema,
   companySummarySchema,
+  compareSchema,
   type Explain,
   explainSchema,
   type GroupMap,
@@ -42,4 +44,9 @@ export const api = {
     get(`/groups/${id}`, groupMapSchema),
   alerts: async (): Promise<Alert[]> =>
     (await get(`/alerts?limit=${ALERTS_LIMIT}`, alertsSchema)).alerts,
+  compare: (ids: string[]): Promise<Compare> =>
+    get(
+      `/compare?${new URLSearchParams({ ids: ids.join(",") })}`,
+      compareSchema,
+    ),
 };
