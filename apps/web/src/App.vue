@@ -15,6 +15,7 @@ import AlertList from "./components/AlertList.vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import GroupStrip from "./components/GroupStrip.vue";
 import Radiography from "./components/Radiography.vue";
+import ReportPanel from "./components/ReportPanel.vue";
 import { monthLabel } from "./format.ts";
 
 const roles = [
@@ -208,6 +209,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
           :explanation="explanation"
           :comparison="comparison.length ? comparison : [company]"
         />
+        <ReportPanel :company-id="selected" :role="role" />
         <GroupStrip v-if="group" :group="group" :selected="selected" @select="select" />
       </template>
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>

@@ -13,6 +13,9 @@ import {
   groupMapSchema,
   type Meta,
   metaSchema,
+  type Report,
+  type Role,
+  reportSchema,
 } from "@hackspain/shared";
 import { z } from "zod";
 
@@ -48,5 +51,10 @@ export const api = {
     get(
       `/compare?${new URLSearchParams({ ids: ids.join(",") })}`,
       compareSchema,
+    ),
+  report: (id: string, role: Role): Promise<Report> =>
+    get(
+      `/companies/${id}/report?${new URLSearchParams({ role })}`,
+      reportSchema,
     ),
 };

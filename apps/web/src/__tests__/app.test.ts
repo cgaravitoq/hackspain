@@ -123,6 +123,62 @@ describe("App", () => {
     expect(seen).toContain("/api/compare");
   });
 
+  it("renders the role report with figures and a PDF export", async () => {
+    const requested: string[] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      requested.push(String(input));
+      return base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".report-summary").text()).toBe(
+      "La tesorería necesita atención inmediata.",
+    );
+    expect(wrapper.find(".report-section h3").text()).toBe("Situación actual");
+    expect(
+      wrapper.findAll(".report-body p").map((item) => item.text()),
+    ).toEqual([
+      "Los cobros han caído.",
+      "Las facturas vencidas presionan la caja.",
+    ]);
+    expect(wrapper.find(".report-section table").text()).toContain(
+      "Cobros40.000EUR",
+    );
+    const exportLink = wrapper.find(".report-export");
+    expect(exportLink.attributes("href")).toBe(
+      "/api/companies/COMP_A/report.pdf?role=financiero",
+    );
+    expect(exportLink.attributes("target")).toBe("_blank");
+    const salesTab = wrapper
+      .findAll(".role-tabs button")
+      .find((button) => button.text() === "Ventas");
+    await salesTab?.trigger("click");
+    await flushPromises();
+    expect(requested).toContain("/api/companies/COMP_A/report?role=ventas");
+    expect(wrapper.find(".report-export").attributes("href")).toBe(
+      "/api/companies/COMP_A/report.pdf?role=ventas",
+    );
+  });
+
+  it("keeps the radiography visible when its report fails", async () => {
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      return url.pathname.endsWith("/report")
+        ? Promise.resolve(new Response("down", { status: 500 }))
+        : base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(wrapper.find(".report .error").text()).toBe(
+      "/companies/COMP_A/report?role=financiero answered 500",
+    );
+  });
+
   it("opens the first company matching a typed id prefix", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
