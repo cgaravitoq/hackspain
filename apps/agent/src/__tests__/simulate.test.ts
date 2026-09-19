@@ -63,6 +63,26 @@ describe("GET /companies/:id/simulate", () => {
     expect(body.scenarios).toEqual([]);
   });
 
+  it("projects every month from the published monthly net flow to the cent", async () => {
+    const body = await simulation("COMP_H/simulate?draw=12000&apr=0.06");
+    const net = body.inputs.net_flow_monthly;
+    const steps = (cash: number[]) =>
+      cash.slice(1).map((value, month) => cents(value - (cash[month] ?? 0)));
+    expect(net).toBe(cents((-60_000 - 59_999 - 59_999) / 3));
+    expect(net).toBe(-59_999.33);
+    expect(body.baseline.cash).toEqual([
+      150_000, 90_000.67, 30_001.34, -29_997.99, -89_997.32, -149_996.65,
+      -209_995.98,
+    ]);
+    expect(steps(body.baseline.cash)).toEqual(Array(6).fill(net));
+    const draw = single(body);
+    const interest = cents((12_000 * 0.06) / 12);
+    expect(steps(draw.cash)).toEqual([
+      cents(net + 12_000 - interest),
+      ...Array(5).fill(cents(net - interest)),
+    ]);
+  });
+
   it("resolves a demo company name and projects only the requested horizon", async () => {
     const named = await simulation("Bodegas%20Altamira/simulate?horizon=2");
     expect(named.company_id).toBe("COMP_0077");

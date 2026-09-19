@@ -175,16 +175,19 @@ export function simulate(
     outflow: entry.flows.outflow,
     fees: OBSERVED_FEES,
   }));
-  const net = mean(
-    months.map(
-      (entry) =>
-        entry.flows.inflow - entry.flows.outflow - entry.flows.debt_repayment,
+  const net = round(
+    mean(
+      months.map(
+        (entry) =>
+          entry.flows.inflow - entry.flows.outflow - entry.flows.debt_repayment,
+      ),
     ),
+    CENTS,
   );
   const monthly = {
-    inflow: mean(observed.map((flows) => flows.inflow)),
-    outflow: mean(observed.map((flows) => flows.outflow)),
-    fees: mean(observed.map((flows) => flows.fees)),
+    inflow: round(mean(observed.map((flows) => flows.inflow)), CENTS),
+    outflow: round(mean(observed.map((flows) => flows.outflow)), CENTS),
+    fees: round(mean(observed.map((flows) => flows.fees)), CENTS),
   };
   const baselineCash = cashPath(
     treasury.starting_cash,
@@ -289,7 +292,7 @@ export function simulate(
       pending_receivables: round(treasury.pending_receivables, CENTS),
       credit_line_limit: round(treasury.credit_line_limit, CENTS),
       credit_line_drawn: round(treasury.credit_line_drawn, CENTS),
-      net_flow_monthly: round(net, CENTS),
+      net_flow_monthly: net,
     },
     baseline: {
       cash: baselineCash,

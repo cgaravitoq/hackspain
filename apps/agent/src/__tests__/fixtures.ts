@@ -15,6 +15,7 @@ type Month = {
   score: number | null;
   state: State;
   observed?: boolean;
+  inflow?: number;
 };
 
 export const TREASURY: Treasury = {
@@ -72,7 +73,7 @@ function entry(month: Month, previous: Month | undefined): MonthEntry {
       rule_version: "xray-score/0.1",
     },
     flows: {
-      inflow: 40_000,
+      inflow: month.inflow ?? 40_000,
       outflow: 100_000,
       financing_in: 0,
       financing_out: 0,
@@ -162,6 +163,12 @@ export const slipping = company("COMP_D", "GROUP_2", [
   { month: "2026-06", score: 45.0, state: "slipping" },
   { month: "2026-07", score: 42.0, state: "slipping" },
   { month: "2026-08", score: 40.0, state: "slipping" },
+]);
+
+export const drift = company("COMP_H", "GROUP_4", [
+  { month: "2026-06", score: 88.1, state: "healthy", inflow: 40_000 },
+  { month: "2026-07", score: 90.4, state: "healthy", inflow: 40_001 },
+  { month: "2026-08", score: 91.0, state: "healthy", inflow: 40_001 },
 ]);
 
 export const short = company("COMP_G", "GROUP_2", [
@@ -285,6 +292,7 @@ export async function seed(db: D1Database): Promise<void> {
     slipping,
     short,
     demo,
+    drift,
   ].map((detail) => {
     const { series: _series, ...summary } = detail;
     return db
