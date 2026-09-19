@@ -74,7 +74,13 @@ describe("GET /graph", () => {
     ]);
   });
 
-  it("treats confidence as a minimum, dropping low at medium and keeping only high at high", async () => {
+  it("treats confidence as a minimum, keeping every edge at low, dropping low at medium and keeping only high at high", async () => {
+    const low = await graph("?confidence=low");
+    expect(low.edges.map((edge) => edge.confidence)).toEqual([
+      "high",
+      "low",
+      "medium",
+    ]);
     const medium = await graph("?confidence=medium");
     expect(medium.edges.map((edge) => edge.confidence)).toEqual([
       "high",
