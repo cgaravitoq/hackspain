@@ -11,6 +11,7 @@ import {
   monthEntrySchema,
   ROLE_LABELS,
   reportSchema,
+  reportSectionCodeSchema,
   roleSchema,
   stateSchema,
 } from "./xray.ts";
@@ -347,6 +348,97 @@ describe("xray contracts", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["sections"],
+    ]);
+  });
+
+  it("rejects a report that omits the sections key", () => {
+    const { sections: _sections, ...reportWithoutSections } = demoReport;
+    const result = reportSchema.safeParse(reportWithoutSections);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections"],
+    ]);
+  });
+
+  it("accepts a report for each of the three product roles", () => {
+    for (const role of ["tesorero", "financiero", "ventas"]) {
+      expect(reportSchema.parse({ ...demoReport, role }).role).toBe(role);
+    }
+  });
+
+  it("admits exactly the six section codes, decision included, in order", () => {
+    expect(reportSectionCodeSchema.options).toEqual([
+      "resumen",
+      "por_que",
+      "que_hacer",
+      "datos_y_limites",
+      "grupo",
+      "decision",
+    ]);
+  });
+
+  it("accepts a report generated at the current instant", () => {
+    const generatedAt = new Date().toISOString();
+    const report = reportSchema.parse({
+      ...demoReport,
+      generated_at: generatedAt,
+    });
+    expect(report.generated_at).toBe(generatedAt);
+  });
+
+  it("rejects a report whose generated_at is not an ISO datetime", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      generated_at: "yesterday",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["generated_at"],
+    ]);
+  });
+
+  it("rejects a report without an export url", () => {
+    const { export_url: _exportUrl, ...reportWithoutExportUrl } = demoReport;
+    const result = reportSchema.safeParse(reportWithoutExportUrl);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["export_url"],
+    ]);
+  });
+
+  it("rejects a report figure without a label", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      sections: [
+        {
+          code: "resumen",
+          title: "Resumen",
+          body: "Texto",
+          figures: [{ value: 50, unit: "pts" }],
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections", 0, "figures", 0, "label"],
+    ]);
+  });
+
+  it("rejects a report figure without a unit", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      sections: [
+        {
+          code: "resumen",
+          title: "Resumen",
+          body: "Texto",
+          figures: [{ label: "Score", value: 50 }],
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["sections", 0, "figures", 0, "unit"],
     ]);
   });
 
