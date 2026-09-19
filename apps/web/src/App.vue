@@ -7,7 +7,7 @@ import type {
   GroupMap,
   Meta,
 } from "@hackspain/shared";
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AlertList from "./components/AlertList.vue";
 import ChatPanel from "./components/ChatPanel.vue";
@@ -46,6 +46,10 @@ function select(companyId: string) {
   selected.value = companyId;
 }
 
+function syncHash() {
+  selected.value = window.location.hash.slice(1);
+}
+
 function search() {
   const text = query.value.trim().toUpperCase();
   const hit =
@@ -82,7 +86,10 @@ onMounted(async () => {
     selected.value =
       alerts.value[0]?.company_id ?? companies.value[0]?.company_id ?? "";
   }
+  window.addEventListener("hashchange", syncHash);
 });
+
+onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 </script>
 
 <template>

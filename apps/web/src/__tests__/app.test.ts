@@ -100,6 +100,20 @@ describe("App", () => {
     expect(wrapper.find(".error").text()).toBe("/meta answered 500");
   });
 
+  it("follows a hash change to another company", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    window.location.hash = "COMP_B";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
   it("loads another company when an alert is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
