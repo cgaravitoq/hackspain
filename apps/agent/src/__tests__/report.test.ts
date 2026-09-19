@@ -1,11 +1,13 @@
 import { env } from "cloudflare:test";
 import { reportSchema } from "@hackspain/shared";
 import { MockLanguageModelV4 } from "ai/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { createApp } from "../app.ts";
 import { seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
+beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
 
 const narrative = {
   summary: "Revisar los hechos observados con las personas autorizadas.",
@@ -34,6 +36,82 @@ function reply(text: string) {
     warnings: [],
   };
 }
+
+const pdfRequest = z.strictObject({
+  html: z.string(),
+  pdfOptions: z.object({
+    format: z.literal("a4"),
+    printBackground: z.literal(true),
+    displayHeaderFooter: z.literal(true),
+    headerTemplate: z.string(),
+    footerTemplate: z.string(),
+    margin: z.object({
+      top: z.string(),
+      bottom: z.string(),
+      left: z.string(),
+      right: z.string(),
+    }),
+  }),
+  rejectRequestPattern: z.array(z.string()),
+});
+
+const pdfBytes = new TextEncoder().encode(
+  "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
+);
+
+describe("GET /companies/:id/report.pdf", () => {
+  it("renders the role sections and disclaimer once and caches PDF bytes in D1", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const quickAction = vi.fn((action: "pdf", input: BrowserRunPDFOptions) => {
+      expect(action).toBe("pdf");
+      const request = pdfRequest.parse(input);
+      expect(request.html).toContain("Indicadores históricos de tesorería");
+      expect(request.html).toContain(
+        "No constituye una calificación crediticia, una certificación de solvencia",
+      );
+      expect(request.html).toContain(
+        "El índice mensual, de 0 a 100, combina nivel y momentum acotado.",
+      );
+      for (const section of narrative.sections) {
+        expect(request.html).toContain(section.title);
+      }
+      expect(request.html).toContain("debt_repayment_break");
+      expect(request.html).toContain("No disponible");
+      expect(request.html).toContain("12000");
+      expect(request.pdfOptions.headerTemplate).toContain("COMP_A");
+      expect(request.pdfOptions.footerTemplate).toContain('class="pageNumber"');
+      expect(request.pdfOptions.footerTemplate).toContain('class="totalPages"');
+      expect(request.rejectRequestPattern).toEqual([".*"]);
+      return Promise.resolve(
+        new Response(pdfBytes, {
+          headers: { "content-type": "application/pdf" },
+        }),
+      );
+    });
+    const app = createApp({ model: () => model, browser: { quickAction } });
+    for (let request = 0; request < 2; request++) {
+      const response = await app.request(
+        "/companies/COMP_A/report.pdf?role=tesorero",
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/pdf");
+      expect(response.headers.get("content-disposition")).toContain("COMP_A");
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(pdfBytes);
+    }
+    expect(quickAction).toHaveBeenCalledTimes(1);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    const cached = await env.DB.prepare(
+      "SELECT length(pdf) AS size FROM reports WHERE company_id = ? AND role = ?",
+    )
+      .bind("COMP_A", "tesorero")
+      .first<{ size: number }>();
+    expect(cached?.size).toBe(pdfBytes.byteLength);
+  });
+});
 
 describe("GET /companies/:id/report", () => {
   it("grounds the role sections and figures in D1 and reuses the stored report", async () => {

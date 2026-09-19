@@ -20,6 +20,7 @@
     }
   ],
   "ai": { "binding": "AI", "remote": true },
+  "browser": { "binding": "BROWSER", "remote": true },
   // Bindings and vars are not inherited by named environments, so staging
   // repeats everything it needs.
   "env": {
@@ -34,7 +35,8 @@
           "migrations_dir": "migrations"
         }
       ],
-      "ai": { "binding": "AI", "remote": true }
+      "ai": { "binding": "AI", "remote": true },
+      "browser": { "binding": "BROWSER", "remote": true }
     }
   }
 }
