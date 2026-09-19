@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import type { Alert, Report, Role } from "@hackspain/shared";
+import type {
+  Alert,
+  CommitmentDraftResult,
+  CommitmentRequest,
+  CommitmentResponse,
+  Report,
+  Role,
+} from "@hackspain/shared";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import ChatPanel from "./ChatPanel.vue";
 
@@ -11,16 +18,26 @@ const props = defineProps<{
   companyId: string;
   alerts: Alert[];
   role: Role;
+  confirmedCommitment?: CommitmentRequest | null;
 }>();
 
 const emit = defineEmits<{
   compare: [companyIds: string[]];
   report: [result: ReportResult];
+  commitment: [result: CommitmentResponse];
+  draft: [result: CommitmentDraftResult];
 }>();
 
 const open = ref(false);
 const seen = ref(false);
 const panel = ref<HTMLElement | null>(null);
+const chatPanel = ref<{ sendConfirmation: () => void } | null>(null);
+
+function sendConfirmation() {
+  chatPanel.value?.sendConfirmation();
+}
+
+defineExpose({ sendConfirmation, openChat, close });
 
 function close() {
   open.value = false;
@@ -73,12 +90,16 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
     aria-label="Asistente"
   >
     <ChatPanel
+      ref="chatPanel"
       :company-id="props.companyId"
       :alerts="props.alerts"
       :role="props.role"
+      :confirmed-commitment="props.confirmedCommitment"
       @close="close"
       @compare="emit('compare', $event)"
       @report="emit('report', $event)"
+      @commitment="emit('commitment', $event)"
+      @draft="emit('draft', $event)"
     />
   </div>
   <button

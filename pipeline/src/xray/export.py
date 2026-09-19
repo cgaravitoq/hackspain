@@ -52,7 +52,7 @@ def alert_stage(kind: str, state: str) -> str | None:
 
 def _write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 
 def _rows_by_company(
@@ -345,6 +345,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             invoice_facts,
             _treasury_of(treasury, company_id),
         )
+        record["treasury_snapshot"] = dataset.treasury_snapshots.get(company_id)
         companies_out.append(record)
         _write(out_dir / "scores" / f"{company_id}.json", {**record, "series": series})
         alert = _alert(company_id, latest, before, company_group)
@@ -356,6 +357,8 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
             company_group, company_rows, company_currency, holdout_groups, debt_by_company, invoice_facts, treasury
         )
     )
+    for record in companies_out:
+        record["treasury_snapshot"] = dataset.treasury_snapshots.get(record["company_id"])
     companies_out.sort(key=lambda item: item["company_id"])
     groups_out = _groups(group_ids, companies_out, holdout_groups)
     order = {"down": 0, "recovered": 1, "up": 2}

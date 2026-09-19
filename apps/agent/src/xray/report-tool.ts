@@ -2,7 +2,6 @@ import { roleSchema } from "@hackspain/shared";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
 import { loadReport, resolveCompany } from "./report.ts";
-import type { Judge } from "./report-judge.ts";
 import { type ReportBrowser, reportFilename, reportPdf } from "./report-pdf.ts";
 
 export const reportInput = z.object({
@@ -21,13 +20,12 @@ export const reportDescription =
 export function createReportTool(
   db: D1Database,
   model: () => LanguageModel,
-  judge: Judge,
   browser: ReportBrowser,
   baseUrl: string,
 ) {
   return async (input: z.infer<typeof reportInput>) => {
     const companyId = resolveCompany(input.company);
-    const report = await loadReport(db, model, judge, companyId, input.role);
+    const report = await loadReport(db, model, companyId, input.role);
     const pdf = await reportPdf(db, browser, report);
     return {
       url: `${baseUrl}/companies/${encodeURIComponent(companyId)}/report.pdf?role=${input.role}`,

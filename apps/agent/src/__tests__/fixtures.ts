@@ -83,6 +83,17 @@ function entry(month: Month, previous: Month | undefined): MonthEntry {
   };
 }
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type RequestBody = { [key: string]: JsonValue };
+
 export function company(
   id: string,
   groupId: string,

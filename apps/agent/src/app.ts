@@ -1,6 +1,7 @@
 import {
   alertKindSchema,
   chatRequestSchema,
+  commitmentRequestSchema,
   environmentSchema,
   type HealthResponse,
   relationConfidenceSchema,
@@ -12,12 +13,13 @@ import {
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { chat, workersAiModel } from "./xray/chat.ts";
+import { commitmentContext } from "./xray/commitment.ts";
 import { createMcpServer } from "./xray/mcp.ts";
-import { loadReport, reportSources } from "./xray/report.ts";
+import { loadReport } from "./xray/report.ts";
 import { renderReportHtml } from "./xray/report-html.ts";
-import { createJudge, type Judge } from "./xray/report-judge.ts";
 import {
   type ReportBrowser,
   reportFilename,
@@ -26,11 +28,10 @@ import {
 import { createReportTool } from "./xray/report-tool.ts";
 import { simulateCompany, simulateQuery } from "./xray/simulate.ts";
 import { createStore } from "./xray/store.ts";
-import { createTools } from "./xray/tools.ts";
+import { createTools, resolveCompanyId } from "./xray/tools.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
-  judge?: (env: Env) => Judge;
   browser?: ReportBrowser;
 };
 
@@ -62,8 +63,6 @@ const graphQuerySchema = z.object({
 
 export function createApp(options: AppOptions = {}) {
   const model = options.model ?? ((env: Env) => workersAiModel(env.AI));
-  const judge =
-    options.judge ?? ((env: Env) => createJudge(env.TYPESAFE_API_KEY));
   const app = new Hono<{ Bindings: Env }>();
 
   app.get("/health", (context) => {
@@ -100,6 +99,38 @@ export function createApp(options: AppOptions = {}) {
       ? context.json(explanation, 404)
       : context.json(explanation);
   });
+
+  app.get("/companies/:id/commitment-context", async (context) => {
+    const company = await createStore(context.env.DB).company(
+      resolveCompanyId(context.req.param("id")),
+    );
+    return company
+      ? context.json(commitmentContext(company))
+      : context.json({ error: "Unknown company" }, 404);
+  });
+
+  app.post(
+    "/companies/:id/commitment",
+    bodyLimit({ maxSize: 65_536 }),
+    async (context) => {
+      const request = commitmentRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!request.success) {
+        return context.json({ error: z.treeifyError(request.error) }, 400);
+      }
+      const result = await createTools(
+        createStore(context.env.DB),
+      ).simulate_commitment({
+        company_id: context.req.param("id"),
+        ...request.data,
+      });
+      context.header("cache-control", "private, no-store");
+      return "error" in result
+        ? context.json(result, 404)
+        : context.json(result);
+    },
+  );
 
   app.get("/compare", async (context) => {
     const query = compareQuerySchema.safeParse(context.req.query());
@@ -142,7 +173,6 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
-      judge(context.env),
       context.req.param("id"),
       role.data,
     );
@@ -157,7 +187,6 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
-      judge(context.env),
       context.req.param("id"),
       role.data,
     );
@@ -184,14 +213,12 @@ export function createApp(options: AppOptions = {}) {
     const report = await loadReport(
       context.env.DB,
       () => model(context.env),
-      judge(context.env),
       context.req.param("id"),
       role.data,
     );
-    const sources = await reportSources(context.env.DB, report.company_id);
     context.header("cache-control", "private, no-store");
     context.header("x-content-type-options", "nosniff");
-    return context.html(renderReportHtml(report, sources));
+    return context.html(renderReportHtml(report));
   });
 
   app.get("/companies/:id/relations", async (context) => {
@@ -259,7 +286,6 @@ export function createApp(options: AppOptions = {}) {
       createReportTool(
         context.env.DB,
         () => model(context.env),
-        judge(context.env),
         options.browser ?? context.env.BROWSER,
         "/api",
       ),
@@ -273,7 +299,6 @@ export function createApp(options: AppOptions = {}) {
       createReportTool(
         context.env.DB,
         () => model(context.env),
-        judge(context.env),
         options.browser ?? context.env.BROWSER,
         new URL(context.req.url).origin,
       ),

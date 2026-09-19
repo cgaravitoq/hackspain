@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  commitmentEvaluationSchema,
+  commitmentRequestSchema,
+  treasurySnapshotSchema,
+} from "./commitment.ts";
 
 export const stateSchema = z.enum([
   "healthy",
@@ -146,6 +151,7 @@ export const companySummarySchema = z.object({
   }),
   treasury: treasurySchema,
   latest: latestSchema,
+  treasury_snapshot: treasurySnapshotSchema.nullable().optional(),
 });
 
 export type CompanySummary = z.infer<typeof companySummarySchema>;
@@ -195,6 +201,27 @@ export const groupSchema = z.object({
 
 export type Group = z.infer<typeof groupSchema>;
 
+export const diagnosisSchema = z.strictObject({
+  status: z.enum(["CURRENT", "RETROSPECTIVE", "INSUFFICIENT_EVIDENCE"]),
+  scope: z.literal("PARTIAL_TREASURY_DIAGNOSIS"),
+  state_since: z.string().nullable(),
+  findings: z.array(
+    z.strictObject({
+      code: driverCodeSchema,
+      certainty: z.literal("HYPOTHESIS"),
+      observed: z.string(),
+      hypothesis: z.string(),
+      alternative: z.string(),
+      check: z.string(),
+      action: z.string(),
+      evidence_ref: z.string(),
+    }),
+  ),
+  next_steps: z.array(z.string()),
+  limitations: z.array(z.string()),
+});
+export type Diagnosis = z.infer<typeof diagnosisSchema>;
+
 export const explainSchema = z.object({
   company_id: z.string(),
   group_id: z.string().nullable(),
@@ -212,6 +239,7 @@ export const explainSchema = z.object({
   flows: monthEntrySchema.shape.flows,
   invoice_facts: companySummarySchema.shape.invoice_facts,
   action: z.string(),
+  diagnosis: diagnosisSchema.optional(),
 });
 
 export type Explain = z.infer<typeof explainSchema>;
@@ -307,18 +335,67 @@ export const reportSectionSchema = z.object({
 
 export type ReportSection = z.infer<typeof reportSectionSchema>;
 
+export const commitmentResponseSchema = z.strictObject({
+  evaluation: commitmentEvaluationSchema,
+  report_section: reportSectionSchema,
+});
+export type CommitmentResponse = z.infer<typeof commitmentResponseSchema>;
+
 export const reportSchema = z.object({
+  schema_version: z.literal("human-v2"),
   company_id: z.string(),
   month: z.string(),
   role: roleSchema,
   rule_version: z.string(),
   generated_at: z.iso.datetime(),
-  summary: z.string(),
-  sections: z.array(reportSectionSchema).min(1),
+  score: z.number().nullable(),
+  state: stateSchema,
+  state_label: z.string(),
+  headline: z.string().min(1),
+  summary: z.string().min(1),
+  score_explanation: z.string().min(1),
+  outlook: z.string().min(1),
+  caveat: z.string(),
+  next_steps: z.array(z.string().min(1)).max(2),
+  source: z.enum(["llm", "template"]),
   export_url: z.string(),
 });
 
 export type Report = z.infer<typeof reportSchema>;
+
+export type ReportHeadings = {
+  score_explanation: string;
+  outlook: string;
+  caveat: string;
+  next_steps: string;
+};
+
+export const REPORT_HEADINGS: Record<Role, ReportHeadings> = {
+  tesorero: {
+    score_explanation: "Qué ha cambiado",
+    outlook: "Qué podemos esperar",
+    caveat: "Ten en cuenta",
+    next_steps: "Qué conviene revisar",
+  },
+  financiero: {
+    score_explanation: "Por qué tiene esta puntuación",
+    outlook: "Cómo interpretar los próximos meses",
+    caveat: "Hasta dónde llega esta lectura",
+    next_steps: "Qué comprobar antes de decidir",
+  },
+  ventas: {
+    score_explanation: "Qué explica su situación",
+    outlook: "Qué podemos esperar",
+    caveat: "Ten en cuenta",
+    next_steps: "Cómo abordar la conversación",
+  },
+};
+
+export const REPORT_WORD_LIMITS: Record<Role, number> = {
+  tesorero: 300,
+  financiero: 350,
+  ventas: 260,
+};
 
 export const compareSchema = z.object({
   months: z.array(z.string()).min(1),
@@ -544,15 +621,26 @@ const chatPartSchema = z
 export const chatMessageSchema = z
   .object({
     id: z.string().min(1),
-    role: z.enum(["system", "user", "assistant"]),
+    role: z.enum(["user", "assistant"]),
     parts: z.array(chatPartSchema).min(1),
   })
   .loose();
 
-export const chatRequestSchema = z.object({
-  company_id: z.string().min(1).optional(),
-  role: roleSchema.optional(),
-  messages: z.array(chatMessageSchema).min(1),
-});
+export const chatRequestSchema = z
+  .object({
+    company_id: z.string().min(1).max(120).optional(),
+    role: roleSchema.optional(),
+    confirmed_commitment: commitmentRequestSchema.optional(),
+    messages: z.array(chatMessageSchema).min(1),
+  })
+  .superRefine((request, context) => {
+    if (request.confirmed_commitment && !request.company_id) {
+      context.addIssue({
+        code: "custom",
+        path: ["confirmed_commitment"],
+        message: "A confirmed operation requires the selected company",
+      });
+    }
+  });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

@@ -86,7 +86,12 @@ describe("POST /mcp", () => {
       "simulate",
       "report",
       "relations",
+      "simulate_commitment",
     ]);
+    expect(
+      body.result.tools.find((tool) => tool.name === "simulate_commitment")
+        ?.description,
+    ).toContain("Never reserves cash");
     const compare = body.result.tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
     expect(compare?.description).toContain("Talleres Ribera");
