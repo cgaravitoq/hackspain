@@ -15,7 +15,6 @@ function mountSelector(comparison = ["COMP_A"]) {
     props: {
       alerts,
       companies: [...companies, summary("COMP_D")],
-      company: company("COMP_A", "GROUP_1"),
       selected: "COMP_A",
       comparison,
     },
@@ -23,15 +22,13 @@ function mountSelector(comparison = ["COMP_A"]) {
 }
 
 async function openSelector(wrapper: VueWrapper) {
-  await wrapper
-    .find('button[aria-label="Seleccionar empresa"]')
-    .trigger("click");
+  await wrapper.find("#company-search").trigger("focus");
   await flushPromises();
 }
 
 function option(wrapper: VueWrapper, companyId: string) {
   const item = wrapper
-    .findAll(".company-option")
+    .findAll(".option-row")
     .find((candidate) => candidate.find(".company-id").text() === companyId);
   if (!item) {
     throw new Error(`Missing selector option ${companyId}`);
@@ -47,11 +44,10 @@ beforeEach(() => {
 });
 
 describe("CompanySelector", () => {
-  it("shows alert and company groups and filters them by typing", async () => {
+  it("shows companies immediately and filters them by typing", async () => {
     const wrapper = mountSelector();
     await openSelector(wrapper);
-    expect(wrapper.text()).toContain("Alertas del mes");
-    expect(wrapper.text()).toContain("Todas");
+    expect(wrapper.findAll(".company-option")).toHaveLength(4);
     await wrapper.find("#company-search").setValue("COMP_B");
     await flushPromises();
     expect(wrapper.findAll(".company-id").map((item) => item.text())).toEqual([
@@ -65,12 +61,10 @@ describe("CompanySelector", () => {
     await openSelector(wrapper);
     await option(wrapper, "COMP_B").find(".compare-toggle").trigger("click");
     expect(wrapper.emitted("compare")).toEqual([[["COMP_A", "COMP_B"]]]);
-    expect(
-      wrapper
-        .find('button[aria-label="Seleccionar empresa"]')
-        .attributes("aria-expanded"),
-    ).toBe("true");
-    await option(wrapper, "COMP_C").trigger("click");
+    expect(wrapper.find("#company-search").attributes("aria-expanded")).toBe(
+      "true",
+    );
+    await option(wrapper, "COMP_C").find(".company-option").trigger("click");
     expect(wrapper.emitted("open")).toEqual([["COMP_C"]]);
     wrapper.unmount();
   });

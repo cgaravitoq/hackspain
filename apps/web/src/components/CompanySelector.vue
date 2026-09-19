@@ -30,7 +30,14 @@ const alertsByCompany = computed(
 );
 const results = computed(() => {
   const text = query.value.trim().toUpperCase();
-  return props.companies
+  const byId = new Map<string, { company_id: string }>();
+  for (const alert of props.alerts) {
+    byId.set(alert.company_id, alert);
+  }
+  for (const company of props.companies) {
+    byId.set(company.company_id, company);
+  }
+  return [...byId.values()]
     .filter((item) => !text || item.company_id.toUpperCase().includes(text))
     .slice(0, SEARCH_RESULTS_LIMIT);
 });

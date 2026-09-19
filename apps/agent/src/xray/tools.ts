@@ -319,16 +319,15 @@ export function createTools(store: Store) {
           error: `No scored month ${input.month ?? ""} for ${companyId}`,
         };
       }
-      return explainOf(
-        company,
-        input.month
-          ? entry
-          : {
-              ...entry,
-              state: company.latest.state,
-              confidence: company.latest.confidence,
-            },
-      );
+      const explanation = explainOf(company, entry);
+      return input.month
+        ? explanation
+        : {
+            ...explanation,
+            state: company.latest.state,
+            state_label: STATE_LABELS[company.latest.state],
+            confidence: company.latest.confidence,
+          };
     },
 
     async what_changed(input: z.infer<typeof toolInputs.what_changed>) {

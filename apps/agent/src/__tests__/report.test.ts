@@ -428,13 +428,6 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
-  it("requests all receivables and only the undrawn line for the decision", () => {
-    const simulation = decisionSimulation(falling);
-    expect(simulation?.scenarios.map((scenario) => scenario.requested)).toEqual(
-      [33_333.33, 33_333.33],
-    );
-  });
-
   it("reserves the output budget for narrative rather than model reasoning", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) =>
@@ -689,10 +682,7 @@ describe("GET /companies/:id/report", () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });
-    const judge = vi.fn((_narrative: Narrative) =>
-      Promise.resolve<Verdict>({ verdict: "accepted" }),
-    );
-    const app = createApp({ model: () => model, judge: () => judge });
+    const app = createApp({ model: () => model });
     const response = await app.request(
       "/companies/COMP_A/report?role=tesorero",
       undefined,

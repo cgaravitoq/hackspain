@@ -84,7 +84,7 @@ function chartCompanies(wrapper: VueWrapper) {
 }
 
 async function openSelector(wrapper: VueWrapper) {
-  const input = wrapper.find('#company-search');
+  const input = wrapper.find("#company-search");
   if (input.attributes("aria-expanded") !== "true") {
     await input.trigger("focus");
     await flushPromises();
@@ -103,7 +103,9 @@ function companyOption(wrapper: VueWrapper, companyId: string) {
 
 async function openCompanyFromSelector(wrapper: VueWrapper, companyId: string) {
   await openSelector(wrapper);
-  await companyOption(wrapper, companyId).find(".company-option").trigger("click");
+  await companyOption(wrapper, companyId)
+    .find(".company-option")
+    .trigger("click");
   await flushPromises();
   await flushPromises();
 }
@@ -234,7 +236,9 @@ describe("App", () => {
     expect(wrapper.find(".topbar").text()).not.toContain("datos hasta");
     expect(wrapper.find(".company-selector").exists()).toBe(true);
     expect(wrapper.find("#company-search").attributes("role")).toBe("combobox");
-    expect(wrapper.find(".company-selector .compare-chip").exists()).toBe(false);
+    expect(wrapper.find(".company-selector .compare-chip").exists()).toBe(
+      false,
+    );
     expect(wrapper.find(".alerts").exists()).toBe(false);
   });
 
@@ -352,8 +356,7 @@ describe("App", () => {
     });
     const wrapper = mountApp();
     await flushPromises();
-    await wrapper.find("#company-search").setValue("COMP_B");
-    await wrapper.find("form.search").trigger("submit");
+    await openCompanyFromSelector(wrapper, "COMP_B");
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_B");
