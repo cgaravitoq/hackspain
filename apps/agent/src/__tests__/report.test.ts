@@ -5,8 +5,9 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
+import { decisionSimulation } from "../xray/report.ts";
 import type { Narrative, Verdict } from "../xray/report-judge.ts";
-import { company, seed } from "./fixtures.ts";
+import { company, falling, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
@@ -21,6 +22,7 @@ const narrative = {
     { code: "grupo", title: "Mi grupo" },
     { code: "datos_y_limites", title: "Calidad del análisis" },
     { code: "que_hacer", title: "Acciones posibles" },
+    { code: "decision", title: "Decisión" },
   ].map((section) => ({
     ...section,
     body: "Contrastar los datos disponibles antes de actuar.",
@@ -359,6 +361,13 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
+  it("requests all receivables and only the undrawn line for the decision", () => {
+    const simulation = decisionSimulation(falling);
+    expect(simulation?.scenarios.map((scenario) => scenario.requested)).toEqual(
+      [33_333.33, 33_333.33],
+    );
+  });
+
   it("reserves the output budget for narrative rather than model reasoning", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) =>
@@ -390,6 +399,7 @@ describe("GET /companies/:id/report", () => {
         "Contexto del grupo",
         "Cobertura y reproducibilidad",
         "Seguimiento humano",
+        "Decisión",
       ],
       codes: [
         "resumen",
@@ -399,6 +409,7 @@ describe("GET /companies/:id/report", () => {
         "grupo",
         "datos_y_limites",
         "que_hacer",
+        "decision",
       ],
     },
     {
@@ -410,6 +421,7 @@ describe("GET /companies/:id/report", () => {
         "Alcance del grupo",
         "Capacidades pertinentes",
         "Qué sabemos y qué falta",
+        "Decisión",
       ],
       codes: [
         "resumen",
@@ -418,6 +430,7 @@ describe("GET /companies/:id/report", () => {
         "grupo",
         "que_hacer",
         "datos_y_limites",
+        "decision",
       ],
     },
   ])(
@@ -517,10 +530,6 @@ describe("GET /companies/:id/report", () => {
 
   it.each([
     JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
-    JSON.stringify({
-      ...narrative,
-      sections: [{ code: "decision", title: "Forbidden", body: "Forbidden" }],
-    }),
     JSON.stringify({ ...narrative, sections: narrative.sections.slice(0, 2) }),
     "not JSON",
   ])(
@@ -610,6 +619,23 @@ describe("GET /companies/:id/report", () => {
       "SELECT count(*) AS count FROM reports",
     ).first<{ count: number }>();
     expect(row?.count).toBe(0);
+  });
+
+  it("rejects a decision section outside the final position", async () => {
+    const misplaced = {
+      ...narrative,
+      sections: [narrative.sections.at(-1), ...narrative.sections.slice(0, -1)],
+    };
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(misplaced)),
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_A/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(502);
+    expect(model.doGenerateCalls).toHaveLength(2);
   });
 
   it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
@@ -718,9 +744,52 @@ describe("GET /companies/:id/report", () => {
       value: 2,
       unit: "companies",
     });
-    expect(report.sections.some((section) => section.code === "decision")).toBe(
-      false,
-    );
+    expect(report.sections.at(-1)).toMatchObject({
+      code: "decision",
+      title: "Decisión",
+      figures: [
+        {
+          label: "adelanto de cobros · Caja mínima",
+          value: -177_333.34,
+          unit: "EUR",
+        },
+        {
+          label: "adelanto de cobros · Caja final",
+          value: -177_333.34,
+          unit: "EUR",
+        },
+        {
+          label: "adelanto de cobros · Coste",
+          value: 666.67,
+          unit: "EUR",
+        },
+        {
+          label: "adelanto de cobros · Delta score",
+          value: -1.3,
+          unit: "pts",
+        },
+        {
+          label: "disposición de línea · Caja mínima",
+          value: -177_666.69,
+          unit: "EUR",
+        },
+        {
+          label: "disposición de línea · Caja final",
+          value: -177_666.69,
+          unit: "EUR",
+        },
+        {
+          label: "disposición de línea · Coste",
+          value: 1000.02,
+          unit: "EUR",
+        },
+        {
+          label: "disposición de línea · Delta score",
+          value: -0.2,
+          unit: "pts",
+        },
+      ],
+    });
     expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
     expect(prompt).toContain("tesorero");
