@@ -20,7 +20,12 @@ afterEach(() => vi.unstubAllGlobals());
 describe("ChatPanel", () => {
   it("renders the assistant header and closes from its button", async () => {
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
     });
     expect(wrapper.find("h2").text()).toBe("TellMe · X Ray");
     await wrapper
@@ -34,7 +39,12 @@ describe("ChatPanel", () => {
       alert(`COMP_${index}`),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts: capped, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts: capped,
+        role: "ventas",
+      },
     });
     expect(wrapper.text()).toContain(`${ALERTS_LIMIT}+ alertas`);
   });
@@ -66,7 +76,12 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "tesorero" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "tesorero",
+      },
     });
     expect(wrapper.find(".panel-title").text()).toBe("TellMe · X Ray");
     await wrapper
@@ -101,6 +116,7 @@ describe("ChatPanel", () => {
     const wrapper = mount(ChatPanel, {
       props: {
         companyId: "COMP_A",
+        compareIds: ["COMP_A"],
         alerts,
         role: "tesorero",
         confirmedCommitment,
@@ -111,6 +127,34 @@ describe("ChatPanel", () => {
     const body = JSON.parse(bodies[0] ?? "{}");
     expect(body.confirmed_commitment).toEqual(confirmedCommitment);
     expect(body.messages[0].parts[0].text).toBe(COMMITMENT_CONFIRMATION);
+  });
+
+  it("sends the companies the chart compares and omits them when only one is drawn", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body));
+      return Promise.resolve(sse([{ type: "start" }, { type: "finish" }]));
+    });
+    const wrapper = mount(ChatPanel, {
+      props: {
+        companyId: "COMP_A",
+        alerts,
+        role: "financiero",
+        compareIds: ["COMP_A", "COMP_B"],
+      },
+    });
+    await wrapper.find("input").setValue("Compara ambas");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() => expect(bodies).toHaveLength(1));
+    expect(JSON.parse(bodies[0] ?? "{}").compare_ids).toEqual([
+      "COMP_A",
+      "COMP_B",
+    ]);
+    await wrapper.setProps({ compareIds: ["COMP_A"] });
+    await wrapper.find("input").setValue("¿Y ahora?");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() => expect(bodies).toHaveLength(2));
+    expect("compare_ids" in JSON.parse(bodies[1] ?? "{}")).toBe(false);
   });
 
   it("sends the question with the company on screen and renders the streamed answer and tool calls", async () => {
@@ -143,7 +187,12 @@ describe("ChatPanel", () => {
       );
     });
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
     });
     expect(wrapper.text()).toContain(
       "2 alertas, 1 empresas empeoran y 1 se recuperan",
@@ -187,7 +236,12 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
     });
     await wrapper.find("input").setValue("Exporta el informe");
     await wrapper.find("form").trigger("submit");
@@ -237,7 +291,12 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
     });
     await wrapper.find("input").setValue("¿Cómo está el grupo?");
     await wrapper.find("form").trigger("submit");
@@ -265,7 +324,12 @@ describe("ChatPanel", () => {
       ),
     );
     const wrapper = mount(ChatPanel, {
-      props: { companyId: "COMP_A", alerts, role: "ventas" },
+      props: {
+        companyId: "COMP_A",
+        compareIds: ["COMP_A"],
+        alerts,
+        role: "ventas",
+      },
     });
     const list = wrapper.find(".messages").element;
     let height = 0;

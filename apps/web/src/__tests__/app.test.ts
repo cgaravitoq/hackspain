@@ -3,14 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
 import { company, fakeApi } from "./fixtures.ts";
 
-const sendConfirmation = vi.fn();
-
 const ChatPanelStub = {
-  props: ["companyId", "alerts", "role", "confirmedCommitment"],
+  props: ["companyId", "compareIds", "alerts", "role", "confirmedCommitment"],
   emits: ["close", "compare", "report", "commitment", "draft"],
-  methods: { sendConfirmation },
   template:
     "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
+};
+
+const RelationGraphStub = {
+  emits: ["analyze"],
+  template: "<div class='graph-stub' />",
 };
 
 function sse(chunks: object[]): Response {
@@ -281,66 +283,18 @@ describe("App", () => {
     expect(wrapper.find(".selector-popover").exists()).toBe(false);
   });
 
-  it("keeps TellMe as the only assistant and opens the operation form from its draft", async () => {
+  it("hides the operation form and keeps TellMe as the only assistant", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find('[aria-label="Qué necesitas"]').exists()).toBe(false);
-    expect(wrapper.findAll(".chat-stub")).toHaveLength(1);
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    const chat = wrapper.findComponent(ChatPanelStub);
-    chat.vm.$emit("draft", {
-      company_id: "COMP_B",
-      draft: { opportunity: { title: "Otro" } },
-      missing: [],
-    });
-    await flushPromises();
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    chat.vm.$emit("draft", {
-      company_id: "COMP_A",
-      draft: { opportunity: { title: "Pedido" } },
-      missing: ["opportunity.costs"],
-    });
-    await flushPromises();
-    expect(wrapper.find(".commitment").text()).toContain("COMP_A");
-    expect(wrapper.find(".commitment").text()).toContain(
-      "TellMe ha rellenado el formulario",
-    );
-    await wrapper.find(".commitment .close").trigger("click");
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    await wrapper.find(".open-commitment").trigger("click");
-    expect(wrapper.find(".commitment").exists()).toBe(true);
     expect(wrapper.find("h1").text()).toBe("COMP_A");
-  });
-
-  it("tells TellMe when the operation form is confirmed", async () => {
-    vi.stubGlobal("fetch", fakeApi([]));
-    sendConfirmation.mockClear();
-    const wrapper = mountApp();
-    await flushPromises();
-    await flushPromises();
-    await wrapper.find(".open-commitment").trigger("click");
-    const request = { horizon_months: 1, reserve_floor_minor: 0 };
-    wrapper
-      .findComponent({ name: "CommitmentPanel" })
-      .vm.$emit("evaluated", request, {
-        evaluation: { company_id: "COMP_A" },
-        report_section: {
-          code: "decision",
-          title: "Evaluación de una operación",
-          body: "Sin anticipo, la caja mínima estimada es 10 €.",
-          figures: [],
-        },
-      });
-    await flushPromises();
-    expect(
-      wrapper.findComponent(ChatPanelStub).props("confirmedCommitment"),
-    ).toEqual(request);
-    expect(sendConfirmation).toHaveBeenCalledTimes(1);
-    expect(wrapper.find(".report-decision h3").text()).toBe(
-      "Evaluación de una operación",
+    expect(wrapper.findAll(".chat-stub")).toHaveLength(1);
+    expect(wrapper.find(".open-commitment").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "CommitmentPanel" }).exists()).toBe(
+      false,
     );
+    expect(wrapper.text()).not.toContain("Evaluar una operación");
   });
 
   it("does not replace the selected company with a late response from the previous company", async () => {
@@ -565,6 +519,69 @@ describe("App", () => {
       expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_C"]),
     );
     expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("keeps the selected company on screen when chat compares it with another", async () => {
+    const seen: string[] = [];
+    const base = fakeApi(seen);
+    const chatBodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), "https://web.test");
+        if (url.pathname !== "/api/chat") {
+          return base(input);
+        }
+        chatBodies.push(String(init?.body));
+        return Promise.resolve(
+          sse([
+            { type: "start" },
+            {
+              type: "tool-input-available",
+              toolCallId: "compare-1",
+              toolName: "compare",
+              input: { company_ids: ["COMP_B", "COMP_A"] },
+            },
+            {
+              type: "tool-output-available",
+              toolCallId: "compare-1",
+              output: {
+                months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+                companies: [
+                  company("COMP_B", "GROUP_1"),
+                  company("COMP_A", "GROUP_1"),
+                ],
+              },
+            },
+            { type: "finish" },
+          ]),
+        );
+      },
+    );
+    mounted = mount(App, { attachTo: document.body });
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    await wrapper
+      .find('button[aria-label="Abrir el asistente"]')
+      .trigger("click");
+    await wrapper.find("#chat-input").setValue("Compara ambas");
+    await wrapper.find(".chat form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_A"]),
+    );
+    expect(JSON.parse(chatBodies[0] ?? "{}").compare_ids).toEqual([
+      "COMP_A",
+      "COMP_B",
+    ]);
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(window.location.hash).toBe("#COMP_A");
+    expect(seen.filter((path) => path === "/api/companies/COMP_A")).toEqual([
+      "/api/companies/COMP_A",
+    ]);
+    expect(seen).not.toContain("/api/companies/COMP_B");
   });
 
   it("opens the company and role returned by a report in chat", async () => {
@@ -924,6 +941,40 @@ describe("App", () => {
     }
     expect(window.location.hash).toBe(hash);
     expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
+  });
+
+  it("opens a company from the graph alone instead of adding it to the comparison", async () => {
+    const compared: string[][] = [];
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      if (url.pathname === "/api/compare") {
+        compared.push(url.searchParams.get("ids")?.split(",") ?? []);
+      }
+      return base(input);
+    });
+    mounted = mount(App, {
+      attachTo: document.body,
+      global: {
+        stubs: { ChatPanel: ChatPanelStub, RelationGraph: RelationGraphStub },
+      },
+    });
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await compareCompany(wrapper, "COMP_B");
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B"]);
+    await openRoute(wrapper, "Grafo");
+    expect(wrapper.find(".graph-stub").exists()).toBe(true);
+    wrapper.findComponent(RelationGraphStub).vm.$emit("analyze", "COMP_C");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".graph-stub").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("COMP_C");
+    expect(window.location.hash).toBe("#COMP_C");
+    expect(compared.at(-1)).toEqual(["COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_C"]);
+    expect(wrapper.findAll(".series-line")).toHaveLength(1);
   });
 
   it("returns from the graph to the company that was on screen", async () => {

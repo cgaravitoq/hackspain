@@ -666,6 +666,28 @@ describe("xray contracts", () => {
     ).toHaveLength(1);
   });
 
+  it("carries up to three chart companies in a chat request and rejects a fourth", () => {
+    const messages = [
+      { id: "m1", role: "user", parts: [{ type: "text", text: "Compara" }] },
+    ];
+    expect(
+      chatRequestSchema.parse({
+        company_id: "COMP_A",
+        compare_ids: ["COMP_A", "COMP_B", "COMP_C"],
+        messages,
+      }).compare_ids,
+    ).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    const result = chatRequestSchema.safeParse({
+      company_id: "COMP_A",
+      compare_ids: ["COMP_A", "COMP_B", "COMP_C", "COMP_D"],
+      messages,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["compare_ids"],
+    ]);
+  });
+
   it("rejects a chat request whose role is not one of the three product roles", () => {
     const result = chatRequestSchema.safeParse({
       role: "ceo",

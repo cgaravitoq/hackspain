@@ -675,9 +675,12 @@ export const chatMessageSchema = z
   })
   .loose();
 
+const chatCompanyId = z.string().min(1).max(120);
+
 export const chatRequestSchema = z
   .object({
-    company_id: z.string().min(1).max(120).optional(),
+    company_id: chatCompanyId.optional(),
+    compare_ids: z.array(chatCompanyId).min(1).max(3).optional(),
     role: roleSchema.optional(),
     confirmed_commitment: commitmentRequestSchema.optional(),
     messages: z.array(chatMessageSchema).min(1),
