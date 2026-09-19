@@ -6,6 +6,7 @@ import {
   type Group,
   type GroupMap,
   type MonthEntry,
+  relationTypeSchema,
   STATE_LABELS,
   type State,
 } from "@hackspain/shared";
@@ -36,6 +37,14 @@ export const toolInputs = {
       .describe("down (worsened), recovered (left a down state) or up"),
     limit: z.number().int().min(1).max(100).default(20),
   }),
+  relations: z.object({
+    company_id: companyId,
+    relation_type: relationTypeSchema
+      .optional()
+      .describe(
+        "INFERRED_PAYMENT_TO, OPEN_OBLIGATION_TO or SHARES_COUNTERPARTY_WITH",
+      ),
+  }),
 };
 
 export const toolDescriptions = {
@@ -49,6 +58,8 @@ export const toolDescriptions = {
     "Every company of a group with score, state and share of the group debt, plus whether the group is under tension",
   alerts:
     "Companies whose state changed in the latest month, worst first, with the driver behind each one",
+  relations:
+    "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
 };
 
 export type ToolName = keyof typeof toolInputs;
@@ -237,6 +248,14 @@ export function createTools(store: Store) {
         count: alerts.length,
         alerts: alerts.map(withLabel),
       };
+    },
+
+    async relations(input: z.infer<typeof toolInputs.relations>) {
+      const relations = await store.companyRelations(
+        input.company_id,
+        input.relation_type,
+      );
+      return relations ?? unknownCompany(input.company_id);
     },
   };
 }

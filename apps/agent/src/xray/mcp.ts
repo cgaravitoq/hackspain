@@ -85,5 +85,12 @@ export function createMcpServer(store: Store, report: ReportTool): McpServer {
       };
     },
   );
+  register(
+    server,
+    "relations",
+    toolDescriptions.relations,
+    toolInputs.relations,
+    tools.relations,
+  );
   return server;
 }

@@ -3,6 +3,9 @@ import {
   chatRequestSchema,
   environmentSchema,
   type HealthResponse,
+  relationConfidenceSchema,
+  relationScopeSchema,
+  relationTypeSchema,
   roleSchema,
   stateSchema,
 } from "@hackspain/shared";
@@ -37,6 +40,14 @@ const companiesQuerySchema = z.object({
 const alertsQuerySchema = z.object({
   kind: alertKindSchema.optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+const graphQuerySchema = z.object({
+  type: relationTypeSchema.optional(),
+  confidence: relationConfidenceSchema.optional(),
+  scope: relationScopeSchema.optional(),
+  group_id: z.string().optional(),
+  include_isolated: z.stringbool().default(false),
 });
 
 export function createApp(options: AppOptions = {}) {
@@ -135,6 +146,15 @@ export function createApp(options: AppOptions = {}) {
     return context.html(renderReportHtml(report, sources));
   });
 
+  app.get("/companies/:id/relations", async (context) => {
+    const relations = await createStore(context.env.DB).companyRelations(
+      context.req.param("id"),
+    );
+    return relations
+      ? context.json(relations)
+      : context.json({ error: "Unknown company" }, 404);
+  });
+
   app.get("/groups/:id", async (context) => {
     const group = await createTools(createStore(context.env.DB)).group_map({
       group_id: context.req.param("id"),
@@ -152,6 +172,17 @@ export function createApp(options: AppOptions = {}) {
       query.data.limit,
     );
     return context.json({ alerts });
+  });
+
+  app.get("/graph", async (context) => {
+    const query = graphQuerySchema.safeParse(context.req.query());
+    if (!query.success) {
+      return context.json({ error: z.treeifyError(query.error) }, 400);
+    }
+    const graph = await createStore(context.env.DB).graph(query.data);
+    return graph
+      ? context.json(graph)
+      : context.json({ error: "No relations loaded" }, 404);
   });
 
   app.get("/backtest", async (context) => {
