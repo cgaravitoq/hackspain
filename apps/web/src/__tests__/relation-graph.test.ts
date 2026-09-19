@@ -296,14 +296,106 @@ describe("RelationGraph", () => {
     expect(tooltip).toContain("estable");
   });
 
-  it("navigates to the company of the clicked node", async () => {
+  it("opens a detail panel with the company's relations instead of navigating", async () => {
     const wrapper = await mountGraph();
     const position = drawn("COMP_D");
     await wrapper.find("canvas").trigger("click", {
       clientX: position.x,
       clientY: position.y,
     });
-    expect(window.location.hash).toBe("#COMP_D");
+    expect(window.location.hash).toBe("");
+    const panel = text(wrapper, ".graph-panel");
+    expect(panel).toContain("COMP_D");
+    expect(panel).toContain("Analizar");
+    expect(panel).toContain("Comparar");
+  });
+
+  it("closes the detail panel and opens a different node's panel on click", async () => {
+    const wrapper = await mountGraph();
+    const first = drawn("COMP_D");
+    await wrapper
+      .find("canvas")
+      .trigger("click", { clientX: first.x, clientY: first.y });
+    const second = drawn("COMP_C");
+    await wrapper
+      .find("canvas")
+      .trigger("click", { clientX: second.x, clientY: second.y });
+    expect(text(wrapper, ".graph-panel")).toContain("COMP_C");
+    await wrapper.find(".graph-panel-close").trigger("click");
+    expect(wrapper.find(".graph-panel").exists()).toBe(false);
+  });
+
+  it("emits analyze with the selected company when Analizar is clicked", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_D");
+    await wrapper
+      .find("canvas")
+      .trigger("click", { clientX: position.x, clientY: position.y });
+    await wrapper.find(".graph-panel-primary").trigger("click");
+    expect(wrapper.emitted("analyze")).toEqual([["COMP_D"]]);
+  });
+
+  it("emits compare with the selected company when Comparar is clicked", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_D");
+    await wrapper
+      .find("canvas")
+      .trigger("click", { clientX: position.x, clientY: position.y });
+    const buttons = wrapper.findAll(".graph-panel-actions button");
+    await buttons[1]?.trigger("click");
+    expect(wrapper.emitted("compare")).toEqual([["COMP_D"]]);
+  });
+
+  it("pans the graph so nodes track the drag distance", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_C");
+    const canvasElement = wrapper.find("canvas");
+    await canvasElement.trigger("mousedown", { clientX: 0, clientY: 0 });
+    await canvasElement.trigger("mousemove", { clientX: 40, clientY: 15 });
+    await canvasElement.trigger("mouseup");
+    await canvasElement.trigger("mousemove", {
+      clientX: position.x + 40,
+      clientY: position.y + 15,
+    });
+    expect(text(wrapper, ".graph-tooltip")).toContain("COMP_C");
+  });
+
+  it("does not open the detail panel when the pointer dragged before release", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_D");
+    const canvasElement = wrapper.find("canvas");
+    await canvasElement.trigger("mousedown", { clientX: 0, clientY: 0 });
+    await canvasElement.trigger("mousemove", { clientX: 50, clientY: 50 });
+    await canvasElement.trigger("mouseup");
+    await canvasElement.trigger("click", {
+      clientX: position.x + 50,
+      clientY: position.y + 50,
+    });
+    expect(wrapper.find(".graph-panel").exists()).toBe(false);
+  });
+
+  it("zooms toward the pointer on wheel, growing a node's hit area on screen", async () => {
+    const wrapper = await mountGraph();
+    const position = drawn("COMP_C");
+    const canvasElement = wrapper.find("canvas");
+    const nearMiss = {
+      clientX: position.x + position.radius + 2,
+      clientY: position.y,
+    };
+    await canvasElement.trigger("mousemove", nearMiss);
+    expect(wrapper.find(".graph-tooltip").exists()).toBe(false);
+    canvasElement.element.dispatchEvent(
+      new WheelEvent("wheel", {
+        clientX: position.x,
+        clientY: position.y,
+        deltaY: -1000,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await flushPromises();
+    await canvasElement.trigger("mousemove", nearMiss);
+    expect(text(wrapper, ".graph-tooltip")).toContain("COMP_C");
   });
 
   it("reports the endpoint that failed instead of the graph", async () => {
