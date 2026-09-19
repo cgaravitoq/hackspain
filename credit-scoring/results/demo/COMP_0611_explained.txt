@@ -1,0 +1,43 @@
+CREDIT SCORE EXPLANATION - COMP_0611
+Scoring date: 2026-09-19  |  Rule version: v1.0.0
+============================================================
+FINAL SCORE
+-----------
+99.9 / 100
+
+  Base score (average of the last 3 observed months):  99.9
+  Trajectory adjustment applied on top:                +0.0
+  = Final score:                                       99.9
+
+TREND
+-----
+Not enough history to call a trend
+
+PERIODS COMPARED
+----------------
+  Recent window:   01 Mar 2026 to 31 Mar 2026, 01 Apr 2026 to 30 Apr 2026
+  Baseline window: none available
+
+CONFIDENCE
+----------
+  Months of history available: 2
+  Months considered complete:  1
+  Share of complete months:    50%
+  Currency scope:              EUR_only
+
+EVIDENCE USED FOR THIS SCORE
+----------------------------
+  Transactions used:  10008
+  Date range covered: 2026-03 to 2026-04
+  Excluded from this company's data: 849 non-EUR, 1711 uncategorized
+
+LIMITATIONS THAT APPLY TO THIS COMPANY
+--------------------------------------
+  - transfer category excluded (ambiguous internal/external)
+  - 635860 transactions system-wide have no usable category
+  - months_complete threshold set at 10 transactions (not validated)
+  - scoring cutoff 2026-09-01: the trailing partial calendar month is excluded, not scored as a short month
+  - settlement and investment categories count as evidence but feed no component; the audit could not prove they are operational
+  - amounts are EUR product-currency only; no FX conversion and no non-EUR activity
+  - trajectory unavailable: 2 observed months, 4 required
+  - latest observed month is 2026-04, before the last closed month 2026-08: the score describes stale activity, not current health

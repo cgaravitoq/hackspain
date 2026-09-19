@@ -1,0 +1,218 @@
+{
+  "score_nodes_verified": 1286,
+  "transactions": {
+    "rows": 2556437,
+    "direct_company_rows": 0,
+    "unknown_product_ids": [
+      "PRODUCT_08229",
+      "PRODUCT_08230",
+      "PRODUCT_08231",
+      "PRODUCT_08232",
+      "PRODUCT_08233",
+      "PRODUCT_08234",
+      "PRODUCT_08235",
+      "PRODUCT_08236",
+      "PRODUCT_08237",
+      "PRODUCT_08238",
+      "PRODUCT_08239",
+      "PRODUCT_08240",
+      "PRODUCT_08241",
+      "PRODUCT_08242",
+      "PRODUCT_08243",
+      "PRODUCT_08244",
+      "PRODUCT_08245",
+      "PRODUCT_08246",
+      "PRODUCT_08247",
+      "PRODUCT_08248",
+      "PRODUCT_08249",
+      "PRODUCT_08250",
+      "PRODUCT_08251",
+      "PRODUCT_08252",
+      "PRODUCT_08253",
+      "PRODUCT_08254",
+      "PRODUCT_08255",
+      "PRODUCT_08256",
+      "PRODUCT_08257"
+    ],
+    "unknown_product_example": {
+      "transaction_id": "3fa09d8b65664279a73b1ced8f4cded1",
+      "company_id": "COMP_1115",
+      "product_id": "PRODUCT_08229",
+      "counterparty_id": ""
+    },
+    "cross_file_record_ids": []
+  },
+  "invoices": {
+    "rows": 897894,
+    "direct_company_rows": 0,
+    "unknown_product_ids": [],
+    "unknown_product_example": null,
+    "cross_file_record_ids": []
+  },
+  "settlement_fallback": [
+    {
+      "company_id": "COMP_1072",
+      "settlement_product_id": "PRODUCT_08227",
+      "owners_any_file": []
+    },
+    {
+      "company_id": "COMP_0770",
+      "settlement_product_id": "PRODUCT_08228",
+      "owners_any_file": []
+    }
+  ],
+  "unknown_balance_examples": [
+    {
+      "product_id": "PRODUCT_08258",
+      "company_id": "COMP_0007",
+      "date": "2026-09-01 00:00:00",
+      "balance": "-100000",
+      "available": "",
+      "granted": "",
+      "liquidity": "",
+      "countable": ""
+    },
+    {
+      "product_id": "PRODUCT_08259",
+      "company_id": "COMP_0046",
+      "date": "2026-09-01 00:00:00",
+      "balance": "-476658.35",
+      "available": "",
+      "granted": "-488000",
+      "liquidity": "",
+      "countable": ""
+    },
+    {
+      "product_id": "PRODUCT_08230",
+      "company_id": "COMP_0046",
+      "date": "2026-09-01 00:00:00",
+      "balance": "382758.36",
+      "available": "",
+      "granted": "",
+      "liquidity": "",
+      "countable": ""
+    }
+  ],
+  "structured_examples": [
+    {
+      "file": "transactions.csv",
+      "transaction_id": "f6aab5a1f910f227df526651270f76df",
+      "company_id": "COMP_1109",
+      "product_id": "PRODUCT_07867",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "ca90c6b7dde6cb704dd56e6e2b8a7863",
+      "company_id": "COMP_0977",
+      "product_id": "PRODUCT_06590",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "55eeed92fcd2780df687275cbf477f0e",
+      "company_id": "COMP_0354",
+      "product_id": "PRODUCT_07589",
+      "counterparty_id": "COUNTERPARTY_08536"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "3375847c143a801d9409368a81c68232",
+      "company_id": "COMP_0354",
+      "product_id": "PRODUCT_07589",
+      "counterparty_id": "COUNTERPARTY_08536"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "00c6eedbf1e027f20b5c0b339f5f865f",
+      "company_id": "COMP_0909",
+      "product_id": "PRODUCT_03133",
+      "counterparty_id": "COUNTERPARTY_08536"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "6bf6a0e5710031125663420edd0e96b5",
+      "company_id": "COMP_1109",
+      "product_id": "PRODUCT_07867",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "371822cabe0ecc06e4180f4006c9a62a",
+      "company_id": "COMP_1109",
+      "product_id": "PRODUCT_07867",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "1048abb46bb4f1fd06257391905fe50d",
+      "company_id": "COMP_0354",
+      "product_id": "PRODUCT_07589",
+      "counterparty_id": "COUNTERPARTY_08536"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "5583525ea4d602a819d52b0e9fcbf8e3",
+      "company_id": "COMP_0909",
+      "product_id": "PRODUCT_03133",
+      "counterparty_id": "COUNTERPARTY_08536"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "164436fd75e475f6f759e9bc3f47d02c",
+      "company_id": "COMP_1109",
+      "product_id": "PRODUCT_07867",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "e665a5dcb359c2d40414d35322ade138",
+      "company_id": "COMP_1109",
+      "product_id": "PRODUCT_07867",
+      "counterparty_id": "COUNTERPARTY_03211"
+    },
+    {
+      "file": "transactions.csv",
+      "transaction_id": "fb222850579e72beb9eeee508e923cdd",
+      "company_id": "COMP_0354",
+      "product_id": "PRODUCT_07589",
+      "counterparty_id": "COUNTERPARTY_08536"
+    }
+  ],
+  "same_service": {
+    "pairs": 278391,
+    "unique_services": 202,
+    "examples": {
+      "sabadell_emp": [
+        "COMP_0004",
+        "COMP_0011",
+        "COMP_0018"
+      ],
+      "santander_emp": [
+        "COMP_0001",
+        "COMP_0003",
+        "COMP_0004"
+      ],
+      "ibercaja": [
+        "COMP_0001",
+        "COMP_0005",
+        "COMP_0007"
+      ]
+    }
+  },
+  "leave_one_out_group_score": {
+    "companies": 1091,
+    "groups": 169,
+    "group_mae": 10.59026680869917,
+    "global_mae": 10.909493941542607,
+    "group_rmse": 13.524570741619932,
+    "global_rmse": 13.425289372884503
+  },
+  "graph_edge_counts": {
+    "shared_counterparty_structured": 2,
+    "shared_counterparty_mention": 441633,
+    "shared_named_bank": 206684,
+    "shared_bank_service": 278391
+  },
+  "memberships_verified": 1286
+}

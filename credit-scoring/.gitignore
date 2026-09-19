@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+results/companies/
+results/forecasts/
+results-v2-agent6-20260919/companies/
+results-v2-agent6-20260919/forecasts/
+research/graph_edges.csv
+research/relationship_incidence.csv

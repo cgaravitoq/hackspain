@@ -1,0 +1,47 @@
+MODO OFFLINE DETERMINISTA — sin llamada API ni narrativa generada por Anthropic.
+
+1. SITUACIÓN ACTUAL
+
+Empresa COMP_0874; fecha 2026-09-19; reglas v2.0.0-w3-h9. [company:/company_id] [company:/scoring_date] [company:/rule_version]
+Índice actual: 62/100; banda medio-alto. Banda descriptiva de presentación, no validada: [0,20) bajo, [20,40) medio-bajo, [40,60) medio, [60,80) medio-alto, [80,100] alto. Es un índice de salud de tesorería, no una probabilidad de impago validada ni una categoría de riesgo crediticio. Una banda alta no equivale a una alerta HIGH. [company:/final_score]
+Mayor peso de política: inflow_outflow_ratio, 0.4. El mayor peso no implica la mayor contribución efectiva. [company:/component_summary/inflow_outflow_ratio/weight] [company:/component_summary/chargeback_score/weight] [company:/component_summary/fee_score/weight] [company:/component_summary/debt_score/weight]
+Mayor contribución base (incluye empates): índice de devoluciones (chargeback_score); peso 0.25, media normalizada 87.7676, contribución 21.9419 puntos. Es el producto de peso y media, no una explicación causal. [company:/component_summary/inflow_outflow_ratio/weight] [company:/component_summary/inflow_outflow_ratio/recent_average] [company:/component_summary/inflow_outflow_ratio/base_contribution] [company:/component_summary/chargeback_score/weight] [company:/component_summary/chargeback_score/recent_average] [company:/component_summary/chargeback_score/base_contribution] [company:/component_summary/fee_score/weight] [company:/component_summary/fee_score/recent_average] [company:/component_summary/fee_score/base_contribution] [company:/component_summary/debt_score/weight] [company:/component_summary/debt_score/recent_average] [company:/component_summary/debt_score/base_contribution]
+Ajuste de trayectoria separado: -10 puntos; las contribuciones de signals pertenecen a este ajuste, no al score base. [company:/trajectory_adjustment] [company:/signals]
+HIGH — señal de atención: dirección y persistencia coinciden con el disparador configurado (DETERIORATION_CONFIRMED). Valor disparador: {"trajectory": "deteriorating", "persistence": "confirmed"}; umbral: {"trajectory": "deteriorating", "persistence": "confirmed"}. No identifica por sí solo una causa empresarial. [company:/alerts/0/severity] [company:/alerts/0/alert_type] [company:/alerts/0/trigger_value] [company:/alerts/0/threshold_used]
+Cobertura observada: 11 meses completos de 11 meses disponibles (100%). No es la confianza de la proyección ni su número de meses operativos elegibles. [company:/confidence/months_complete] [company:/confidence/months_available] [company:/confidence/coverage_pct]
+
+2. TENDENCIA RECIENTE
+
+Tendencia calculada: deterioro; persistencia confirmada. Esto describe los datos observados, no el escenario futuro. [company:/trajectory] [company:/persistence]
+Comparación real: 3 meses observados recientes (2026-06, 2026-07, 2026-08) frente a 3 de referencia (2026-03, 2026-04, 2026-05). No se rellenan huecos del calendario. [company:/periods_compared/recent] [company:/periods_compared/baseline] [company:/window_usage/primary]
+Mayor cambio absoluto (incluye empates): índice de entradas/salidas baja, -29.8543 puntos normalizados. No son euros ni un porcentaje bruto de comisiones o devoluciones. [company:/signals/0/component] [company:/signals/0/change] [company:/signals/1/component] [company:/signals/1/change] [company:/signals/2/component] [company:/signals/2/change] [company:/signals/3/component] [company:/signals/3/change]
+
+3. PROYECCIÓN A 3 MESES
+
+NO hay proyección disponible: 11 meses operativos EUR observados; se requieren 12; falta 1 mes elegible. AGENT8 rechaza proyectar por historial insuficiente. No se han calculado escenarios, métodos ni evaluación MAE para esta empresa; no se sustituyen por ceros. [forecast:/forecast_status] [forecast:/observed_operational_months] [forecast:/min_months_required] [forecast:/months_missing] [forecast:/reason] [forecast:/scenarios] [forecast:/method_per_component] [forecast:/baseline_vs_regression]
+
+4. LIMITACIONES CONCRETAS DE ESTA EMPRESA
+
+Se excluye la categoría transfer: no se distingue entre transferencias internas y externas. [company:/limitations/0] [forecast:/limitations/0]
+635860 transacciones del conjunto del sistema carecen de categoría utilizable; no es el total de esta empresa. [company:/limitations/1] [forecast:/limitations/1]
+El umbral de mes completo es 10 transacciones; no está validado. [company:/limitations/2] [forecast:/limitations/2]
+Corte de scoring 2026-09-01: se excluye el último mes parcial; no se puntúa como un mes corto. [company:/limitations/3] [forecast:/limitations/3]
+Las categorías de liquidación e inversión cuentan como evidencia, pero no alimentan ningún componente; la auditoría no pudo acreditar su carácter operativo. [company:/limitations/4] [forecast:/limitations/4]
+Solo se consideran importes de productos denominados en EUR; no hay conversión de divisas ni actividad en otras monedas. [company:/limitations/5] [forecast:/limitations/5]
+Comparación drift_detection con ventanas acortadas: se configuraron 9 meses observados por lado; hay 9 recientes y 2 de referencia. [company:/limitations/6] [forecast:/limitations/6]
+Las ventanas de persistencia comparten la ventana de referencia; las comparaciones son puntos consecutivos, no muestras independientes. [company:/limitations/7] [forecast:/limitations/7]
+Medias de componentes, contribuciones base y señales se exportan con cuatro decimales; las contribuciones concuerdan con la base sin redondear con tolerancia de 0.001 puntos; los deltas conservan la precisión de cálculo para los umbrales de dirección. [company:/limitations/8] [forecast:/limitations/8]
+La ventana reciente incluye meses potencialmente estacionales: 2026-08; el deterioro no tiene ajuste estacional. [company:/limitations/9] [forecast:/limitations/9]
+El método no está validado externamente. [forecast:/limitations/10]
+Los índices proyectados usan los mismos pesos que los observados, sin recalibración. [forecast:/limitations/11]
+Los escenarios favorable y adverso se basan en la desviación estándar histórica, no en un modelo causal. [forecast:/limitations/12]
+La regresión lineal es un método candidato; solo tres observaciones reservadas seleccionan el método, no lo validan. [forecast:/limitations/13]
+Se proyectan componentes normalizados, no saldos de caja ni probabilidades de impago. [forecast:/limitations/14]
+No se modela la estacionalidad: no hay ajuste estacional ni predictor estacional estimado. [forecast:/limitations/15]
+Los escenarios modifican las entradas, no son límites de probabilidad calibrados; los ajustes no lineales del motor pueden cambiar el orden de sus índices. [forecast:/limitations/16]
+Las ventanas usan todo el historial observado original más las proyecciones explícitas; no hay meses puente ocultos ni relleno con ceros; las filas proyectadas no son evidencia observada. [forecast:/limitations/17]
+
+5. QUÉ REVISAR
+
+Verifique los meses operativos ausentes: hay 11, se requieren 12 y falta 1 mes elegible. No trate la ausencia de proyección como ausencia de riesgo. [forecast:/observed_operational_months] [forecast:/min_months_required] [forecast:/months_missing]
+Verifique los registros de índice de entradas/salidas en los periodos recientes 2026-06, 2026-07, 2026-08 frente a 2026-03, 2026-04, 2026-05; esto ya está pasando en los datos observados, pero no determina su causa. [company:/periods_compared] [company:/signals/0]

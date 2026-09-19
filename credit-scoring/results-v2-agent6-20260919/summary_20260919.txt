@@ -1,0 +1,87 @@
+CREDIT SCORING PORTFOLIO SUMMARY
+Generated on: 2026-09-19
+Companies in this batch: 1286 (1167 scored, 119 not scored: no eligible EUR month observed)
+============================================================
+
+SCORE DISTRIBUTION (deciles, scored companies only)
+----------------------------------------------------
+     0-10: 0
+    10-20: 0
+    20-30: 1
+    30-40: 3
+    40-50: 21
+    50-60: 101
+    60-70: 269
+    70-80: 312
+    80-90: 290
+   90-100: 170
+
+TRAJECTORY
+----------
+  improving: 421
+  deteriorating: 409
+  stable: 317
+  insufficient_data: 139
+
+PERSISTENCE
+-----------
+  Confirmed trends (drove a score adjustment): 202
+  Unconfirmed / not applicable:                1084
+
+TOP 10 SCORES
+-------------
+  COMP_0012: 100.0
+  COMP_0029: 100.0
+  COMP_0039: 100.0
+  COMP_0045: 100.0
+  COMP_0098: 100.0
+  COMP_0109: 100.0
+  COMP_0110: 100.0
+  COMP_0131: 100.0
+  COMP_0144: 100.0
+  COMP_0147: 100.0
+
+BOTTOM 10 SCORES
+----------------
+  COMP_0680: 29.5
+  COMP_0649: 36.7
+  COMP_1101: 36.8
+  COMP_0816: 38.1
+  COMP_0043: 40.4
+  COMP_0407: 41.5
+  COMP_0177: 42.3
+  COMP_0241: 42.5
+  COMP_0857: 43.3
+  COMP_0587: 43.5
+
+OBSOLESCENCE: LATEST DATA IS FROM 2025
+---------------------------------------
+  28 companies have no 2026 evidence in the window used to score them.
+  COMP_0002: latest observed month 2025-04
+  COMP_0147: latest observed month 2025-04
+  COMP_0223: latest observed month 2025-12
+  COMP_0259: latest observed month 2025-12
+  COMP_0261: latest observed month 2025-11
+  COMP_0269: latest observed month 2025-10
+  COMP_0288: latest observed month 2025-11
+  COMP_0307: latest observed month 2025-09
+  COMP_0342: latest observed month 2025-12
+  COMP_0343: latest observed month 2025-10
+  COMP_0434: latest observed month 2025-09
+  COMP_0492: latest observed month 2025-10
+  COMP_0503: latest observed month 2025-09
+  COMP_0556: latest observed month 2025-07
+  COMP_0624: latest observed month 2025-11
+  COMP_0681: latest observed month 2025-08
+  COMP_0701: latest observed month 2025-10
+  COMP_0712: latest observed month 2025-05
+  COMP_0729: latest observed month 2025-12
+  COMP_0840: latest observed month 2025-07
+  COMP_0879: latest observed month 2025-11
+  COMP_0916: latest observed month 2025-10
+  COMP_0961: latest observed month 2025-05
+  COMP_0981: latest observed month 2025-04
+  COMP_1046: latest observed month 2025-12
+  COMP_1099: latest observed month 2025-04
+  COMP_1143: latest observed month 2025-12
+  COMP_1265: latest observed month 2025-12

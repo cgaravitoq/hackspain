@@ -1,0 +1,70 @@
+# Treasury health scoring policy, v1 baseline.
+#
+# Every number below is a declared policy choice, not an estimate fitted to the
+# data. None of it was tuned against real companies: it is set once, documented
+# here, and versioned. Any intentional change requires a new `version`.
+version: "v2.0.0"
+
+windows:
+  short: 3
+  medium: 6
+  long: 9
+comparison_horizons:
+  primary: short
+  drift_detection: long
+evaluation_frequency: monthly
+min_months_for_window: 4
+
+# Pesos del base score (deben sumar 1.0).
+#
+# inflow_outflow_ratio carries the most weight because it is the only component
+# measured from both sides of the operational cash flow; it is also the least
+# dependent on category labels that the source extract fills in inconsistently.
+# chargeback_score comes next: refunds are an explicit, unambiguous category and
+# a direct quality signal on collections. fee_score and debt_score are cost
+# signals: real, but partly structural (pricing, financing mix), so they move
+# the score less than the flow itself.
+weights:
+  inflow_outflow_ratio: 0.40
+  chargeback_score: 0.25
+  fee_score: 0.20
+  debt_score: 0.15
+
+# Trajectory thresholds
+thresholds:
+  # Materiality band in normalized score points. A move of 2 points on a 0-100
+  # scale is roughly the smallest change that survives one noisy month inside a
+  # three-month average; anything smaller is reported as `stable` instead of
+  # being dressed up as a trend.
+  improving: 2.0      # delta > 2 puntos -> improving
+  deteriorating: -2.0 # delta < -2 puntos -> deteriorating
+  # A company-month with fewer than 10 booked transactions describes activity
+  # too thin to call the month a complete observation. The threshold is a
+  # declared convention: the audit found no verified complete company-month, so
+  # it is NOT validated against ground truth and is disclosed in limitations.
+  # It only feeds confidence; it never changes the score.
+  complete_month: 10  # minimo transacciones para considerar mes completo
+  # Trajectory may bend the score, never replace it: at most 10 points, so a
+  # confirmed trend cannot move a company across more than one tier on its own.
+  max_adjustment: 10  # cap del ajuste por trayectoria
+
+# Categorias (para documentacion y tests).
+#
+# The row-level hard filter applied by the pipeline is only the first five
+# entries of `excluded`: "-", "", cash_withdrawal, pos_withdrawal and transfer.
+# `transfer` is dropped because the extract does not say whether a transfer is
+# internal or external, and counting an internal move as revenue would inflate
+# the inflow side. Withdrawals are treasury movements, not operational results.
+# The remaining entries (settlements, investment flows) survive the row filter,
+# so they still count as observation evidence in `total_transactions`, but no
+# scored component reads them: the audit cannot prove settlements are
+# operational rather than the cash leg of an already-booked collection.
+categories:
+  operational_inflow: [collection, bulk_collection, tax_refund]
+  operational_outflow: [payment, bulk_payment, utility, salary, social_security, tax]
+  chargeback: [collection_refund, payment_refund]
+  fee: [fee]
+  debt: [debt_repayment, interest_charge]
+  excluded: ["-", "", cash_withdrawal, pos_withdrawal, transfer,
+             cash_settlement, pos_settlement, cash_settlements,
+             investment_deployment, investment_return]
