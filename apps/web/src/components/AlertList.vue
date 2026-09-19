@@ -40,6 +40,7 @@ ul {
   list-style: none;
   margin: 0;
   padding: 6px;
+  min-height: 0;
   overflow-y: auto;
 }
 
