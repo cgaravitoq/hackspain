@@ -522,10 +522,6 @@ describe("GET /companies/:id/report", () => {
 
   it.each([
     JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
-    JSON.stringify({
-      ...narrative,
-      sections: [narrative.sections.at(-1), ...narrative.sections.slice(0, -1)],
-    }),
     JSON.stringify({ ...narrative, sections: narrative.sections.slice(0, 2) }),
     "not JSON",
   ])(
@@ -615,6 +611,23 @@ describe("GET /companies/:id/report", () => {
       "SELECT count(*) AS count FROM reports",
     ).first<{ count: number }>();
     expect(row?.count).toBe(0);
+  });
+
+  it("rejects a decision section outside the final position", async () => {
+    const misplaced = {
+      ...narrative,
+      sections: [narrative.sections.at(-1), ...narrative.sections.slice(0, -1)],
+    };
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(misplaced)),
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_A/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(502);
+    expect(model.doGenerateCalls).toHaveLength(2);
   });
 
   it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
