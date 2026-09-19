@@ -4,9 +4,43 @@ import {
   chatRequestSchema,
   companyDetailSchema,
   driverSchema,
+  explainSchema,
+  metaSchema,
   monthEntrySchema,
   stateSchema,
 } from "./xray.ts";
+
+const stableMonth = {
+  month: "2026-08",
+  observed: true,
+  level: 50,
+  momentum: 0,
+  adjustment: 0,
+  score: 50,
+  state: "stable",
+  confidence: "high",
+  components: { balance: 0 },
+  drivers: [],
+  changed: [],
+  evidence: {
+    months_observed: 1,
+    transactions_in_window: 1,
+    share_uncategorised: 0,
+    window: "2026-08 a 2026-08",
+    cutoff: "2026-08",
+    currency: "EUR",
+    sources: { transactions: true, invoices: false, debt: false },
+    rule_version: "xray-score/0.1",
+  },
+  flows: {
+    inflow: 1,
+    outflow: 1,
+    financing_in: 0,
+    financing_out: 0,
+    debt_repayment: 0,
+  },
+  events: { E1: false, E2: false, E3: false, E4: false },
+};
 
 describe("xray contracts", () => {
   it("accepts a company whose first months are not evaluable", () => {
@@ -125,6 +159,54 @@ describe("xray contracts", () => {
       events: { E1: false, E2: false, E3: false, E4: false },
     });
     expect(result.success).toBe(false);
+  });
+
+  it("rejects a month whose changed entry uses a code the pipeline does not emit", () => {
+    const result = monthEntrySchema.safeParse({
+      ...stableMonth,
+      changed: [{ code: "surprise", delta: 1 }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["changed", 0, "code"],
+    ]);
+  });
+
+  it("rejects an explanation whose changed entry uses a code the pipeline does not emit", () => {
+    const result = explainSchema.safeParse({
+      company_id: "COMP_0001",
+      group_id: null,
+      month: "2026-08",
+      score: 50,
+      level: 50,
+      momentum: 0,
+      state: "stable",
+      state_label: "estable",
+      confidence: "high",
+      drivers: [],
+      changed: [{ code: "surprise", delta: 1 }],
+      events: [],
+      evidence: stableMonth.evidence,
+      flows: stableMonth.flows,
+      invoice_facts: {},
+      action: "Nada que hacer",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["changed", 0, "code"],
+    ]);
+  });
+
+  it("rejects a meta whose state labels carry a key that is not a trajectory state", () => {
+    const result = metaSchema.safeParse({
+      state_labels: { healthy: "sana", bad: "mala" },
+      latest_month: "2026-08",
+      holdout_groups: [],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["state_labels"],
+    ]);
   });
 
   it("rejects a chat request whose messages are not UI messages", () => {
