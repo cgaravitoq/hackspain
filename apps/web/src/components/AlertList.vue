@@ -39,6 +39,7 @@ const capped = computed(() => props.alerts.length >= ALERTS_LIMIT);
 <style scoped>
 .alerts {
   display: flex;
+  flex: none;
   align-items: center;
   min-width: 0;
   overflow: hidden;
