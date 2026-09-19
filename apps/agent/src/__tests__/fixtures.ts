@@ -1,6 +1,7 @@
 import {
   type Alert,
   type Backtest,
+  type CommitmentRequest,
   type CompanyDetail,
   type Group,
   type Meta,
@@ -176,6 +177,28 @@ export const short = company("COMP_G", "GROUP_2", [
   { month: "2026-08", score: 54.0, state: "stable" },
 ]);
 
+export const shortHistory = company("COMP_SHORT", "GROUP_SHORT", [
+  { month: "2026-07", score: 55, state: "stable" },
+  { month: "2026-08", score: 55, state: "stable" },
+]);
+
+export const commitmentRequest: CommitmentRequest = {
+  opening_minor: 4_000_000,
+  floor_minor: 2_000_000,
+  revenue_minor: 10_000_000,
+  advance_date: "2026-09-02",
+  final_date: "2026-09-30",
+  advance_bps: [0, 2000, 4000, 6000],
+  costs: [
+    {
+      label: "Opportunity delivery",
+      date: "2026-09-10",
+      amount_minor: 6_000_000,
+    },
+  ],
+  other_flows: [],
+};
+
 export const group: Group = {
   group_id: "GROUP_1",
   holdout: false,
@@ -293,6 +316,7 @@ export async function seed(db: D1Database): Promise<void> {
     short,
     demo,
     drift,
+    shortHistory,
   ].map((detail) => {
     const { series: _series, ...summary } = detail;
     return db

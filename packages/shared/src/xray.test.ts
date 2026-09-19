@@ -1,8 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   alertSchema,
   backtestSchema,
+  COMMITMENT_LABEL,
+  type CommitmentAlternative,
+  type CommitmentCheckpoint,
+  type CommitmentEvaluation,
+  type CommitmentReadiness,
+  type CommitmentRequest,
+  type CommitmentStatus,
   chatRequestSchema,
+  commitmentAlternativeSchema,
+  commitmentCheckpointSchema,
+  commitmentEvaluationSchema,
+  commitmentFlowSchema,
+  commitmentReadinessSchema,
+  commitmentRequestSchema,
+  commitmentStatusSchema,
   companyDetailSchema,
   companyRelationsSchema,
   companySummarySchema,
@@ -12,8 +26,13 @@ import {
   explainSchema,
   graphMetaSchema,
   graphSchema,
+  isoDateSchema,
+  MAX_MINOR,
   metaSchema,
+  minorSchema,
   monthEntrySchema,
+  type OpeningBasis,
+  openingBasisSchema,
   ROLE_LABELS,
   relationArtifactNodeSchema,
   relationEdgeSchema,
@@ -1334,5 +1353,182 @@ describe("relation contracts", () => {
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["edges", 0, "counterpart_state"],
     ]);
+  });
+});
+
+const validCommitmentRequest = {
+  opening_minor: 5_000_000,
+  revenue_minor: 2_000_000,
+  advance_date: "2026-10-01",
+  final_date: "2026-11-30",
+  advance_bps: [0, 5000, 10_000],
+  costs: [{ label: "Materiales", date: "2026-10-15", amount_minor: 1_000_000 }],
+};
+
+const commitmentCheckpoint = {
+  date: "2026-10-15",
+  phase: "DEBITS",
+  cash_minor: 4_000_000,
+};
+
+const commitmentEvaluation = {
+  company_id: "COMP_0176",
+  currency: "EUR",
+  as_of: "2026-09-19",
+  horizon_end: "2027-03-19",
+  observed_months: 24,
+  basis: "USER_ASSUMPTION",
+  readiness: "SIMULATION_ONLY",
+  opening_verified: false,
+  coverage_verified: true,
+  is_financial_authorization: false,
+  label: COMMITMENT_LABEL,
+  search_kind: "ENUMERATED_GRID",
+  minimum_tested_feasible_bps: 5000,
+  assumptions: validCommitmentRequest,
+  alternatives: [
+    {
+      advance_bps: 5000,
+      advance_minor: 1_000_000,
+      final_minor: 1_000_000,
+      status: "COMPATIBLE_UNDER_ASSUMPTIONS",
+      min_cash_minor: 4_000_000,
+      closing_minor: 6_000_000,
+      shortfall_minor: 0,
+      first_breach: null,
+      path: [commitmentCheckpoint],
+    },
+  ],
+};
+
+describe("commitment simulation contracts", () => {
+  it("applies safe defaults to a valid commitment request", () => {
+    expect(commitmentRequestSchema.parse(validCommitmentRequest)).toEqual({
+      ...validCommitmentRequest,
+      floor_minor: 0,
+      other_flows: [],
+    });
+  });
+
+  it("rejects fractional cents and amounts outside the JavaScript safe range", () => {
+    expect(
+      commitmentRequestSchema.safeParse({
+        ...validCommitmentRequest,
+        opening_minor: 123.45,
+      }).success,
+    ).toBe(false);
+    expect(minorSchema.safeParse(MAX_MINOR + 1).success).toBe(false);
+  });
+
+  it("accepts only real ISO calendar dates including valid leap days", () => {
+    expect(isoDateSchema.safeParse("2026-02-30").success).toBe(false);
+    expect(isoDateSchema.safeParse("2026-13-01").success).toBe(false);
+    expect(isoDateSchema.parse("2028-02-29")).toBe("2028-02-29");
+    expect(isoDateSchema.safeParse("2027-02-29").success).toBe(false);
+  });
+
+  it("rejects zero-value flows and zero revenue", () => {
+    expect(
+      commitmentFlowSchema.safeParse({
+        label: "Sin movimiento",
+        date: "2026-10-01",
+        amount_minor: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      commitmentRequestSchema.safeParse({
+        ...validCommitmentRequest,
+        revenue_minor: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects empty and out-of-range advance grids", () => {
+    expect(
+      commitmentRequestSchema.safeParse({
+        ...validCommitmentRequest,
+        advance_bps: [],
+      }).success,
+    ).toBe(false);
+    for (const advanceBps of [-1, 10_001]) {
+      expect(
+        commitmentRequestSchema.safeParse({
+          ...validCommitmentRequest,
+          advance_bps: [advanceBps],
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("prevents clients from declaring server verification or opening basis", () => {
+    expect(
+      commitmentRequestSchema.safeParse({
+        ...validCommitmentRequest,
+        opening_verified: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      commitmentRequestSchema.safeParse({
+        ...validCommitmentRequest,
+        basis: "BANK_AVAILABLE_VERIFIED",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a complete evaluation and every simulation enum value", () => {
+    expect(commitmentEvaluationSchema.parse(commitmentEvaluation)).toEqual({
+      ...commitmentEvaluation,
+      assumptions: {
+        ...validCommitmentRequest,
+        floor_minor: 0,
+        other_flows: [],
+      },
+    });
+    expect(commitmentStatusSchema.options).toEqual([
+      "COMPATIBLE_UNDER_ASSUMPTIONS",
+      "INCOMPATIBLE",
+      "INSUFFICIENT_EVIDENCE",
+      "OUTSIDE_HORIZON",
+    ]);
+    expect(openingBasisSchema.options).toEqual([
+      "BANK_AVAILABLE_VERIFIED",
+      "TREASURY_ATTESTED",
+      "LEDGER_SCENARIO_ONLY",
+      "USER_ASSUMPTION",
+      "UNKNOWN",
+    ]);
+    expect(commitmentReadinessSchema.options).toEqual([
+      "SIMULATION_ONLY",
+      "REVIEW_REQUIRED",
+      "CAPACITY_RESERVABLE",
+    ]);
+    expect(commitmentCheckpointSchema.shape.phase.options).toEqual([
+      "DEBITS",
+      "CREDITS",
+    ]);
+  });
+
+  it("re-exports every commitment contract from the package root", () => {
+    expect([
+      MAX_MINOR,
+      minorSchema,
+      isoDateSchema,
+      commitmentFlowSchema,
+      commitmentRequestSchema,
+      commitmentStatusSchema,
+      openingBasisSchema,
+      commitmentReadinessSchema,
+      commitmentCheckpointSchema,
+      commitmentAlternativeSchema,
+      commitmentEvaluationSchema,
+      COMMITMENT_LABEL,
+    ]).not.toContain(undefined);
+    expectTypeOf<CommitmentRequest>().toBeObject();
+    expectTypeOf<CommitmentEvaluation>().toBeObject();
+    expectTypeOf<CommitmentAlternative>().toBeObject();
+    expectTypeOf<CommitmentStatus>().toBeString();
+    expectTypeOf<OpeningBasis>().toBeString();
+    expectTypeOf<CommitmentReadiness>().toBeString();
+    expectTypeOf<CommitmentCheckpoint>().toBeObject();
   });
 });

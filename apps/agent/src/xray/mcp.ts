@@ -1,6 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import {
+  commitmentDescription,
+  commitmentInput,
+  simulateCommitment,
+} from "./commitment-tool.ts";
+import { resolveCompany } from "./report.ts";
+import {
   type ReportTool,
   reportDescription,
   reportInput,
@@ -94,6 +100,24 @@ export function createMcpServer(store: Store, report: ReportTool): McpServer {
         },
       ],
     }),
+  );
+  server.registerTool(
+    "simulate_commitment",
+    {
+      description: commitmentDescription,
+      inputSchema: commitmentInput.shape,
+    },
+    async (input) => {
+      const { company, ...request } = commitmentInput.parse(input);
+      const simulation = await simulateCommitment(
+        store,
+        resolveCompany(company),
+        request,
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(simulation) }],
+      };
+    },
   );
   server.registerTool(
     "report",

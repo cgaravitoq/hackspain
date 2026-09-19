@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   type Alert,
+  type CommitmentEvaluation,
+  type CommitmentRequest,
   type CompanyDetail,
   type CompanySummary,
   type Explain,
@@ -38,7 +40,12 @@ const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
 const query = ref("");
+const commitmentLaunch = ref<{
+  token: number;
+  assumptions: CommitmentRequest;
+} | null>(null);
 let compareRequest = 0;
+let commitmentToken = 0;
 
 async function load(companyId: string) {
   error.value = "";
@@ -109,6 +116,22 @@ function openReport(
 ) {
   role.value = result.role;
   selected.value = result.company_id;
+}
+
+function openCommitment(
+  result: Pick<CommitmentEvaluation, "company_id" | "assumptions">,
+) {
+  if (role.value === "ventas") {
+    role.value = "financiero";
+  }
+  onGraph.value = false;
+  selected.value = result.company_id;
+  window.location.hash = result.company_id;
+  commitmentToken += 1;
+  commitmentLaunch.value = {
+    token: commitmentToken,
+    assumptions: result.assumptions,
+  };
 }
 
 function selectRole(nextRole: Role) {
@@ -273,6 +296,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
         :group="group"
         :selected="selected"
         :role="role"
+        :commitment-launch="commitmentLaunch"
         @select="select"
       />
       <p v-else-if="!error" class="loading">Cargando radiografía…</p>
@@ -285,6 +309,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
     :role="role"
     @compare="replaceComparison"
     @report="openReport"
+    @commitment="openCommitment"
   />
 </template>
 

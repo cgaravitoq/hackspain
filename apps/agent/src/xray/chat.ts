@@ -8,6 +8,11 @@ import {
   validateUIMessages,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import {
+  commitmentDescription,
+  commitmentInput,
+  simulateCommitment,
+} from "./commitment-tool.ts";
 import { resolveCompany } from "./report.ts";
 import {
   type ReportTool,
@@ -37,6 +42,7 @@ const SYSTEM = `Eres X Ray, el analista de salud financiera dentro de Embat.
 Respondes en español, en tres o cuatro frases como máximo, con las cifras y periodos que devuelven las herramientas.
 Nunca inventes números ni empresas: si no tienes el dato, llama a la herramienta o di que no está en los datos.
 Cuando te pidan datos de dos o tres empresas, llama a compare en una sola llamada para que la pantalla muestre todas sus series.
+Una simulación de simulate_commitment nunca es una aprobación, caja disponible confirmada ni una previsión; repite los supuestos del usuario antes del resultado e indica que requiere revisión humana.
 El score va de 0 a 100 y mide cobros operativos frente a pagos en los últimos tres meses; los estados son sana, mejorando, estable, torciéndose, cayendo y no evaluable.
 Cuando una empresa está torciéndose o cayendo, termina con la acción sugerida y el módulo de Embat donde hacerla.`;
 
@@ -115,6 +121,28 @@ export async function chat(
     system: `${SYSTEM}\n\n${RELATIONS_RULES}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
     messages: await convertToModelMessages(messages),
     tools: {
+      simulate_commitment: tool({
+        description: commitmentDescription,
+        inputSchema: commitmentInput,
+        execute: async (input) => {
+          const { company, ...request } = input;
+          const simulation = await simulateCommitment(
+            store,
+            resolveCompany(company),
+            request,
+          );
+          if ("error" in simulation) {
+            return simulation;
+          }
+          const { alternatives, ...evaluation } = simulation;
+          return {
+            ...evaluation,
+            alternatives: alternatives.map(
+              ({ path: _path, ...alternative }) => alternative,
+            ),
+          };
+        },
+      }),
       report: tool({
         description: reportDescription,
         inputSchema: chatReportInput,

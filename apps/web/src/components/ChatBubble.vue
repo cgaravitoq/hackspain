@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import type { Alert, Report, Role } from "@hackspain/shared";
+import type {
+  Alert,
+  CommitmentEvaluation,
+  Report,
+  Role,
+} from "@hackspain/shared";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import ChatPanel from "./ChatPanel.vue";
 
 const SEEN_KEY = "xray.chat.seen";
 
 type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
+type CommitmentResult = Pick<
+  CommitmentEvaluation,
+  "company_id" | "assumptions"
+>;
 
 const props = defineProps<{
   companyId: string;
@@ -16,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   compare: [companyIds: string[]];
   report: [result: ReportResult];
+  commitment: [result: CommitmentResult];
 }>();
 
 const open = ref(false);
@@ -79,6 +89,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
       @close="close"
       @compare="emit('compare', $event)"
       @report="emit('report', $event)"
+      @commitment="emit('commitment', $event)"
     />
   </div>
   <button

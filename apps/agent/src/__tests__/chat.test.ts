@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import {
+  type CommitmentRequest,
+  commitmentRequestSchema,
   companyRelationEdgeSchema,
   companyRelationsSchema,
   compareSchema,
@@ -16,7 +18,7 @@ import { chat } from "../xray/chat.ts";
 import type { reportInput } from "../xray/report-tool.ts";
 import type { SimulateInput } from "../xray/simulate.ts";
 import { createStore } from "../xray/store.ts";
-import { seed } from "./fixtures.ts";
+import { commitmentRequest, seed } from "./fixtures.ts";
 import { relationsJson, seedRelations } from "./relations.ts";
 
 beforeAll(async () => {
@@ -55,15 +57,13 @@ function textReply(text: string) {
 
 function toolCall(
   name: string,
-  input:
-    | {
-        company?: string;
-        company_id?: string;
-        company_ids?: string[];
-        relation_type?: RelationType;
-        role?: Role;
-      }
-    | Partial<SimulateInput>,
+  input: Partial<CommitmentRequest & SimulateInput> & {
+    company?: string;
+    company_id?: string;
+    company_ids?: string[];
+    relation_type?: RelationType;
+    role?: Role;
+  },
 ) {
   return stream([
     {
@@ -205,6 +205,9 @@ describe("POST /chat", () => {
     expect(systemPrompt(model, 0)).toContain(
       "Empieza por la evidencia de la cartera y sus exposiciones",
     );
+    expect(systemPrompt(model, 0)).toContain(
+      "Una simulación de simulate_commitment nunca es una aprobación, caja disponible confirmada ni una previsión",
+    );
   });
 
   it("defaults a report tool call to the selected role", async () => {
@@ -258,6 +261,37 @@ describe("POST /chat", () => {
     expect(toolName).toBe("score");
     expect(output).toContain('"score":91');
     expect(output).toContain('"state":"healthy"');
+  });
+
+  it("runs the commitment assumptions produced by the model through the deterministic simulation", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("simulate_commitment", {
+          company: "Talleres Ribera",
+          ...commitmentRequest,
+        }),
+        textReply("La simulación requiere revisión humana."),
+      ],
+    });
+    const response = await ask(model, {});
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("requiere revisión humana");
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("simulate_commitment");
+    const simulation = z
+      .object({
+        type: z.literal("json"),
+        value: z.object({
+          readiness: z.literal("SIMULATION_ONLY"),
+          assumptions: commitmentRequestSchema,
+          alternatives: z.array(
+            z.object({ path: z.never().optional() }).loose(),
+          ),
+        }),
+      })
+      .parse(JSON.parse(output)).value;
+    expect(simulation.assumptions).toEqual(commitmentRequest);
+    expect(simulation.alternatives).toHaveLength(4);
   });
 
   it("offers the model a compare tool that names its cap and the demo names", async () => {
