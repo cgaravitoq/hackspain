@@ -1,0 +1,319 @@
+EXPLICACIONES EN LENGUAJE LLANO — 5 EMPRESAS REPRESENTATIVAS
+Generado a partir de results/summary_20260919.txt y results/companies/*.json
+Fecha de cálculo de las puntuaciones: 19/09/2026
+==============================================================================
+
+Nota metodológica breve (para entender las cinco fichas siguientes):
+La puntuación final va de 0 a 100 y resume la salud financiera operativa de la
+empresa combinando cuatro ingredientes, con distinto peso cada uno:
+  - Relación cobros/pagos operativos (40% del peso): compara lo que entra por
+    cobros de clientes frente a lo que sale por pagos a proveedores, nóminas,
+    impuestos, etc. Es el ingrediente más importante.
+  - Devoluciones o "chargebacks" (25% del peso): qué proporción de los cobros
+    o pagos se acaban revirtiendo.
+  - Comisiones bancarias (20% del peso): qué proporción de la actividad se va
+    en comisiones.
+  - Deuda e intereses (15% del peso): qué proporción de la actividad se
+    destina a devolver deuda o pagar intereses.
+Con esos cuatro ingredientes se calcula una "puntuación base" usando los
+últimos tres meses con datos. Después se compara ese trimestre con el
+trimestre inmediatamente anterior para ver si la empresa mejora, empeora o se
+mantiene estable; ese movimiento solo se convierte en puntos de bonus o
+penalización (hasta 10 puntos) si el mismo movimiento ya se había visto una
+vez antes (lo llamamos "tendencia confirmada"). Si no se ha visto antes, se
+queda en la puntuación base, sin premiar ni castigar algo que podría ser
+ruido de un solo trimestre.
+Importante: el archivo de cada empresa no guarda el nivel absoluto de cada
+ingrediente (por ejemplo, "esta empresa paga un 3% de su facturación en
+comisiones"), solo cuánto ha cambiado cada ingrediente entre el trimestre
+reciente y el anterior. Por eso, en el punto 2 de cada ficha describimos la
+dirección y el tamaño de esos cambios recientes como la mejor evidencia
+disponible de qué está funcionando bien o mal, y dejamos explícito que no
+tenemos el nivel absoluto de comisiones o deuda de cada empresa en este
+informe.
+
+==============================================================================
+1) COMP_0680 — Puntuación: 29,5 / 100 — Nivel BAJO
+==============================================================================
+
+1. Qué significa esta puntuación
+   Es una de las diez puntuaciones más bajas de las 1.167 empresas evaluadas
+   en este lote. En términos simples: la combinación de cómo cobra, cómo
+   paga, cuántas devoluciones sufre y cuánto le cuestan las comisiones y la
+   deuda coloca a esta empresa entre las de salud financiera más frágil de
+   toda la cartera analizada.
+
+2. Por qué tiene esa puntuación
+   - Cobros/pagos: en el trimestre reciente (junio-agosto 2026) frente al
+     anterior (marzo-mayo 2026) esta relación apenas se movió (un cambio
+     mínimo, prácticamente plano). No hay evidencia de que la empresa haya
+     mejorado ni empeorado en si cobra más de lo que paga; simplemente la
+     puntuación base ya era baja en ambos trimestres.
+   - Devoluciones: empeoraron ligeramente de un trimestre a otro, aunque el
+     movimiento es pequeño. No es la causa principal de la puntuación baja.
+   - Comisiones: aquí sí hay una mejora notable entre trimestres — el peso
+     de las comisiones bajó de forma apreciable en el trimestre reciente
+     respecto al anterior. Es el único punto claramente positivo.
+   - Deuda e intereses: no se observa actividad de deuda relevante ni cambio
+     alguno; este ingrediente ni ayuda ni perjudica.
+   En conjunto, la puntuación baja no viene de un deterioro reciente, sino de
+   que el nivel de partida de la empresa (sobre todo la relación entre lo que
+   cobra y lo que paga, que es el factor de mayor peso) ya era débil en los
+   dos trimestres comparados.
+
+3. Hacia dónde va
+   El sistema etiqueta la tendencia como "mejorando", porque al comparar el
+   trimestre reciente con el anterior el conjunto de indicadores sube lo
+   suficiente para cruzar el umbral de mejora. Sin embargo, esa mejora NO
+   está confirmada: cuando se repite la misma comparación un trimestre más
+   atrás, no se ve la misma mejora, así que podría ser un repunte puntual y
+   no una recuperación consolidada. Por eso no se le ha sumado ningún punto
+   extra a la puntuación; el 29,5 es la puntuación base "a secas".
+
+4. Confianza en el dato
+   Alta cobertura temporal: hay 10 meses de historia y los 10 se consideran
+   completos (suficiente volumen de transacciones cada mes), un 100% de
+   cobertura. En cuanto a cantidad de datos, es una de las fichas más
+   fiables de este grupo de cinco.
+
+5. Limitaciones concretas de esta empresa
+   - De toda la actividad de esta empresa en el periodo, una parte muy
+     importante (1.111 movimientos) no se pudo clasificar en ninguna
+     categoría útil (cobro, pago, comisión, etc.), frente a solo 158
+     movimientos que sí se usaron para calcular la puntuación. Es decir, la
+     puntuación se basa en una porción minoritaria de todo lo que ocurre en
+     las cuentas de esta empresa; el resto es "ruido" que no sabemos
+     interpretar.
+   - Además, 286 movimientos se descartaron por no estar en euros; esa
+     actividad en otras divisas queda completamente fuera del análisis.
+   - La categoría "transferencias" se excluye siempre porque no se puede
+     saber si es dinero moviéndose dentro del propio grupo o hacia fuera.
+
+==============================================================================
+2) COMP_0043 — Puntuación: 40,4 / 100 — Nivel MEDIO-BAJO
+==============================================================================
+
+1. Qué significa esta puntuación
+   Está en el tramo bajo de la cartera (por debajo del 96% de las empresas
+   analizadas aproximadamente, según la distribución general), aunque no
+   entre las diez peores. Indica una empresa con problemas de fondo en su
+   operativa de cobros y pagos, no una situación catastrófica pero sí de
+   riesgo elevado.
+
+2. Por qué tiene esa puntuación
+   - Cobros/pagos (el ingrediente más importante, 40% del peso): es, con
+     diferencia, el mayor problema de esta empresa. Entre el trimestre
+     marzo-mayo y el trimestre junio-agosto de 2026, la relación entre lo
+     que cobra y lo que paga ha empeorado de forma muy marcada y es el
+     cambio más grande de los cinco casos de este informe. En plata: la
+     empresa está pagando de forma cada vez más desequilibrada respecto a lo
+     que ingresa por cobros.
+   - Devoluciones: también han ido a peor de un trimestre a otro, aunque en
+     menor medida que la relación de cobros/pagos. Señal adicional de
+     deterioro en la calidad de los cobros o pagos.
+   - Comisiones: aquí hay una ligera mejora, el peso de las comisiones bajó
+     un poco; no compensa lo anterior.
+   - Deuda e intereses: prácticamente sin cambios, no es relevante en este
+     caso.
+   El resultado es una puntuación baja explicada casi en su totalidad por el
+   deterioro reciente en la relación entre lo que entra y lo que sale de
+   caja por la actividad operativa.
+
+3. Hacia dónde va
+   La tendencia está etiquetada como "empeorando", coherente con el punto
+   anterior. Pero igual que en el caso anterior, esta tendencia NO está
+   confirmada por una segunda comparación en el trimestre previo, así que
+   todavía no se ha aplicado ninguna penalización extra sobre la puntuación
+   base: los 40,4 puntos ya reflejan la situación actual, sin castigo
+   adicional por la tendencia. Hay que vigilar el próximo trimestre para ver
+   si el empeoramiento se consolida.
+
+4. Confianza en el dato
+   Buena: 9 meses de historia, los 9 completos (100% de cobertura), y un
+   volumen de 836 movimientos usados para el cálculo, claramente más que los
+   excluidos por falta de categoría (266) o por no ser en euros (57). Es un
+   dato bien respaldado.
+
+5. Limitaciones concretas de esta empresa
+   - El propio sistema avisa de que el trimestre reciente incluye agosto de
+     2026, un mes que históricamente tiene un comportamiento estacional
+     (vacaciones, menor actividad). El empeoramiento detectado NO se ha
+     ajustado por ese efecto estacional, así que parte de la caída podría
+     deberse simplemente a que agosto es un mes flojo todos los años, y no a
+     un problema estructural nuevo.
+   - Las limitaciones generales del sistema aplican igual: transferencias
+     excluidas, movimientos sin categoría del conjunto global del sistema, y
+     alcance únicamente en euros.
+
+==============================================================================
+3) COMP_0114 — Puntuación: 56,7 / 100 — Nivel MEDIO
+==============================================================================
+
+1. Qué significa esta puntuación
+   Puntuación intermedia, pero conviene leerla con cautela (ver punto 4):
+   la puntuación de partida de esta empresa era más bien buena (66,7 sobre
+   100), pero se le ha restado el máximo castigo posible por una tendencia
+   negativa confirmada, dejándola en 56,7. Es decir, no es tanto una empresa
+   "mediocre de base" como una empresa buena que está empeorando de forma
+   sostenida.
+
+2. Por qué tiene esa puntuación
+   - Cobros/pagos: ha empeorado de forma importante entre el trimestre
+     anterior y el reciente; es el ingrediente que más ha tirado hacia abajo
+     de la puntuación final.
+   - Comisiones: también ha empeorado de forma notable — el peso de las
+     comisiones ha subido bastante de un trimestre a otro, siendo el segundo
+     factor que más penaliza la puntuación.
+   - Devoluciones y deuda: sin cambios relevantes, no influyen en este caso.
+   En conjunto, la puntuación base (66,7) ya era razonablemente buena, pero
+   se ve arrastrada a la baja por el peor comportamiento reciente en cobros
+   frente a pagos y en el coste de las comisiones.
+
+3. Hacia dónde va
+   La tendencia es "empeorando" y, a diferencia de los dos casos anteriores,
+   aquí SÍ está confirmada: el mismo empeoramiento ya se había detectado en
+   la comparación del trimestre anterior, es decir, no es un bache puntual
+   sino una caída sostenida durante varios meses seguidos. Por eso se le ha
+   aplicado la penalización máxima permitida por las reglas (10 puntos sobre
+   100), bajando la puntuación de 66,7 a 56,7. Si esta empresa fuera un
+   cliente o proveedor de la compañía, sería la que más justifica un
+   seguimiento cercano de los cinco casos de este informe, porque el
+   deterioro no es un rumor, es un patrón repetido.
+
+4. Confianza en el dato
+   Baja. Aunque hay 7 meses de historial, NINGUNO de esos meses alcanza el
+   volumen mínimo de transacciones que el sistema considera necesario para
+   llamarlo "mes completo" (0% de cobertura de meses completos). En números
+   de actividad real, solo se han usado 19 movimientos en total para todo el
+   periodo analizado (marzo-agosto 2026). Es, con diferencia, la ficha con
+   menos actividad de las cinco de este informe, así que la puntuación
+   descansa sobre muy poca información y debería tratarse como orientativa,
+   no como un diagnóstico sólido.
+
+5. Limitaciones concretas de esta empresa
+   - Muy poco volumen de transacciones: cualquier movimiento puntual grande
+     o pequeño puede cambiar el resultado de forma desproporcionada porque
+     hay pocos datos donde diluirlo.
+   - El trimestre reciente también incluye agosto de 2026 (mes con posible
+     efecto estacional), y el empeoramiento no está ajustado por ese efecto.
+   - Al confirmarse la tendencia comparando dos trimestres consecutivos que
+     comparten parte del periodo base, las dos comparaciones no son
+     totalmente independientes entre sí; es una confirmación más débil que
+     si vinieran de periodos totalmente separados.
+   - De 104 movimientos con categoría reconocible en el periodo, 85 se
+     excluyeron por no tener categoría utilizable, lo que refuerza que
+     hay muy poca información limpia detrás de esta puntuación.
+
+==============================================================================
+4) COMP_0628 — Puntuación: 71,0 / 100 — Nivel MEDIO-ALTO
+==============================================================================
+
+1. Qué significa esta puntuación
+   Es una puntuación buena, por encima de la mitad de la cartera. Describe
+   una empresa con una operativa de cobros, pagos, comisiones y deuda
+   razonablemente sana y, sobre todo, muy estable en el tiempo.
+
+2. Por qué tiene esa puntuación
+   - Cobros/pagos: apenas ha cambiado entre el trimestre anterior y el
+     reciente (una mejora muy pequeña, por debajo del umbral que el sistema
+     considera un movimiento real). Es una empresa que mantiene un
+     equilibrio parecido entre lo que cobra y lo que paga mes a mes.
+   - Devoluciones, comisiones y deuda: sin cambios apreciables en ninguno de
+     los tres. Nada tira de la puntuación hacia arriba ni hacia abajo.
+   En resumen, no hay ningún ingrediente que destaque especialmente para
+   bien ni para mal en el periodo reciente: la puntuación de 71 refleja un
+   nivel de partida consolidado, no un movimiento reciente puntual.
+
+3. Hacia dónde va
+   La tendencia se clasifica como "estable": ningún cambio entre trimestres
+   ha sido lo bastante grande como para llamarlo mejora o deterioro real. No
+   se aplica ningún ajuste (ni premio ni castigo) sobre la puntuación base;
+   los 71 puntos son directamente el reflejo del comportamiento reciente sin
+   sobresaltos.
+
+4. Confianza en el dato
+   Es la ficha con más historial de las cinco: 23 meses de datos
+   disponibles, de los cuales 17 se consideran completos (74% de cobertura).
+   Es un dato razonablemente sólido, aunque no perfecto: casi uno de cada
+   cuatro meses no llega al volumen mínimo de transacciones para considerarse
+   representativo.
+
+5. Limitaciones concretas de esta empresa
+   - El trimestre "reciente" usado para el cálculo no son tres meses
+     consecutivos: falta junio de 2026 (se usan mayo, julio y agosto), lo
+     que sugiere que ese mes tuvo muy poca o ninguna actividad registrable.
+     La comparación, por tanto, salta un mes sin datos en vez de basarse en
+     un trimestre natural completo.
+   - De la actividad total en el rango de fechas usado, 780 movimientos se
+     excluyeron por no tener categoría utilizable, muy por encima de los 90
+     movimientos que sí se emplearon para calcular la puntuación. A pesar
+     del largo historial, la base de datos limpia detrás de esta puntuación
+     es en realidad pequeña.
+   - Aplican también las limitaciones generales: transferencias excluidas y
+     alcance solo en euros.
+
+==============================================================================
+5) COMP_1233 — Puntuación: 99,9 / 100 — Nivel ALTO
+==============================================================================
+
+1. Qué significa esta puntuación
+   Es prácticamente la puntuación máxima posible y está entre las mejores de
+   toda la cartera (tramo 90-100, donde se sitúan 170 de las 1.167 empresas
+   evaluadas). Describe una empresa con una operativa financiera muy sólida
+   en los cuatro frentes analizados: cobra bien frente a lo que paga, apenas
+   sufre devoluciones, las comisiones pesan muy poco y la deuda no supone
+   una carga relevante.
+
+2. Por qué tiene esa puntuación
+   - Cobros/pagos: sin cambios entre trimestres; el equilibrio entre lo que
+     entra y lo que sale ya era muy bueno y se mantiene igual.
+   - Devoluciones: sin cambios, y en un nivel ya muy favorable.
+   - Comisiones y deuda: variaciones prácticamente inexistentes (cambios
+     residuales, casi cero) entre el trimestre reciente y el anterior.
+   Ningún ingrediente muestra ni una señal de alarma ni una mejora relevante
+   porque ya partían de un nivel excelente y se han mantenido así.
+
+3. Hacia dónde va
+   La tendencia es "estable": no hay ningún movimiento significativo en
+   ninguno de los cuatro ingredientes entre los dos trimestres comparados.
+   No se aplica ajuste alguno; la puntuación de 99,9 es un reflejo directo y
+   sin sobresaltos del comportamiento reciente.
+
+4. Confianza en el dato
+   Muy alta: 21 meses de historial, 20 de ellos completos (95% de
+   cobertura), y 172 movimientos usados para el cálculo del periodo
+   reciente. Es la segunda ficha con más historial del informe y con muy
+   buena proporción de meses fiables.
+
+5. Limitaciones concretas de esta empresa
+   - A pesar del buen historial, una parte importante de la actividad total
+     de esta empresa (2.077 movimientos) no se pudo clasificar en ninguna
+     categoría útil, muy por encima de los 172 que sí entraron en el
+     cálculo. La puntuación excelente se basa, igual que en los otros casos,
+     solo en la porción de actividad que el sistema logra entender.
+   - Aplican las limitaciones generales del sistema: transferencias
+     excluidas de forma sistemática, alcance únicamente en euros, y el
+     umbral de "mes completo" (mínimo de movimientos por mes) es una
+     convención interna todavía no validada contra la realidad.
+
+==============================================================================
+LECTURA DE CONJUNTO PARA EL CFO
+==============================================================================
+Las cinco empresas ilustran los distintos "porqués" detrás de una
+puntuación:
+  - COMP_0680 (29,5): puntuación baja por un nivel de partida débil en el
+    equilibrio cobros/pagos, no por un deterioro reciente.
+  - COMP_0043 (40,4): puntuación baja por un deterioro reciente y marcado en
+    ese mismo equilibrio, todavía sin confirmar como tendencia sostenida.
+  - COMP_0114 (56,7): el caso a vigilar de cerca — buen nivel de partida
+    pero con un deterioro ya confirmado en dos comparaciones seguidas, sobre
+    una base de datos muy pequeña.
+  - COMP_0628 (71,0): buen nivel, estable, sin señales de cambio en ningún
+    frente.
+  - COMP_1233 (99,9): salud financiera excelente y estable en los cuatro
+    frentes analizados.
+En todos los casos, una limitación transversal se repite: una parte
+relevante (a veces mayoritaria) de los movimientos de cada empresa no tiene
+categoría reconocible y queda fuera del cálculo. La puntuación siempre se
+calcula sobre la porción de la actividad que el sistema logra clasificar,
+nunca sobre el 100% de los movimientos reales de la empresa.

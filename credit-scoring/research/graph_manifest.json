@@ -1,0 +1,46 @@
+{
+  "edge_rows": 926710,
+  "edge_counts": {
+    "shared_counterparty_structured": 2,
+    "shared_counterparty_mention": 441633,
+    "shared_named_bank": 206684,
+    "shared_bank_service": 278391
+  },
+  "node_rows": 1286,
+  "group_rows": 250,
+  "membership_rows": 1286,
+  "layer_examples": {
+    "shared_counterparty_structured": {
+      "company_a": "COMP_0354",
+      "company_b": "COMP_0909",
+      "relationship_type": "shared_counterparty_structured",
+      "weight": 1,
+      "direction": "undirected",
+      "source_file": "transactions.csv"
+    },
+    "shared_counterparty_mention": {
+      "company_a": "COMP_0001",
+      "company_b": "COMP_0003",
+      "relationship_type": "shared_counterparty_mention",
+      "weight": 1,
+      "direction": "undirected",
+      "source_file": "invoices.csv"
+    },
+    "shared_named_bank": {
+      "company_a": "COMP_0001",
+      "company_b": "COMP_0003",
+      "relationship_type": "shared_named_bank",
+      "weight": 1,
+      "direction": "undirected",
+      "source_file": "banking_products.csv"
+    },
+    "shared_bank_service": {
+      "company_a": "COMP_0001",
+      "company_b": "COMP_0003",
+      "relationship_type": "shared_bank_service",
+      "weight": 1,
+      "direction": "undirected",
+      "source_file": "banking_products.csv"
+    }
+  }
+}

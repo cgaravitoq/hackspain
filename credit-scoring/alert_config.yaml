@@ -1,0 +1,22 @@
+version: "alerts-v1.0.0"
+severity_order: [HIGH, MEDIUM, LOW, INFO]
+rules:
+  DETERIORATION_CONFIRMED:
+    severity: HIGH
+    trajectory: deteriorating
+    persistence: confirmed
+  DRIFT_DETECTED:
+    severity: MEDIUM
+    delta_threshold: -2.0
+  INSUFFICIENT_DATA:
+    severity: INFO
+    min_months_threshold: 4
+  STALE_DATA:
+    severity: MEDIUM
+    max_age_months: 3
+  LOW_COVERAGE:
+    severity: LOW
+    coverage_threshold: 0.5
+  SCORE_FLOOR:
+    severity: HIGH
+    score_threshold: 40

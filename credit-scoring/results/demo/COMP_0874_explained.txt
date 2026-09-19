@@ -1,0 +1,51 @@
+CREDIT SCORE EXPLANATION - COMP_0874
+Scoring date: 2026-09-19  |  Rule version: v1.0.0
+============================================================
+FINAL SCORE
+-----------
+62.0 / 100
+
+  Base score (average of the last 3 observed months):  72.0
+  Trajectory adjustment applied on top:                -10.0
+  = Final score:                                       62.0
+
+TREND
+-----
+Deteriorating
+This direction is CONFIRMED: the same trend also showed up when the same comparison was repeated one quarter earlier, so it is not a one-off swing. It is the reason the trajectory adjustment above is non-zero.
+
+WHAT MOVED
+----------
+  Inflow / outflow ratio: down 29.9 points (contributed -7.8 points to the score adjustment)
+  Chargeback score: down 12.2 points (contributed -2.0 points to the score adjustment)
+  Fee score: down 1.3 points (contributed -0.2 points to the score adjustment)
+  Debt service score: unchanged 0.0 points (no measurable contribution to the score adjustment)
+
+PERIODS COMPARED
+----------------
+  Recent window:   01 Jun 2026 to 30 Jun 2026, 01 Jul 2026 to 31 Jul 2026, 01 Aug 2026 to 31 Aug 2026
+  Baseline window: 01 Mar 2026 to 31 Mar 2026, 01 Apr 2026 to 30 Apr 2026, 01 May 2026 to 31 May 2026
+
+CONFIDENCE
+----------
+  Months of history available: 11
+  Months considered complete:  11
+  Share of complete months:    100%
+  Currency scope:              EUR_only
+
+EVIDENCE USED FOR THIS SCORE
+----------------------------
+  Transactions used:  467
+  Date range covered: 2026-03 to 2026-08
+  Excluded from this company's data: 52 uncategorized
+
+LIMITATIONS THAT APPLY TO THIS COMPANY
+--------------------------------------
+  - transfer category excluded (ambiguous internal/external)
+  - 635860 transactions system-wide have no usable category
+  - months_complete threshold set at 10 transactions (not validated)
+  - scoring cutoff 2026-09-01: the trailing partial calendar month is excluded, not scored as a short month
+  - settlement and investment categories count as evidence but feed no component; the audit could not prove they are operational
+  - amounts are EUR product-currency only; no FX conversion and no non-EUR activity
+  - recent window contains potentially seasonal month(s) 2026-08; deterioration is not seasonally adjusted
+  - persistence windows share the baseline quarter; the two comparisons are consecutive endpoints, not independent samples
