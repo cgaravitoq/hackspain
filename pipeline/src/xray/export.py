@@ -81,7 +81,7 @@ def _month_entry(
         "state": row["state"],
         "confidence": confidence(row["months_observed"], row["share_uncategorised"] or 0.0),
         "components": d.components(row),
-        "drivers": d.drivers(row, previous, {"debt_break": row["e3"]}),
+        "drivers": d.drivers(row, {"debt_break": row["e3"]}),
         "changed": d.changed(row, previous),
         "evidence": d.evidence(row, sources),
         "flows": {

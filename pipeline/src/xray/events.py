@@ -15,10 +15,6 @@ REVERT_HORIZON = 3
 LEAD_WINDOW = 12
 
 
-def month_index(day: date) -> int:
-    return day.year * 12 + day.month - 1
-
-
 def cash_stress(observed: list[bool], inflow: list[float], outflow: list[float]) -> list[bool]:
     run = 0
     flags = []
