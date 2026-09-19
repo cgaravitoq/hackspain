@@ -34,9 +34,7 @@ async function load(companyId: string) {
     ]);
     company.value = detail;
     explanation.value = why;
-    group.value = detail.group_id
-      ? await api.group(detail.group_id).catch(() => null)
-      : null;
+    group.value = detail.group_id ? await api.group(detail.group_id) : null;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   }

@@ -57,7 +57,7 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
-  it("keeps the radiography when only the group request fails", async () => {
+  it("shows the group error above the radiography when only the group request fails", async () => {
     const seen: string[] = [];
     const base = fakeApi(seen);
     vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
@@ -71,7 +71,7 @@ describe("App", () => {
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_A");
     expect(wrapper.find(".score").text()).toBe("12.3");
-    expect(wrapper.find(".error").exists()).toBe(false);
+    expect(wrapper.find(".error").text()).toBe("/groups/GROUP_1 answered 500");
     expect(wrapper.text()).not.toContain("grupo en tensión");
   });
 
