@@ -21,6 +21,8 @@ import {
   type Report,
   type Role,
   reportSchema,
+  type Simulate,
+  simulateSchema,
 } from "@hackspain/shared";
 import { z } from "zod";
 
@@ -30,6 +32,12 @@ async function get<Schema extends z.ZodType>(
 ): Promise<z.infer<Schema>> {
   const response = await fetch(`/api${path}`);
   if (!response.ok) {
+    const parsed = z
+      .object({ error: z.string() })
+      .safeParse(await response.json().catch(() => null));
+    if (parsed.success) {
+      throw new Error(parsed.data.error);
+    }
     throw new Error(`${path} answered ${response.status}`);
   }
   return schema.parse(await response.json());
@@ -48,6 +56,14 @@ export type GraphQuery = {
   include_isolated?: boolean;
 };
 
+export type SimulateQuery = {
+  horizon?: number;
+  advance?: number;
+  draw?: number;
+  fee?: number;
+  apr?: number;
+};
+
 function graphSearch(query: GraphQuery): string {
   const search = new URLSearchParams();
   if (query.type) {
@@ -64,6 +80,14 @@ function graphSearch(query: GraphQuery): string {
   }
   search.set("include_isolated", String(query.include_isolated ?? false));
   return search.toString();
+}
+
+function simulateSearch(query: SimulateQuery): string {
+  return new URLSearchParams(
+    Object.entries(query).flatMap(([key, value]) =>
+      value === undefined ? [] : [[key, String(value)]],
+    ),
+  ).toString();
 }
 
 export const api = {
@@ -90,4 +114,6 @@ export const api = {
       `/companies/${id}/report?${new URLSearchParams({ role })}`,
       reportSchema,
     ),
+  simulate: (id: string, query: SimulateQuery): Promise<Simulate> =>
+    get(`/companies/${id}/simulate?${simulateSearch(query)}`, simulateSchema),
 };
