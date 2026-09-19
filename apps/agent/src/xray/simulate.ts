@@ -41,7 +41,7 @@ export type SimulateInput = z.infer<typeof simulateInput>;
 export const simulateQuery = simulateInput.omit({ company: true });
 
 export const simulateDescription =
-  "Project the cash of a company from its loaded treasury over the horizon and what one receivable advance or one credit-line draw does to that cash, its cost and the index. The advance is capped by the pending receivables, the draw by the undrawn credit line, and the output is a scenario, not an observation, a forecast, a credit rating or a solvency certification.";
+  "Project the cash of a company from its loaded treasury over the horizon and what one receivable advance or one draw on its line does to that cash, its cost and the index. The advance is capped by the pending receivables, the draw by the undrawn part of the line, and the output is a scenario, never an observation.";
 
 type Flows = { inflow: number; outflow: number; fees: number };
 

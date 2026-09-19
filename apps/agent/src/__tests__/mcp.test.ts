@@ -97,6 +97,25 @@ describe("POST /mcp", () => {
     );
   });
 
+  it("keeps credit, solvency and forecast wording out of the simulate tool", async () => {
+    const response = await rpc("tools/list", {});
+    const body = z
+      .object({
+        result: z.object({
+          tools: z.array(
+            z.object({ name: z.string(), description: z.string() }),
+          ),
+        }),
+      })
+      .loose()
+      .parse(await response.json());
+    const simulate = body.result.tools.find((tool) => tool.name === "simulate");
+    expect(simulate?.description).toContain(
+      "the output is a scenario, never an observation",
+    );
+    expect(simulate?.description).not.toMatch(/forecast|credit|solvenc/i);
+  });
+
   it("echoes the JSON-RPC id the caller sent", async () => {
     const response = await rpc("tools/list", {}, 7);
     expect(response.status).toBe(200);
