@@ -24,8 +24,23 @@ bun run verify                               # everything CI runs
 apps/agent/       Hono Worker (API, agent logic)
 apps/web/         Vue 3 + Vite, served as Worker static assets, /api proxied to the agent
 packages/shared/  Zod schemas shared by both
+pipeline/         Python 3.13+ scorer (uv + polars), outside `bun run verify`
 .agents/skills/   Team skills for Claude Code, Codex, OpenCode and Cursor
 ```
+
+## Data pipeline and D1
+
+From `pipeline/`, `uv run xray score --data <dir> --out artifacts` scores the nine Embat CSVs and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json`.
+`uv run pytest` runs the pipeline tests; `pipeline/data` and `pipeline/artifacts` are gitignored.
+
+The agent serves the artifacts from the D1 binding `DB` (migrations in `apps/agent/migrations/`, one row per company with the summary and the whole series as JSON).
+`bun --filter @hackspain/agent load -- --local` validates the artifacts with the shared schemas, writes `artifacts/xray.sql`, applies the migrations and loads the local database; `-- --env staging` targets staging.
+
+## API
+
+- GET: `/health`, `/companies?state&group_id&limit`, `/companies/:id`, `/companies/:id/explain`, `/groups/:id`, `/alerts?kind&limit`, `/backtest`, `/meta`.
+- `POST /chat` streams an AI SDK response from Workers AI `@cf/deepseek-ai/deepseek-v4-flash-0731`.
+- `ALL /mcp` serves a stateless Streamable HTTP MCP server with tools `score`, `explain`, `what_changed`, `group_map` and `alerts`.
 
 ## Workflow
 
@@ -44,7 +59,7 @@ Manual deploys from a laptop are for emergencies only: `bun --filter @hackspain/
 
 ## Environments
 
-| Environment | Web | Agent |
-|---|---|---|
-| staging | https://hackspain-web-staging.carlos-garavito.workers.dev | https://hackspain-agent-staging.carlos-garavito.workers.dev/health |
-| production | https://hackspain-web.carlos-garavito.workers.dev | https://hackspain-agent.carlos-garavito.workers.dev/health |
+| Environment | Web | Agent | MCP |
+|---|---|---|---|
+| staging | https://hackspain-web-staging.carlos-garavito.workers.dev | https://hackspain-agent-staging.carlos-garavito.workers.dev/health | https://hackspain-agent-staging.carlos-garavito.workers.dev/mcp |
+| production | https://hackspain-web.carlos-garavito.workers.dev | https://hackspain-agent.carlos-garavito.workers.dev/health | https://hackspain-agent.carlos-garavito.workers.dev/mcp |

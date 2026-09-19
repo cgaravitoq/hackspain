@@ -21,6 +21,9 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 | `bun run typecheck` | `tsc --noEmit` per workspace (`vue-tsc` in web) |
 | `bun run test` | Vitest per workspace, never reaches the network |
 | `bun --filter @hackspain/agent types` | Regenerates `worker-configuration.d.ts` after editing `wrangler.jsonc` |
+| `bun --filter @hackspain/agent load -- --local` | Validates `pipeline/artifacts` with the shared schemas, writes `artifacts/xray.sql`, applies migrations and loads the local D1 (`-- --env staging` targets staging) |
+| `cd pipeline && uv run xray score --data <dir> --out artifacts` | Scores the nine Embat CSVs and writes `companies.json`, `alerts.json`, `groups.json`, `backtest.json`, `meta.json` and `scores/<id>.json` |
+| `cd pipeline && uv run pytest` | Pipeline tests |
 
 ## Layout
 
@@ -29,8 +32,17 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 | `apps/agent/` | Hono Worker, the API and the agent brain. `src/app.ts` builds the app through `createApp()`, `src/index.ts` exports it |
 | `apps/web/` | Vue 3 + Vite, deployed as static assets of its own Worker. `src/worker.ts` proxies `/api/*` to the agent over a service binding |
 | `packages/shared/` | Zod schemas and types crossing the agent/web boundary. Source-only, no build step |
+| `pipeline/` | Python 3.13+ scorer on uv and polars, outside `bun run verify`. `pipeline/data` and `pipeline/artifacts` are gitignored |
 | `.agents/skills/` | Team skills; `.claude/skills` is a symlink to it |
 | `.github/workflows/` | `ci.yml` on pull requests, `deploy-staging.yml` on push to `staging`, `deploy-production.yml` on push to `main` |
+
+## The X Ray surface
+
+- The agent reads everything from the D1 binding `DB` (`hackspain-xray`, `hackspain-xray-staging` on staging); migrations live in `apps/agent/migrations/`.
+- One row per company carries the summary and the whole series as JSON, written by the load script.
+- GET routes: `/health`, `/companies?state&group_id&limit`, `/companies/:id`, `/companies/:id/explain`, `/groups/:id`, `/alerts?kind&limit`, `/backtest`, `/meta`.
+- `POST /chat` streams an AI SDK response from Workers AI `@cf/deepseek-ai/deepseek-v4-flash-0731` through the `AI` binding (`remote: true`).
+- `ALL /mcp` serves a stateless Streamable HTTP MCP server with tools `score`, `explain`, `what_changed`, `group_map` and `alerts`.
 
 ## Invariants
 
@@ -40,6 +52,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - **Secrets never enter the repository.** Local values live in `.dev.vars` (gitignored); deployed values are set with `wrangler secret put` or live in the AI Gateway. `.dev.vars.example` lists every name.
 - **The browser talks to one origin.** Web calls `/api/...`, the web Worker forwards to the agent. Do not add CORS to the agent.
 - **`compatibility_date` stays at or below the date the bundled workerd supports.** The comment in `apps/agent/wrangler.jsonc` says which one; bump both together.
+- **Pipeline commits carry no scope.** commitlint allows only `agent`, `web`, `shared`, `ci` and `repo`; changes under `pipeline/` go unscoped.
 
 ## Conventions
 
@@ -51,6 +64,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - English for code, comments, commits, branches, PRs, issues and docs. Spanish is for chat.
 - Use `bun`, never `npm`/`npx`/`pnpm`. Dependencies are exact versions (`bunfig.toml` sets `exact = true`).
 - Never bypass hooks (`--no-verify`, `LEFTHOOK=0`); a failing hook is fixed at its root cause.
+- The ultracite preset forbids `unknown` params, `Record<string, unknown>`, `typeof` narrowing, `vi.mock` and casts without a `// SAFETY:` comment.
 
 ## Git and Linear workflow
 
@@ -69,3 +83,5 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - Vitest everywhere. Agent tests live in `apps/agent/src/__tests__/` and call the Worker through `SELF` from `cloudflare:test`. Web tests live in `apps/web/src/__tests__/` under jsdom. Shared tests sit next to their module as `*.test.ts`.
 - Test names are behavior sentences (`reports the environment the worker was configured with`), not implementation labels.
 - Assert the mechanism, not just the final value: a test that could pass through another code path does not prove the one it names.
+- `apps/agent/vitest.config.ts` sets `remoteBindings: false` and pins `ENVIRONMENT` through `miniflare.bindings`; `.dev.vars` would otherwise override it.
+- The chat tests inject a mock `LanguageModel`; `__tests__/setup.ts` applies `TEST_MIGRATIONS`.
