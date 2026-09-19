@@ -340,6 +340,7 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 .month {
   font-size: 13px;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .compare-selector {

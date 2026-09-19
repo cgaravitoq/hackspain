@@ -62,8 +62,10 @@ button {
 
 .brand {
   display: flex;
+  flex: none;
   align-items: baseline;
   gap: 10px;
+  white-space: nowrap;
   font-weight: 700;
   font-size: 18px;
   letter-spacing: 0.02em;

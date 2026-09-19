@@ -85,7 +85,7 @@ const STATE_FALLBACKS: Record<State, string> = {
 };
 
 const GROUP_BANDS = ["#5b7cfa", "#e0a33e", "#3fa87a", "#c264a0", "#7a86d8"];
-const HUB_LABEL_DEGREE = 12;
+const HUB_LABEL_DEGREE = 25;
 
 const types: RelationType[] = [
   "INFERRED_PAYMENT_TO",
