@@ -157,6 +157,7 @@ describe("App", () => {
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "Talleres Ribera",
+      "proyección por tendencia (3 meses)",
     ]);
   });
 
@@ -179,6 +180,7 @@ describe("App", () => {
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "Talleres Ribera",
+      "proyección por tendencia (3 meses)",
     ]);
   });
 
@@ -205,6 +207,7 @@ describe("App", () => {
       "COMP_B",
       "COMP_C",
       "COMP_D",
+      "proyección por tendencia (3 meses)",
     ]);
   });
 
@@ -308,6 +311,7 @@ describe("App", () => {
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "COMP_A",
       "COMP_B",
+      "proyección por tendencia (3 meses)",
     ]);
   });
 
