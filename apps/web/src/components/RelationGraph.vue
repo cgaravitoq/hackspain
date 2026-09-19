@@ -17,6 +17,7 @@ import {
   LAYOUT_HEIGHT,
   LAYOUT_WIDTH,
   layoutGraph,
+  type NodePosition,
   nodeAt,
   visibleEdges,
   visibleNodes,
@@ -85,6 +86,8 @@ const GROUP_VARIABLES: [string, string][] = [
 
 const HUB_LABEL_DEGREE = 25;
 const ISOLATED_ALPHA = 0.45;
+const LABEL_HEIGHT = 16;
+const LABEL_PADDING = 4;
 
 type Palette = {
   card: string;
@@ -93,6 +96,8 @@ type Palette = {
   states: Map<State, string>;
   groups: string[];
 };
+
+type Box = { left: number; top: number; right: number; bottom: number };
 
 const types: RelationType[] = [
   "INFERRED_PAYMENT_TO",
@@ -197,6 +202,46 @@ function readPalette(): Palette {
   };
 }
 
+function overlaps(box: Box, other: Box): boolean {
+  return (
+    box.left < other.right &&
+    box.right > other.left &&
+    box.top < other.bottom &&
+    box.bottom > other.top
+  );
+}
+
+function paintLabels(
+  context: CanvasRenderingContext2D,
+  palette: Palette,
+  hubs: NodePosition[],
+) {
+  const drawn: Box[] = [];
+  context.font = "11px 'IBM Plex Sans', system-ui, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  for (const { node, x, y, radius } of hubs) {
+    const width =
+      context.measureText(node.company_id).width + LABEL_PADDING * 2;
+    const box = {
+      left: x - width / 2,
+      right: x + width / 2,
+      top: y - radius - LABEL_PADDING - LABEL_HEIGHT,
+      bottom: y - radius - LABEL_PADDING,
+    };
+    if (drawn.some((other) => overlaps(box, other))) {
+      continue;
+    }
+    drawn.push(box);
+    context.globalAlpha = 0.85;
+    context.fillStyle = palette.card;
+    context.fillRect(box.left, box.top, width, LABEL_HEIGHT);
+    context.globalAlpha = 1;
+    context.fillStyle = palette.inkSoft;
+    context.fillText(node.company_id, x, (box.top + box.bottom) / 2);
+  }
+}
+
 function bandColor(palette: Palette, group: string | null): string {
   const index = [...(group ?? "")].reduce(
     (total, character) => total + character.charCodeAt(0),
@@ -231,8 +276,7 @@ function paint() {
     context.stroke();
   }
   context.globalAlpha = 1;
-  context.font = "11px 'IBM Plex Sans', system-ui, sans-serif";
-  context.textAlign = "center";
+  const hubs: NodePosition[] = [];
   for (const position of layout.value.positions.values()) {
     const { node, x, y, radius } = position;
     context.beginPath();
@@ -252,10 +296,11 @@ function paint() {
     context.stroke();
     context.globalAlpha = 1;
     if (node.degree >= HUB_LABEL_DEGREE) {
-      context.fillStyle = palette.inkSoft;
-      context.fillText(node.company_id, x, y - radius - 7);
+      hubs.push(position);
     }
   }
+  hubs.sort((left, right) => right.node.degree - left.node.degree);
+  paintLabels(context, palette, hubs);
 }
 
 function canvasPoint(event: MouseEvent) {
