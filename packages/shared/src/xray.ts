@@ -556,3 +556,130 @@ export const chatRequestSchema = z.object({
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
+
+export const MAX_MINOR = Number.MAX_SAFE_INTEGER;
+
+export const minorSchema = z.number().int().min(-MAX_MINOR).max(MAX_MINOR);
+
+const isRealIsoDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  if (year === 0 || month < 1 || month > 12) {
+    return false;
+  }
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth =
+    month === 2
+      ? leapYear
+        ? 29
+        : 28
+      : [4, 6, 9, 11].includes(month)
+        ? 30
+        : 31;
+  return day >= 1 && day <= daysInMonth;
+};
+
+export const isoDateSchema = z.string().refine(isRealIsoDate);
+
+export const commitmentFlowSchema = z.object({
+  label: z.string().min(1).max(80),
+  date: isoDateSchema,
+  amount_minor: minorSchema.refine((amount) => amount !== 0),
+});
+
+export const commitmentRequestSchema = z.strictObject({
+  opening_minor: minorSchema,
+  floor_minor: minorSchema.min(0).default(0),
+  revenue_minor: minorSchema.positive(),
+  advance_date: isoDateSchema,
+  final_date: isoDateSchema,
+  advance_bps: z.array(z.number().int().min(0).max(10_000)).min(1).max(20),
+  costs: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(80),
+        date: isoDateSchema,
+        amount_minor: minorSchema.positive(),
+      }),
+    )
+    .max(50),
+  other_flows: z.array(commitmentFlowSchema).max(200).default([]),
+});
+
+export type CommitmentRequest = z.infer<typeof commitmentRequestSchema>;
+
+export const commitmentStatusSchema = z.enum([
+  "COMPATIBLE_UNDER_ASSUMPTIONS",
+  "INCOMPATIBLE",
+  "INSUFFICIENT_EVIDENCE",
+  "OUTSIDE_HORIZON",
+]);
+
+export type CommitmentStatus = z.infer<typeof commitmentStatusSchema>;
+
+export const openingBasisSchema = z.enum([
+  "BANK_AVAILABLE_VERIFIED",
+  "TREASURY_ATTESTED",
+  "LEDGER_SCENARIO_ONLY",
+  "USER_ASSUMPTION",
+  "UNKNOWN",
+]);
+
+export type OpeningBasis = z.infer<typeof openingBasisSchema>;
+
+export const commitmentReadinessSchema = z.enum([
+  "SIMULATION_ONLY",
+  "REVIEW_REQUIRED",
+  "CAPACITY_RESERVABLE",
+]);
+
+export type CommitmentReadiness = z.infer<typeof commitmentReadinessSchema>;
+
+export const commitmentCheckpointSchema = z.object({
+  date: isoDateSchema,
+  phase: z.enum(["DEBITS", "CREDITS"]),
+  cash_minor: minorSchema,
+});
+
+export type CommitmentCheckpoint = z.infer<typeof commitmentCheckpointSchema>;
+
+export const commitmentAlternativeSchema = z.object({
+  advance_bps: z.number().int().min(0).max(10_000),
+  advance_minor: minorSchema,
+  final_minor: minorSchema,
+  status: commitmentStatusSchema,
+  min_cash_minor: minorSchema.nullable(),
+  closing_minor: minorSchema.nullable(),
+  shortfall_minor: minorSchema.min(0).nullable(),
+  first_breach: commitmentCheckpointSchema.nullable(),
+  path: z.array(commitmentCheckpointSchema),
+});
+
+export type CommitmentAlternative = z.infer<typeof commitmentAlternativeSchema>;
+
+export const commitmentEvaluationSchema = z.object({
+  company_id: z.string(),
+  currency: z.literal("EUR"),
+  as_of: isoDateSchema,
+  horizon_end: isoDateSchema,
+  observed_months: z.number().int().min(0),
+  basis: openingBasisSchema,
+  readiness: commitmentReadinessSchema,
+  opening_verified: z.boolean(),
+  coverage_verified: z.boolean(),
+  is_financial_authorization: z.literal(false),
+  label: z.string(),
+  search_kind: z.literal("ENUMERATED_GRID"),
+  minimum_tested_feasible_bps: z.number().int().nullable(),
+  assumptions: commitmentRequestSchema,
+  alternatives: z.array(commitmentAlternativeSchema).min(1),
+});
+
+export type CommitmentEvaluation = z.infer<typeof commitmentEvaluationSchema>;
+
+export const COMMITMENT_LABEL =
+  "Simulación con supuestos del usuario, no reservable, requiere revisión humana";
