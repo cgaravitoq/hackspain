@@ -73,7 +73,11 @@ def seed_dataset(
         COMPANY_FIELDS,
         [{"company_id": company_id, "group_id": group_id, "currency": "EUR"} for company_id, group_id in companies],
     )
-    _write_csv(folder / "banking_products.csv", BANKING_FIELDS, banking_products or [{"product_id": "P1", "type": "checking", "currency": "EUR"}])
+    _write_csv(
+        folder / "banking_products.csv",
+        BANKING_FIELDS,
+        banking_products or [{"product_id": "P1", "type": "checking", "currency": "EUR"}],
+    )
     _write_csv(
         folder / "debt_products.csv",
         DEBT_FIELDS,
@@ -90,8 +94,16 @@ def seed_dataset(
             }
         ],
     )
-    _write_csv(folder / "transactions.csv", TRANSACTION_FIELDS, transactions or [transaction("TX_FILLER", companies[0][0], "2026-01-01", 1.0)])
-    _write_csv(folder / "invoices.csv", INVOICE_FIELDS, invoices or [invoice("INV_FILLER", companies[0][0], "2026-01-01", 1.0)])
+    _write_csv(
+        folder / "transactions.csv",
+        TRANSACTION_FIELDS,
+        transactions or [transaction("TX_FILLER", companies[0][0], "2026-01-01", 1.0)],
+    )
+    _write_csv(
+        folder / "invoices.csv",
+        INVOICE_FIELDS,
+        invoices or [invoice("INV_FILLER", companies[0][0], "2026-01-01", 1.0)],
+    )
     return folder
 
 
@@ -325,12 +337,24 @@ def test_in_house_lines_below_the_thousand_balance_floor_never_pair(tmp_path: Pa
 def test_a_shared_counterparty_is_a_succession_only_above_ten_counterparties(tmp_path: Path):
     transactions = []
     for index in range(10):
-        transactions.append(transaction(f"TX_SUCC_{index}", "C1", "2025-01-05", 10.0, counterparty_id=f"CP_A{index}"))
-        transactions.append(transaction(f"TX_SUCC_{index}_2", "C2", "2025-06-05", 10.0, counterparty_id=f"CP_A{index}"))
+        transactions.append(
+            transaction(f"TX_SUCC_{index}", "C1", "2025-01-05", 10.0, counterparty_id=f"CP_A{index}")
+        )
+        transactions.append(
+            transaction(f"TX_SUCC_{index}_2", "C2", "2025-06-05", 10.0, counterparty_id=f"CP_A{index}")
+        )
     for index in range(9):
-        transactions.append(transaction(f"TX_SHARED_{index}", "C3", "2025-01-05", 10.0, counterparty_id=f"CP_B{index}"))
-        transactions.append(transaction(f"TX_SHARED_{index}_2", "C4", "2025-06-05", 10.0, counterparty_id=f"CP_B{index}"))
-    payload = detect(tmp_path, companies=[("C1", "G1"), ("C2", "G2"), ("C3", "G1"), ("C4", "G2")], transactions=transactions)
+        transactions.append(
+            transaction(f"TX_SHARED_{index}", "C3", "2025-01-05", 10.0, counterparty_id=f"CP_B{index}")
+        )
+        transactions.append(
+            transaction(f"TX_SHARED_{index}_2", "C4", "2025-06-05", 10.0, counterparty_id=f"CP_B{index}")
+        )
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G2"), ("C3", "G1"), ("C4", "G2")],
+        transactions=transactions,
+    )
     edges = edges_of(payload, "shared_counterparty_id")
     assert sorted((edge["source"], edge["target"], edge["subtype"]) for edge in edges) == [
         ("C1", "C2", "client_portfolio_transfer"),

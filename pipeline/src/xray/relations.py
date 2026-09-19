@@ -42,6 +42,7 @@ PAYROLL_CATEGORIES = ("salary", "social_security")
 TAX_CATEGORIES = ("tax",)
 COMMERCIAL_CATEGORIES = ("payment", "collection", "bulk_payment", "bulk_collection", "utility")
 
+
 @dataclass(frozen=True)
 class Tables:
     companies: pd.DataFrame
@@ -169,7 +170,9 @@ def _flow_subtypes(matches: pd.DataFrame, product_type: pd.Series) -> pd.Series:
     in_category = matches["category_in"].fillna("").astype(str)
     out_type = matches["product_id_out"].map(product_type).fillna("")
     in_type = matches["product_id_in"].map(product_type).fillna("")
-    descriptions = matches["description_out"].fillna("").astype(str) + " " + matches["description_in"].fillna("").astype(str)
+    descriptions = (
+        matches["description_out"].fillna("").astype(str) + " " + matches["description_in"].fillna("").astype(str)
+    )
     conditions = [
         descriptions.str.contains(POOL_DESCRIPTION, case=False, regex=True),
         (out_type == LINE_OF_CREDIT) | (in_type == LINE_OF_CREDIT),
@@ -250,7 +253,10 @@ def _invoice_edges(matches: pd.DataFrame) -> list[dict[str, Any]]:
             qualifies = distinct_amounts >= INVOICE_MINIMUM_MATCHES and same_day_share >= INVOICE_SAME_DAY_SHARE
         if not qualifies:
             continue
-        high = len(rows) >= INVOICE_HIGH_CONFIDENCE_MATCHES if same_group else distinct_amounts >= INVOICE_HIGH_CONFIDENCE_MATCHES
+        if same_group:
+            high = len(rows) >= INVOICE_HIGH_CONFIDENCE_MATCHES
+        else:
+            high = distinct_amounts >= INVOICE_HIGH_CONFIDENCE_MATCHES
         currency = rows["currency_seller"].dropna()
         edges.append(
             {
@@ -477,7 +483,9 @@ def build(data_dir: Path, out_dir: Path) -> dict[str, Any]:
         + _counterparty_edges(tables.transactions, tables.group_of, tables.company_currency)
     )
     _promote_cross_signal(edges)
-    edges.sort(key=lambda edge: (edge["scope"], edge["relation_type"], -edge["matches"], edge["source"], edge["target"]))
+    edges.sort(
+        key=lambda edge: (edge["scope"], edge["relation_type"], -edge["matches"], edge["source"], edge["target"])
+    )
     calibration = _calibration(matches, null_flows, invoice_matches, null_invoices)
     nodes = _nodes(tables.companies, edges, tables.group_of)
     counts = Counter(edge["relation_type"] for edge in edges)
