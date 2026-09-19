@@ -19,7 +19,7 @@ class Dataset:
 
 
 def _to_date(column: str) -> pl.Expr:
-    # Unparsable values used to become null and vanish in `date < CUTOFF`.
+    # Strict on purpose: a nulled date would silently drop its row from the CUTOFF and overdue filters.
     return pl.col(column).str.slice(0, 10).str.to_date("%Y-%m-%d")
 
 
