@@ -6,6 +6,7 @@ import {
   relationsArtifactSchema,
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { seed } from "./fixtures.ts";
 import { relationsJson, seedRelations } from "./relations.ts";
 
@@ -136,9 +137,21 @@ describe("GET /graph", () => {
     });
   });
 
-  it("rejects a relation type outside the contract", async () => {
-    const response = await SELF.fetch("https://agent.test/graph?type=OWNS");
+  it.each([
+    ["type", "OWNS"],
+    ["confidence", "bogus"],
+    ["scope", "bogus"],
+  ])("rejects a %s outside the contract and names it", async (param, value) => {
+    const response = await SELF.fetch(
+      `https://agent.test/graph?${param}=${value}`,
+    );
     expect(response.status).toBe(400);
+    const body = z
+      .object({
+        error: z.object({ properties: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(await response.json());
+    expect(Object.keys(body.error.properties)).toEqual([param]);
   });
 
   it("answers 404 while the relations artifact has not been loaded", async () => {
@@ -205,6 +218,14 @@ describe("GET /companies/:id/relations", () => {
     const body = companyRelationsSchema.parse(await response.json());
     expect(body.company_id).toBe("COMP_E");
     expect(body.edges).toEqual([]);
+  });
+
+  it("answers an empty edge list for a scored company the relations artifact does not list", async () => {
+    const response = await SELF.fetch(
+      "https://agent.test/companies/COMP_F/relations",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ company_id: "COMP_F", edges: [] });
   });
 
   it("answers 404 with the same shape as /companies/:id for an unknown company", async () => {

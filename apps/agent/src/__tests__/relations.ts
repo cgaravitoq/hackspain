@@ -5,6 +5,10 @@ export const isolated = company("COMP_E", "GROUP_2", [
   { month: "2026-08", score: null, state: "not_evaluable" },
 ]);
 
+export const unlisted = company("COMP_F", "GROUP_2", [
+  { month: "2026-08", score: 55.5, state: "stable" },
+]);
+
 export const relationsJson = {
   meta: {
     rule_version: "xray-relations/0.1",
@@ -113,22 +117,24 @@ export async function seedRelations(
   db: D1Database,
   artifact: RelationsArtifact,
 ): Promise<void> {
-  const { series: _series, ...summary } = isolated;
   const statements = [
-    db
-      .prepare(
-        "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-      )
-      .bind(
-        isolated.company_id,
-        isolated.group_id,
-        isolated.scorable ? 1 : 0,
-        isolated.latest.month,
-        isolated.latest.score,
-        isolated.latest.state,
-        JSON.stringify(summary),
-        JSON.stringify(isolated),
-      ),
+    ...[isolated, unlisted].map((detail) => {
+      const { series: _series, ...summary } = detail;
+      return db
+        .prepare(
+          "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .bind(
+          detail.company_id,
+          detail.group_id,
+          detail.scorable ? 1 : 0,
+          detail.latest.month,
+          detail.latest.score,
+          detail.latest.state,
+          JSON.stringify(summary),
+          JSON.stringify(detail),
+        );
+    }),
     db
       .prepare("INSERT INTO documents (name, payload) VALUES (?1, ?2)")
       .bind("relations_meta", JSON.stringify(artifact.meta)),

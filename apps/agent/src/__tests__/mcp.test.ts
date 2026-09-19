@@ -51,7 +51,11 @@ describe("POST /mcp", () => {
         id: z.literal(1),
         result: z.object({
           tools: z.array(
-            z.object({ name: z.string(), inputSchema: z.object({}).loose() }),
+            z.object({
+              name: z.string(),
+              description: z.string(),
+              inputSchema: z.object({}).loose(),
+            }),
           ),
         }),
       })
@@ -65,6 +69,11 @@ describe("POST /mcp", () => {
       "report",
       "relations",
     ]);
+    expect(
+      body.result.tools.find((tool) => tool.name === "relations")?.description,
+    ).toBe(
+      "The companies related to a company, with each counterpart's score and state; every edge is inferred from mirrored movements and is not a verified obligation",
+    );
   });
 
   it("answers a relations call with the edges and the counterpart state", async () => {
