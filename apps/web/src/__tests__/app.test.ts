@@ -818,7 +818,7 @@ describe("App", () => {
     expect(window.location.hash).toBe("#graph");
   });
 
-  it("lists and switches roles from the avatar menu", async () => {
+  it("renders only the role control in the footer and switches roles", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
@@ -829,6 +829,9 @@ describe("App", () => {
     const roleTrigger = wrapper.find('[aria-label="Cambiar rol"]');
     expect(roleTrigger.attributes("aria-label")).toBe("Cambiar rol");
     expect(roleTrigger.text()).toBe("FI");
+    const footer = wrapper.find('[data-sidebar="footer"]');
+    expect(footer.findAll('[data-sidebar="menu-button"]')).toHaveLength(1);
+    expect(footer.text()).not.toContain("Ajustes");
     expect(wrapper.find('[aria-label="Alertas · próximamente"]').exists()).toBe(
       false,
     );

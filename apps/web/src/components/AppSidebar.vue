@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   ScanSearch,
   Send,
-  Settings,
   Zap,
 } from "@lucide/vue";
 import {
@@ -165,9 +164,7 @@ const menuAfterAnalytics = [
     </SidebarContent>
 
     <SidebarFooter>
-      <SidebarMenu
-        class="grid grid-cols-[auto_auto] justify-start group-data-[collapsible=icon]:grid-cols-1"
-      >
+      <SidebarMenu>
         <SidebarMenuItem class="min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
@@ -205,17 +202,6 @@ const menuAfterAnalytics = [
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            class="w-auto gap-1 px-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:p-2!"
-            tooltip="Ajustes · próximamente"
-            aria-disabled="true"
-            title="Próximamente"
-          >
-            <Settings />
-            <span>Ajustes</span>
-          </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarFooter>
