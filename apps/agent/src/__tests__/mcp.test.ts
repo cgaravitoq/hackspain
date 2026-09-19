@@ -116,6 +116,17 @@ describe("POST /mcp", () => {
     expect(relations.edges[0].counterpart_company_id).toBe("COMP_D");
   });
 
+  it("answers a relations call for an unknown company with the error shape", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: { company_id: "COMP_X" },
+    });
+    const body = rpcResult.parse(await response.json());
+    expect(JSON.parse(body.result.content[0]?.text ?? "")).toEqual({
+      error: "Unknown company COMP_X",
+    });
+  });
+
   it("answers a score call with the state and evidence read from D1", async () => {
     const response = await rpc("tools/call", {
       name: "score",
