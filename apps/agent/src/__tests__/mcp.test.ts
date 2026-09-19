@@ -1,13 +1,25 @@
 import { env, SELF } from "cloudflare:test";
+import { relationsArtifactSchema } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seed } from "./fixtures.ts";
+import { relationsJson, seedRelations } from "./relations.ts";
 
-beforeAll(() => seed(env.DB));
+beforeAll(async () => {
+  await seed(env.DB);
+  await seedRelations(
+    env.DB,
+    relationsArtifactSchema.parse(JSON.parse(JSON.stringify(relationsJson))),
+  );
+});
 
 type Params = {
   name?: string;
-  arguments?: { company_id?: string; kind?: string };
+  arguments?: {
+    company_id?: string;
+    kind?: string;
+    relation_type?: string;
+  };
 };
 
 function rpc(method: string, params: Params, id = 1) {
@@ -30,7 +42,7 @@ const rpcResult = z.object({
 });
 
 describe("POST /mcp", () => {
-  it("lists the X Ray tools and report export with their input schemas", async () => {
+  it("lists the seven X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -51,7 +63,57 @@ describe("POST /mcp", () => {
       "group_map",
       "alerts",
       "report",
+      "relations",
     ]);
+  });
+
+  it("answers a relations call with the edges and the counterpart state", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: { company_id: "COMP_A" },
+    });
+    const body = rpcResult.parse(await response.json());
+    const relations = z
+      .object({
+        company_id: z.string(),
+        edges: z.array(
+          z.object({
+            relation_type: z.string(),
+            counterpart_company_id: z.string(),
+            counterpart_score: z.number().nullable(),
+            counterpart_state: z.string(),
+          }),
+        ),
+      })
+      .parse(JSON.parse(body.result.content[0]?.text ?? ""));
+    expect(relations.company_id).toBe("COMP_A");
+    expect(relations.edges).toMatchObject([
+      {
+        relation_type: "INFERRED_PAYMENT_TO",
+        counterpart_company_id: "COMP_B",
+        counterpart_score: 91,
+        counterpart_state: "healthy",
+      },
+      {
+        relation_type: "SHARES_COUNTERPARTY_WITH",
+        counterpart_company_id: "COMP_D",
+        counterpart_state: "slipping",
+      },
+    ]);
+  });
+
+  it("keeps only the requested relation type in a relations call", async () => {
+    const response = await rpc("tools/call", {
+      name: "relations",
+      arguments: {
+        company_id: "COMP_A",
+        relation_type: "SHARES_COUNTERPARTY_WITH",
+      },
+    });
+    const body = rpcResult.parse(await response.json());
+    const relations = JSON.parse(body.result.content[0]?.text ?? "");
+    expect(relations.edges).toHaveLength(1);
+    expect(relations.edges[0].counterpart_company_id).toBe("COMP_D");
   });
 
   it("answers a score call with the state and evidence read from D1", async () => {
