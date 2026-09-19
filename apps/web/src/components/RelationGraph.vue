@@ -431,7 +431,12 @@ onMounted(load);
       </label>
       <label>
         Empresa
-        <input id="graph-search" v-model="query" placeholder="COMP_0077" />
+        <input
+          id="graph-search"
+          v-model="query"
+          type="text"
+          placeholder="COMP_0077"
+        />
       </label>
       <label class="graph-toggle">
         <input id="graph-isolated" v-model="includeIsolated" type="checkbox" />
@@ -494,14 +499,14 @@ onMounted(load);
 }
 
 .graph-toolbar select,
-.graph-toolbar input {
+.graph-toolbar input[type="text"] {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper);
 }
 
-.graph-toolbar input {
+.graph-toolbar input[type="text"] {
   width: 130px;
 }
 
@@ -511,6 +516,10 @@ onMounted(load);
   gap: 6px !important;
   padding-bottom: 6px;
   font-weight: 600;
+}
+
+.graph-toggle input {
+  margin: 0;
 }
 
 .graph-counter {
