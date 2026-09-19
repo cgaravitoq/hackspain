@@ -447,7 +447,75 @@ describe("xray contracts", () => {
       months: ["2026-08"],
       companies: [{ ...demoCompanySummary, series: [stableMonth] }],
     });
-    expect(compare.companies[0]?.series).toHaveLength(1);
+    expect(compare.companies[0]?.series).toEqual([stableMonth]);
+  });
+
+  it("accepts a compare payload of three companies", () => {
+    const compare = compareSchema.parse({
+      months: ["2026-08"],
+      companies: [
+        { ...demoCompanySummary, company_id: "COMP_0001", series: [] },
+        { ...demoCompanySummary, company_id: "COMP_0002", series: [] },
+        { ...demoCompanySummary, company_id: "COMP_0003", series: [] },
+      ],
+    });
+    expect(compare.companies.map((company) => company.company_id)).toEqual([
+      "COMP_0001",
+      "COMP_0002",
+      "COMP_0003",
+    ]);
+  });
+
+  it("rejects a compare payload with no companies", () => {
+    const result = compareSchema.safeParse({
+      months: ["2026-08"],
+      companies: [],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["companies"],
+    ]);
+  });
+
+  it("rejects a compare payload that omits the companies key", () => {
+    const result = compareSchema.safeParse({ months: ["2026-08"] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["companies"],
+    ]);
+  });
+
+  it("rejects a compare payload that omits the months key", () => {
+    const result = compareSchema.safeParse({
+      companies: [{ ...demoCompanySummary, series: [] }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["months"],
+    ]);
+  });
+
+  it("rejects a compare company without its series", () => {
+    const result = compareSchema.safeParse({
+      months: ["2026-08"],
+      companies: [demoCompanySummary],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["companies", 0, "series"],
+    ]);
+  });
+
+  it("rejects a compare series entry without its evidence", () => {
+    const { evidence: _evidence, ...monthWithoutEvidence } = stableMonth;
+    const result = compareSchema.safeParse({
+      months: ["2026-08"],
+      companies: [{ ...demoCompanySummary, series: [monthWithoutEvidence] }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["companies", 0, "series", 0, "evidence"],
+    ]);
   });
 
   it("rejects a compare payload listing more than three companies", () => {
