@@ -37,6 +37,45 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+type Cell = string | number | null;
+
+function display(value: Cell): string {
+  return value === null ? "No disponible" : escapeHtml(String(value));
+}
+
+function table(headers: string[], rows: Cell[][]): string {
+  return `<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${display(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+
+const PROJECTION_REASONS = {
+  company_stale: "La última observación está desactualizada.",
+  latest_score_unavailable: "El último score no está disponible.",
+  insufficient_history: "El historial observado todavía es insuficiente.",
+  momentum_unavailable: "El momentum necesario no está disponible.",
+} as const;
+
+function trendProjection(report: Report): string {
+  const projection = report.trend_projection;
+  if (projection.status === "insufficient_data") {
+    const missing = projection.months_missing
+      ? ` Faltan ${projection.months_missing} meses observados para el mínimo de ${projection.min_months_required}.`
+      : "";
+    return `<section><h2>Escenario de tendencia no disponible</h2><p>${PROJECTION_REASONS[projection.reason]}${missing}</p><p class="meta">Reglas: ${escapeHtml(projection.rule_version)} · Meses fuente: ${projection.evidence.source_months.map(escapeHtml).join(", ") || "No disponibles"}</p></section>`;
+  }
+  return `<section><h2>Escenario de tendencia a tres meses</h2>
+<p>Extrapolación mecánica del score y momentum observados. El rango favorable-adverso es un escenario de sensibilidad, no un intervalo de confianza ni una previsión.</p>
+${table(
+  ["Mes", "Base (puntos)", "Favorable (puntos)", "Adverso (puntos)"],
+  projection.points.map((point) => [
+    point.month,
+    point.base,
+    point.favorable,
+    point.adverse,
+  ]),
+)}
+<p class="meta">Reglas: ${escapeHtml(projection.rule_version)} · Último score: ${projection.evidence.latest_score} · Momentum: ${projection.evidence.momentum} · Volatilidad: ${projection.evidence.volatility} · Meses fuente: ${projection.evidence.source_months.map(escapeHtml).join(", ")}</p></section>`;
+}
+
 export function reportId(report: Report): string {
   return `${report.company_id} / ${report.month} / ${report.role}`;
 }
@@ -89,6 +128,9 @@ h2 { color: #087f83; font-size: 11.5pt; margin: 6mm 0 2mm; break-after: avoid; }
 p { margin: 0 0 2.5mm; orphans: 3; widows: 3; }
 ul { margin: 0; padding-left: 5mm; }
 li { margin-bottom: 1.5mm; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+th, td { padding: 1.5mm 2mm; border-bottom: 1px solid #dbe7e8; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
 .caveat { margin-top: 6mm; border-left: 3px solid #087f83; background: #f2f7f7; padding: 3mm 4mm; }
 .caveat h2 { margin-top: 0; }
 footer { margin-top: 10mm; border-top: 1px solid #bfdbdb; padding-top: 3mm; color: #4d6470; font-size: 8pt; }
@@ -103,6 +145,7 @@ footer { margin-top: 10mm; border-top: 1px solid #bfdbdb; padding-top: 3mm; colo
 <section><h2>${escapeHtml(headings.outlook)}</h2>${paragraphs(report.outlook)}</section>
 ${caveat}
 ${steps}
+${trendProjection(report)}
 <footer>${escapeHtml(REPORT_DISCLOSURE)}</footer>
 </body></html>`;
 }

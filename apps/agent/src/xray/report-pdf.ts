@@ -1,6 +1,6 @@
 import type { Report } from "@hackspain/shared";
 import { HTTPException } from "hono/http-exception";
-import { companyName } from "./report.ts";
+import { companyName, reportCacheVersion } from "./report.ts";
 import { escapeHtml, renderReportHtml, reportId } from "./report-html.ts";
 
 export type ReportBrowser = {
@@ -26,7 +26,10 @@ export async function reportPdf(
     report.company_id,
     report.month,
     report.role,
-    report.rule_version,
+    reportCacheVersion(
+      report.rule_version,
+      report.trend_projection.rule_version,
+    ),
   ];
   const cached = await db
     .prepare(

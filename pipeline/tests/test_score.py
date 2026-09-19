@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from xray.events import backtest, cash_stress, debt_break, overdue_invoice_months, recovery
-from xray.export import alert_kind, alert_stage, build
+from xray.export import _trend_projection, alert_kind, alert_stage, build
 from xray.load import read
 from xray.panel import monthly_panel
 from xray.score import (
@@ -653,6 +653,26 @@ def test_build_writes_artifact_files_and_one_company_series(tmp_path: Path):
     assert last["state"] == "falling"
     assert last["confidence"] == "medium"
     assert last["events"] == {"E1": True, "E2": False, "E3": False, "E4": False}
+    assert payload["trend_projection"] == {
+        "rule_version": "xray-trend-projection/0.1",
+        "status": "available",
+        "reason": None,
+        "semantics": "scenario_range_not_confidence_interval",
+        "observed_months": 8,
+        "min_months_required": 6,
+        "months_missing": 0,
+        "points": [
+            {"month": "2026-09", "base": 15.2, "favorable": 28.5, "adverse": 2.0},
+            {"month": "2026-10", "base": 9.7, "favorable": 28.4, "adverse": 0.0},
+            {"month": "2026-11", "base": 4.1, "favorable": 27.0, "adverse": 0.0},
+        ],
+        "evidence": {
+            "latest_score": 20.8,
+            "momentum": -16.7,
+            "volatility": 13.2,
+            "source_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"],
+        },
+    }
     assert json.loads((out / "alerts.json").read_text(encoding="utf-8")) == [
         {
             "rule_version": RULE_VERSION,
@@ -688,6 +708,20 @@ def test_build_writes_utf8_whatever_the_platform_locale(tmp_path: Path):
     assert meta["state_labels"]["slipping"] == "torciéndose"
 
 
+def test_trend_projection_refuses_history_below_its_declared_minimum():
+    projection = _trend_projection(
+        [{"month": "2026-08", "score": 50.0}],
+        {"month": "2026-08", "score": 50.0, "momentum": 12.0},
+        observed_months=5,
+        stale=False,
+    )
+
+    assert projection["status"] == "insufficient_data"
+    assert projection["reason"] == "insufficient_history"
+    assert projection["months_missing"] == 1
+    assert projection["points"] == []
+
+
 def test_a_stale_company_reports_not_evaluable_as_its_latest_state(tmp_path: Path):
     stale_data = seed_dataset(tmp_path / "stale", months=7)
     fresh_data = seed_dataset(tmp_path / "fresh", months=8)
@@ -699,6 +733,9 @@ def test_a_stale_company_reports_not_evaluable_as_its_latest_state(tmp_path: Pat
     assert stale["latest"]["state"] == "not_evaluable"
     assert stale["latest"]["confidence"] == "none"
     assert stale["latest"]["level"] is not None
+    assert stale["trend_projection"]["status"] == "insufficient_data"
+    assert stale["trend_projection"]["reason"] == "company_stale"
+    assert stale["trend_projection"]["points"] == []
     assert json.loads((tmp_path / "stale-out" / "alerts.json").read_text()) == []
     series = json.loads((tmp_path / "stale-out" / "scores" / "C1.json").read_text())["series"]
     assert [entry["state"] for entry in series][-2:] == ["slipping", "slipping"]

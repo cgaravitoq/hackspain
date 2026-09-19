@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import {
-  REPORT_HEADINGS,
-  type Report,
-  type ReportSection,
-  type Role,
-} from "@hackspain/shared";
+import type { Report, ReportSection, Role } from "@hackspain/shared";
 import { computed, ref, watch } from "vue";
 import { api } from "../api.ts";
 import { STATE_COLORS } from "../format.ts";
@@ -16,9 +11,6 @@ const props = defineProps<{
 }>();
 
 const report = ref<Report | null>(null);
-const headings = computed(() =>
-  report.value ? REPORT_HEADINGS[report.value.role] : null,
-);
 const decisionBlocks = computed(() =>
   props.decisionSection ? blocks(props.decisionSection.body) : [],
 );
@@ -55,19 +47,11 @@ function blocks(body: string): Block[] {
     });
 }
 
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-}
-
 function figureValue(value: number): string {
   return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(
     value,
   );
 }
-
 async function load() {
   const currentRequest = ++requestId;
   loading.value = true;
@@ -95,22 +79,22 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
 <template>
   <section class="panel report">
     <header class="report-header">
-      <h2 class="panel-title">Informe</h2>
+      <h2 class="panel-title">Resumen</h2>
       <a
         class="report-export"
         :href="exportUrl"
         target="_blank"
         rel="noopener noreferrer"
       >
-        Exportar PDF
+        Exportar informe completo
       </a>
     </header>
-    <p v-if="loading" class="loading">Generando informe…</p>
+    <p v-if="loading" class="loading">Generando resumen…</p>
     <div v-else-if="error" class="error">
-      <p>No se pudo generar el informe</p>
+      <p>No se pudo generar el resumen</p>
       <small>{{ error }}</small>
     </div>
-    <div v-else-if="report && headings" class="report-content">
+    <div v-else-if="report" class="report-content">
       <div class="report-lead">
         <p class="report-headline">{{ report.headline }}</p>
         <p class="report-score">
@@ -119,28 +103,6 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
         </p>
       </div>
       <p class="report-summary">{{ report.summary }}</p>
-      <article class="report-section report-explanation">
-        <h3>{{ headings.score_explanation }}</h3>
-        <p v-for="paragraph in paragraphs(report.score_explanation)" :key="paragraph">
-          {{ paragraph }}
-        </p>
-      </article>
-      <article class="report-section">
-        <h3>{{ headings.outlook }}</h3>
-        <p v-for="paragraph in paragraphs(report.outlook)" :key="paragraph">
-          {{ paragraph }}
-        </p>
-      </article>
-      <aside v-if="report.caveat.trim()" class="report-section report-caveat">
-        <h3>{{ headings.caveat }}</h3>
-        <p>{{ report.caveat }}</p>
-      </aside>
-      <article v-if="report.next_steps.length" class="report-section report-steps">
-        <h3>{{ headings.next_steps }}</h3>
-        <ul>
-          <li v-for="step in report.next_steps" :key="step">{{ step }}</li>
-        </ul>
-      </article>
       <article v-if="decisionSection" class="report-section report-decision">
         <h3>{{ decisionSection.title }}</h3>
         <div class="report-body">
@@ -231,16 +193,24 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
 }
 
 .report-summary {
-  margin: 0 0 18px;
-  font-size: 14px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
-.report-section p {
+.report-decision {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.report-decision p {
   margin: 0 0 8px;
   color: var(--ink-soft);
 }
 
-.report-section ul {
+.report-decision ul {
   margin: 0;
   padding-left: 20px;
   color: var(--ink-soft);
@@ -257,25 +227,7 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
   font-weight: 600;
 }
 
-.report-caveat {
-  padding: 12px 14px;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 6px 6px 0;
-  background: var(--chip-bg);
-}
-
-.report-section + .report-caveat,
-.report-caveat + .report-section {
-  border-top: 0;
-}
-
-.report-section + .report-section {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.report-section h3 {
+.report-decision h3 {
   margin: 0 0 8px;
   font-size: 14px;
 }
@@ -311,7 +263,6 @@ td {
 th {
   text-align: left;
   font-weight: 500;
-  color: var(--ink-soft);
 }
 
 .loading {

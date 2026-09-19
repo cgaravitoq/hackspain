@@ -19,6 +19,8 @@ import { reportInstructions } from "./report-policy.ts";
 import { createStore } from "./store.ts";
 import { createTools } from "./tools.ts";
 
+const REPORT_FORMAT_VERSION = "xray-report/0.3";
+
 const narrativeSchema = z.strictObject({
   headline: z.string().min(1).max(200),
   summary: z.string().min(1).max(800),
@@ -78,6 +80,13 @@ export async function reportSources(db: D1Database, companyId: string) {
 
 export type ReportSources = Awaited<ReturnType<typeof reportSources>>;
 
+export function reportCacheVersion(
+  scoreRuleVersion: string,
+  trendRuleVersion: string,
+): string {
+  return `${scoreRuleVersion}+${trendRuleVersion}+${REPORT_FORMAT_VERSION}`;
+}
+
 async function narrate(
   model: LanguageModel,
   role: Role,
@@ -130,6 +139,7 @@ function assemble(
     ...narrative,
     source,
     export_url: `/api/companies/${encodeURIComponent(e.company_id)}/report.pdf?role=${role}`,
+    trend_projection: sources.company.trend_projection,
   });
 }
 
@@ -146,11 +156,15 @@ export async function loadReport(
 ): Promise<Report> {
   const sources = await reportSources(db, companyId);
   const { month, evidence } = sources.explanation;
+  const cacheVersion = reportCacheVersion(
+    evidence.rule_version,
+    sources.company.trend_projection.rule_version,
+  );
   const query = db
     .prepare(
       "SELECT body FROM reports WHERE company_id = ? AND month = ? AND role = ? AND rule_version = ?",
     )
-    .bind(companyId, month, role, evidence.rule_version);
+    .bind(companyId, month, role, cacheVersion);
   const cached = await query.first<{ body: string }>();
   const hit = cached ? cachedReport(cached.body) : null;
   if (hit) {
@@ -175,7 +189,7 @@ export async function loadReport(
       companyId,
       month,
       role,
-      evidence.rule_version,
+      cacheVersion,
       JSON.stringify(report),
       report.generated_at,
     )

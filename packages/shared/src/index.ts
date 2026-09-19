@@ -124,5 +124,8 @@ export {
   simulateSchema,
   stateSchema,
   type Treasury,
+  type TrendProjection,
   treasurySchema,
+  trendProjectionPointSchema,
+  trendProjectionSchema,
 } from "./xray.ts";

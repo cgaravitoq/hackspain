@@ -157,6 +157,16 @@ function addComparison(companyId: string) {
   compareIds.value = [...compareIds.value, companyId].slice(-MAX_COMPARED);
 }
 
+function removeComparison(companyId: string) {
+  if (compareIds.value.length === 1) {
+    return;
+  }
+  compareIds.value = compareIds.value.filter((id) => id !== companyId);
+  if (selected.value === companyId) {
+    select(compareIds.value[0] ?? "");
+  }
+}
+
 function openCompany(companyId: string) {
   compareIds.value = [companyId];
   select(companyId);
@@ -175,6 +185,7 @@ function openReport(
   result: Pick<Report, "company_id" | "role" | "export_url">,
 ) {
   role.value = result.role;
+  compareIds.value = [result.company_id];
   selected.value = result.company_id;
 }
 
@@ -287,6 +298,8 @@ onUnmounted(() => {
             :selected="selected"
             :role="role"
             :decision-section="commitmentResult?.report_section"
+            :comparing="compareIds.length > 1"
+            @remove="removeComparison"
             @select="select"
           />
           <CommitmentPanel

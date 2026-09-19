@@ -5,7 +5,7 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
-import { company, seed } from "./fixtures.ts";
+import { company, falling, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
@@ -82,12 +82,79 @@ describe("GET /companies/:id/report.pdf", () => {
     );
     expect(fallback.status).toBe(200);
     expect(fallback.headers.get("content-type")).toContain("text/html");
-    expect(await fallback.text()).toContain("@media print");
+    const html = await fallback.text();
+    expect(html).toContain("@media print");
+    expect(html).toContain("Escenario de tendencia no disponible");
+    expect(html).toContain("Faltan 2 meses observados");
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(quickAction).toHaveBeenCalledTimes(1);
   });
 
-  it("escapes model HTML before rendering", async () => {
+  it("renders the deterministic server trend scenario in printable HTML", async () => {
+    const trendProjection = {
+      rule_version: "xray-trend-projection/0.1",
+      status: "available" as const,
+      reason: null,
+      semantics: "scenario_range_not_confidence_interval" as const,
+      observed_months: 8,
+      min_months_required: 6,
+      months_missing: 0,
+      points: [
+        { month: "2026-09", base: 31, favorable: 42, adverse: 20 },
+        { month: "2026-10", base: 29, favorable: 45, adverse: 13 },
+        { month: "2026-11", base: 27, favorable: 47, adverse: 7 },
+      ],
+      evidence: {
+        latest_score: 33,
+        momentum: -6,
+        volatility: 11,
+        source_months: [
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+        ],
+      },
+    };
+    const detail = {
+      ...falling,
+      company_id: "COMP_TREND",
+      months_observed: 8,
+      trend_projection: trendProjection,
+    };
+    const { series: _series, ...summary } = detail;
+    await env.DB.prepare(
+      "INSERT INTO companies (company_id, group_id, scorable, month, score, state, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+    )
+      .bind(
+        detail.company_id,
+        detail.group_id,
+        1,
+        detail.latest.month,
+        detail.latest.score,
+        detail.latest.state,
+        JSON.stringify(summary),
+        JSON.stringify(detail),
+      )
+      .run();
+    const model = new MockLanguageModelV4({
+      doGenerate: reply(JSON.stringify(narrative)),
+    });
+    const response = await createApp({ model: () => model }).request(
+      "/companies/COMP_TREND/report.html?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Escenario de tendencia a tres meses");
+    expect(html).toContain("2026-09</td><td>31</td><td>42</td><td>20");
+    expect(html).toContain("no un intervalo de confianza ni una previsión");
+  });
+
+  it("escapes model HTML and removes executable links and external images before rendering", async () => {
     const unsafe = {
       ...narrative,
       headline: '<script>alert("unsafe")</script>',
@@ -117,7 +184,7 @@ describe("GET /companies/:id/report.pdf", () => {
     expect(quickAction).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the one-page role report without technical appendices and caches PDF bytes in D1", async () => {
+  it("renders the full role report with its trend scenario and caches PDF bytes in D1", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: reply(JSON.stringify(narrative)),
     });
@@ -137,11 +204,11 @@ describe("GET /companies/:id/report.pdf", () => {
       expect(request.html).toContain(
         "Índice orientativo de salud de tesorería; no constituye una evaluación crediticia.",
       );
+      expect(request.html).toContain("Escenario de tendencia no disponible");
       for (const technical of [
         "Anexo",
         "Metodología",
         "Glosario",
-        "momentum",
         "rule_version",
         "Ten en cuenta",
       ]) {
@@ -481,6 +548,11 @@ describe("GET /companies/:id/report", () => {
   it.each([
     JSON.stringify({ ...narrative, outlook: "El momentum sigue cayendo." }),
     JSON.stringify({ ...narrative, next_steps: ["uno", "dos", "tres"] }),
+    JSON.stringify({ ...narrative, summary: "El índice es 999999." }),
+    JSON.stringify({
+      ...narrative,
+      sections: [{ code: "decision", title: "Forbidden", body: "Forbidden" }],
+    }),
     "not JSON",
   ])(
     "falls back to the deterministic template after two invalid outputs and caches nothing",
@@ -495,7 +567,16 @@ describe("GET /companies/:id/report", () => {
       const report = reportSchema.parse(await response.json());
       expect(report.source).toBe("template");
       expect(report.summary).toContain("12 sobre 100");
-      expect(JSON.stringify(report)).not.toContain("momentum");
+      expect(
+        [
+          report.headline,
+          report.summary,
+          report.score_explanation,
+          report.outlook,
+          report.caveat,
+          ...report.next_steps,
+        ].join(" "),
+      ).not.toContain("momentum");
       expect(model.doGenerateCalls).toHaveLength(2);
       const row = await env.DB.prepare(
         "SELECT count(*) AS count FROM reports",
@@ -566,6 +647,18 @@ describe("GET /companies/:id/report", () => {
       expect(reportSchema.parse(await response.json()).role).toBe(role);
     }
     await env.DB.prepare(
+      "UPDATE companies SET detail = json_set(detail, '$.trend_projection.rule_version', 'xray-trend-projection/0.2') WHERE company_id = 'COMP_CACHE'",
+    ).run();
+    const updatedProjection = await app.request(
+      "/companies/COMP_CACHE/report?role=tesorero",
+      undefined,
+      env,
+    );
+    expect(
+      reportSchema.parse(await updatedProjection.json()).trend_projection
+        .rule_version,
+    ).toBe("xray-trend-projection/0.2");
+    await env.DB.prepare(
       "UPDATE companies SET detail = json_set(detail, '$.series[#-1].evidence.rule_version', 'xray-score/0.2') WHERE company_id = 'COMP_CACHE'",
     ).run();
     const updatedRules = await app.request(
@@ -585,11 +678,11 @@ describe("GET /companies/:id/report", () => {
       env,
     );
     expect(reportSchema.parse(await updatedMonth.json()).month).toBe("2026-09");
-    expect(model.doGenerateCalls).toHaveLength(4);
+    expect(model.doGenerateCalls).toHaveLength(5);
     const row = await env.DB.prepare(
       "SELECT count(*) AS count FROM reports WHERE company_id = 'COMP_CACHE'",
     ).first<{ count: number }>();
-    expect(row?.count).toBe(4);
+    expect(row?.count).toBe(5);
   });
 
   it("grounds the prompt in plain-language facts from D1 and reuses the stored report", async () => {
@@ -607,6 +700,8 @@ describe("GET /companies/:id/report", () => {
     );
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
+    expect(report.trend_projection).toEqual(falling.trend_projection);
+    expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
     for (const fact of [
       "40.000 €",

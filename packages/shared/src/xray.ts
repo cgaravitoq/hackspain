@@ -132,6 +132,53 @@ export const treasurySchema = z.object({
 
 export type Treasury = z.infer<typeof treasurySchema>;
 
+export const trendProjectionPointSchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  base: z.number().min(0).max(100),
+  favorable: z.number().min(0).max(100),
+  adverse: z.number().min(0).max(100),
+});
+
+const trendProjectionEvidenceSchema = z.object({
+  latest_score: z.number().min(0).max(100).nullable(),
+  momentum: z.number().nullable(),
+  volatility: z.number().nonnegative(),
+  source_months: z.array(z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)),
+});
+
+const trendProjectionBaseSchema = z.object({
+  rule_version: z.string(),
+  semantics: z.literal("scenario_range_not_confidence_interval"),
+  observed_months: z.number().int().nonnegative(),
+  min_months_required: z.number().int().positive(),
+  months_missing: z.number().int().nonnegative(),
+});
+
+export const trendProjectionSchema = z.discriminatedUnion("status", [
+  trendProjectionBaseSchema.extend({
+    status: z.literal("available"),
+    reason: z.null(),
+    points: z.array(trendProjectionPointSchema).length(3),
+    evidence: trendProjectionEvidenceSchema.extend({
+      latest_score: z.number().min(0).max(100),
+      momentum: z.number(),
+    }),
+  }),
+  trendProjectionBaseSchema.extend({
+    status: z.literal("insufficient_data"),
+    reason: z.enum([
+      "company_stale",
+      "latest_score_unavailable",
+      "insufficient_history",
+      "momentum_unavailable",
+    ]),
+    points: z.array(trendProjectionPointSchema).length(0),
+    evidence: trendProjectionEvidenceSchema,
+  }),
+]);
+
+export type TrendProjection = z.infer<typeof trendProjectionSchema>;
+
 export const companySummarySchema = z.object({
   rule_version: z.string(),
   company_id: z.string(),
@@ -152,6 +199,7 @@ export const companySummarySchema = z.object({
   treasury: treasurySchema,
   latest: latestSchema,
   treasury_snapshot: treasurySnapshotSchema.nullable().optional(),
+  trend_projection: trendProjectionSchema,
 });
 
 export type CompanySummary = z.infer<typeof companySummarySchema>;
@@ -267,7 +315,7 @@ export const backtestSchema = z.object({
     z.object({
       events: z.number(),
       with_prior_alert: z.number(),
-      coverage: z.number(),
+      coverage: z.number().nullable(),
       median_lead_months: z.number().nullable(),
     }),
   ),
@@ -359,6 +407,7 @@ export const reportSchema = z.object({
   next_steps: z.array(z.string().min(1)).max(2),
   source: z.enum(["llm", "template"]),
   export_url: z.string(),
+  trend_projection: trendProjectionSchema,
 });
 
 export type Report = z.infer<typeof reportSchema>;

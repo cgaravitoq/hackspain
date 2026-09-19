@@ -14,6 +14,7 @@ import {
   relationScopeSchema,
   relationTypeSchema,
   roleSchema,
+  type TrendProjection,
 } from "@hackspain/shared";
 import type { z } from "zod";
 
@@ -108,6 +109,23 @@ export const alerts: Alert[] = [
   },
 ];
 
+export const trendProjectionRefusal: TrendProjection = {
+  rule_version: "xray-trend-projection/0.1",
+  status: "insufficient_data",
+  reason: "insufficient_history",
+  semantics: "scenario_range_not_confidence_interval",
+  observed_months: 4,
+  min_months_required: 6,
+  months_missing: 2,
+  points: [],
+  evidence: {
+    latest_score: 12.3,
+    momentum: -49.2,
+    volatility: 0,
+    source_months: ["2026-06", "2026-07", "2026-08"],
+  },
+};
+
 export function alert(companyId: string, kind: Alert["kind"] = "down"): Alert {
   return {
     rule_version: "xray-score/0.1",
@@ -163,6 +181,7 @@ export function company(id: string, groupId: string): CompanyDetail {
       state: "falling",
       confidence: "high",
     },
+    trend_projection: trendProjectionRefusal,
     series,
   };
 }
@@ -248,6 +267,7 @@ export const report: Report = {
   next_steps: ["Revisar las facturas vencidas."],
   source: "llm",
   export_url: "/companies/COMP_A/report.pdf?role=financiero",
+  trend_projection: trendProjectionRefusal,
 };
 
 export const group: GroupMap = {

@@ -39,23 +39,23 @@ watch(
 );
 
 const TABS = [
+  { id: "report", label: "Informe" },
   { id: "action", label: "Acción" },
   { id: "why", label: "Por qué" },
   { id: "changed", label: "Qué cambió" },
-  { id: "report", label: "Informe" },
   { id: "group", label: "Grupo" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
-const active = ref<TabId>("action");
+const active = ref<TabId>("report");
 
 const tabs = computed(() =>
   TABS.filter((tab) => tab.id !== "group" || props.group !== null),
 );
 
 const current = computed<TabId>(() =>
-  active.value === "group" && props.group === null ? "action" : active.value,
+  active.value === "group" && props.group === null ? "report" : active.value,
 );
 
 const framed = computed(

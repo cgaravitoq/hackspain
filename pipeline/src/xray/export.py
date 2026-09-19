@@ -1,7 +1,9 @@
 import json
 import random
 from datetime import UTC, date, datetime
+from math import sqrt
 from pathlib import Path
+from statistics import stdev
 from typing import Any
 
 import polars as pl
@@ -16,6 +18,9 @@ HOLDOUT_SHARE = 0.2
 STALE_BEFORE = date(CUTOFF.year - 1, 12, 1) if CUTOFF.month == 1 else date(CUTOFF.year, CUTOFF.month - 1, 1)
 LINE_OF_CREDIT = "lineofcredit"
 TREASURY_COLUMNS = ("starting_cash", "pending_receivables", "credit_line_limit", "credit_line_drawn")
+TREND_PROJECTION_RULE_VERSION = "xray-trend-projection/0.1"
+TREND_PROJECTION_MONTHS = 3
+TREND_PROJECTION_MIN_MONTHS = 6
 STATE_LABELS = {
     "healthy": "sana",
     "improving": "mejorando",
@@ -28,6 +33,62 @@ STATE_LABELS = {
 
 def month_key(day: date) -> str:
     return f"{day.year}-{day.month:02d}"
+
+
+def _future_month(month: str, offset: int) -> str:
+    year, number = (int(part) for part in month.split("-"))
+    index = year * 12 + number - 1 + offset
+    return f"{index // 12}-{index % 12 + 1:02d}"
+
+
+def _clamp_score(value: float) -> float:
+    return max(0.0, min(100.0, value))
+
+
+def _trend_projection(
+    series: list[dict[str, Any]],
+    latest: dict[str, Any],
+    observed_months: int,
+    stale: bool,
+) -> dict[str, Any]:
+    scored = [entry for entry in series if entry["score"] is not None][-12:]
+    changes = [current["score"] - previous["score"] for previous, current in zip(scored, scored[1:], strict=False)]
+    volatility = stdev(changes) if len(changes) >= 3 else 0.0
+    evidence = {
+        "latest_score": latest["score"],
+        "momentum": latest["momentum"],
+        "volatility": round(volatility, 1),
+        "source_months": [entry["month"] for entry in scored],
+    }
+    base = {
+        "rule_version": TREND_PROJECTION_RULE_VERSION,
+        "semantics": "scenario_range_not_confidence_interval",
+        "observed_months": observed_months,
+        "min_months_required": TREND_PROJECTION_MIN_MONTHS,
+        "months_missing": max(0, TREND_PROJECTION_MIN_MONTHS - observed_months),
+        "evidence": evidence,
+    }
+    if stale:
+        return {**base, "status": "insufficient_data", "reason": "company_stale", "points": []}
+    if latest["score"] is None:
+        return {**base, "status": "insufficient_data", "reason": "latest_score_unavailable", "points": []}
+    if observed_months < TREND_PROJECTION_MIN_MONTHS:
+        return {**base, "status": "insufficient_data", "reason": "insufficient_history", "points": []}
+    if latest["momentum"] is None:
+        return {**base, "status": "insufficient_data", "reason": "momentum_unavailable", "points": []}
+    points = []
+    for horizon in range(1, TREND_PROJECTION_MONTHS + 1):
+        scenario = _clamp_score(latest["score"] + latest["momentum"] * horizon / TREND_PROJECTION_MONTHS)
+        spread = volatility * sqrt(horizon)
+        points.append(
+            {
+                "month": _future_month(latest["month"], horizon),
+                "base": round(scenario, 1),
+                "favorable": round(_clamp_score(scenario + spread), 1),
+                "adverse": round(_clamp_score(scenario - spread), 1),
+            }
+        )
+    return {**base, "status": "available", "reason": None, "points": points}
 
 
 def alert_kind(before: str, now: str) -> str | None:
@@ -137,6 +198,7 @@ def _treasury_of(treasury: dict[str, dict[str, float]], company_id: str) -> dict
 def _company_record(
     company_id: str,
     rows: list[dict[str, Any]],
+    series: list[dict[str, Any]],
     latest: dict[str, Any],
     company_group: dict[str, str],
     company_currency: dict[str, str],
@@ -147,6 +209,8 @@ def _company_record(
 ) -> dict[str, Any]:
     group_id = company_group.get(company_id)
     last_observed = max(row["month"] for row in rows if row["observed"])
+    stale = last_observed < STALE_BEFORE
+    observed_months = rows[-1]["months_observed"]
     return {
         "rule_version": RULE_VERSION,
         "company_id": company_id,
@@ -154,13 +218,14 @@ def _company_record(
         "currency": company_currency.get(company_id),
         "scorable": latest["level"] is not None,
         "holdout": group_id in holdout_groups,
-        "months_observed": rows[-1]["months_observed"],
+        "months_observed": observed_months,
         "last_observed_month": month_key(last_observed),
-        "stale": last_observed < STALE_BEFORE,
+        "stale": stale,
         "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
         "invoice_facts": invoice_facts.get(company_id, {}),
         "treasury": treasury,
         "latest": {key: latest[key] for key in ("month", "score", "delta_3", "delta_6", "level", "momentum", "state", "confidence")},
+        "trend_projection": _trend_projection(series, latest, observed_months, stale),
     }
 
 
@@ -223,6 +288,12 @@ def _unscorable(
                 "state": NOT_EVALUABLE,
                 "confidence": "none",
             },
+            "trend_projection": _trend_projection(
+                [],
+                {"month": None, "score": None, "momentum": None},
+                0,
+                False,
+            ),
         }
         for company_id, group_id in company_group.items()
         if company_id not in company_rows
@@ -337,6 +408,7 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
         record = _company_record(
             company_id,
             rows,
+            series,
             latest,
             company_group,
             company_currency,

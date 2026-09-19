@@ -23,7 +23,7 @@ describe("ReportPanel", () => {
       props: { companyId: "COMP_A", role: "financiero" },
     });
     await flushPromises();
-    expect(wrapper.find(".loading").text()).toBe("Generando informe…");
+    expect(wrapper.find(".loading").text()).toBe("Generando resumen…");
     expect(wrapper.find(".report-headline").exists()).toBe(false);
     resolve?.(Response.json(report));
     await flushPromises();
@@ -31,7 +31,7 @@ describe("ReportPanel", () => {
     expect(wrapper.find(".report-headline").text()).toBe(report.headline);
   });
 
-  it("shows the score once with the headline, the summary and the role's headings in order", async () => {
+  it("keeps the dashboard report concise and leaves detail to the export", async () => {
     answer();
     const wrapper = mount(ReportPanel, {
       props: { companyId: "COMP_A", role: "financiero" },
@@ -40,31 +40,10 @@ describe("ReportPanel", () => {
     expect(wrapper.find(".report-score strong").text()).toBe("12");
     expect(wrapper.find(".report-score span").text()).toBe("cayendo");
     expect(wrapper.find(".report-summary").text()).toBe(report.summary);
-    expect(wrapper.findAll("h3").map((heading) => heading.text())).toEqual([
-      "Por qué tiene esta puntuación",
-      "Cómo interpretar los próximos meses",
-      "Hasta dónde llega esta lectura",
-      "Qué comprobar antes de decidir",
-    ]);
-    expect(
-      wrapper.findAll(".report-explanation p").map((line) => line.text()),
-    ).toEqual([
-      "Los cobros han caído.",
-      "Las facturas vencidas presionan la caja.",
-    ]);
-    expect(wrapper.find(".report-steps li").text()).toBe(
-      "Revisar las facturas vencidas.",
+    expect(wrapper.get(".report-export").text()).toBe(
+      "Exportar informe completo",
     );
-  });
-
-  it("hides the caution and the steps when the report has none", async () => {
-    answer({ ...report, caveat: "", next_steps: [] });
-    const wrapper = mount(ReportPanel, {
-      props: { companyId: "COMP_A", role: "financiero" },
-    });
-    await flushPromises();
-    expect(wrapper.find(".report-caveat").exists()).toBe(false);
-    expect(wrapper.find(".report-steps").exists()).toBe(false);
+    expect(wrapper.find(".report-section").exists()).toBe(false);
   });
 
   it("appends the decision outcome and folds its assumptions", async () => {
@@ -119,7 +98,7 @@ describe("ReportPanel", () => {
     });
     await flushPromises();
     const failure = wrapper.find(".error");
-    expect(failure.find("p").text()).toBe("No se pudo generar el informe");
+    expect(failure.find("p").text()).toBe("No se pudo generar el resumen");
     expect(failure.find("small").text()).toBe(
       "/companies/COMP_A/report?role=financiero answered 500",
     );

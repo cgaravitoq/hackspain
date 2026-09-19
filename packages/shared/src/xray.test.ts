@@ -32,6 +32,7 @@ import {
   simulateSchema,
   stateSchema,
   treasurySchema,
+  trendProjectionSchema,
 } from "./index.ts";
 
 const stableMonth = {
@@ -75,6 +76,44 @@ const demoTreasury = {
   credit_line_drawn: 40_000,
 };
 
+const demoTrendProjection = {
+  rule_version: "xray-trend-projection/0.1",
+  status: "available",
+  reason: null,
+  semantics: "scenario_range_not_confidence_interval",
+  observed_months: 8,
+  min_months_required: 6,
+  months_missing: 0,
+  points: [
+    { month: "2026-09", base: 45, favorable: 50, adverse: 40 },
+    { month: "2026-10", base: 40, favorable: 48, adverse: 32 },
+    { month: "2026-11", base: 35, favorable: 45, adverse: 25 },
+  ],
+  evidence: {
+    latest_score: 50,
+    momentum: -15,
+    volatility: 5,
+    source_months: [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ],
+  },
+} as const;
+
+const demoTrendProjectionRefusal = {
+  ...demoTrendProjection,
+  status: "insufficient_data",
+  reason: "insufficient_history",
+  observed_months: 3,
+  months_missing: 3,
+  points: [],
+  evidence: { ...demoTrendProjection.evidence, momentum: null },
+} as const;
+
 const demoCompanySummary = {
   rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
@@ -98,6 +137,7 @@ const demoCompanySummary = {
     state: "stable",
     confidence: "high",
   },
+  trend_projection: demoTrendProjection,
 };
 
 const demoAlert = {
@@ -159,6 +199,7 @@ const demoReport = {
   next_steps: ["Revisar los cobros pendientes más antiguos."],
   source: "llm",
   export_url: "/api/companies/COMP_0176/report.pdf?role=tesorero",
+  trend_projection: demoTrendProjection,
 };
 
 const demoScenario = {
@@ -198,6 +239,42 @@ const demoSimulate = {
 };
 
 describe("xray contracts", () => {
+  it("accepts a versioned three-month trend scenario with evidence pointers", () => {
+    expect(trendProjectionSchema.parse(demoTrendProjection)).toEqual(
+      demoTrendProjection,
+    );
+  });
+
+  it("rejects an available trend scenario without all three months", () => {
+    expect(
+      trendProjectionSchema.safeParse({
+        ...demoTrendProjection,
+        points: demoTrendProjection.points.slice(0, 2),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts an explicit refusal without scenario points", () => {
+    const refusal = trendProjectionSchema.parse({
+      ...demoTrendProjection,
+      status: "insufficient_data",
+      reason: "company_stale",
+      points: [],
+    });
+    expect(refusal.status).toBe("insufficient_data");
+    expect(refusal.reason).toBe("company_stale");
+  });
+
+  it("rejects a refused trend scenario that still carries points", () => {
+    expect(
+      trendProjectionSchema.safeParse({
+        ...demoTrendProjection,
+        status: "insufficient_data",
+        reason: "insufficient_history",
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     { delta_3: -1.2, delta_6: 5.4 },
     { delta_3: 0, delta_6: null },
@@ -257,6 +334,7 @@ describe("xray contracts", () => {
         state: "stable",
         confidence: "low",
       },
+      trend_projection: demoTrendProjectionRefusal,
       series: [
         {
           month: "2026-06",
@@ -497,6 +575,21 @@ describe("xray contracts", () => {
     });
     expect(backtest.alerts_by_stage.candidate.revert_rate).toBeNull();
     expect(backtest.alerts_by_stage.confirmed.false_alarm_rate).toBeNull();
+  });
+
+  it("accepts null event coverage when the pipeline observed no events", () => {
+    const backtest = backtestSchema.parse({
+      ...demoBacktest,
+      events: {
+        E3: {
+          events: 0,
+          with_prior_alert: 0,
+          coverage: null,
+          median_lead_months: null,
+        },
+      },
+    });
+    expect(backtest.events.E3?.coverage).toBeNull();
   });
 
   it("rejects a company summary without the last observed month", () => {
@@ -841,6 +934,7 @@ describe("xray contracts", () => {
       ["next_steps"],
       ["source"],
       ["export_url"],
+      ["trend_projection"],
     ]);
   });
 

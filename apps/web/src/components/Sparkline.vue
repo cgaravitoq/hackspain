@@ -8,6 +8,7 @@ import { computed, ref, useId } from "vue";
 import { monthLabel } from "../format.ts";
 
 const props = defineProps<{ companies: CompanyDetail[] }>();
+const emit = defineEmits<{ remove: [companyId: string] }>();
 
 const WIDTH = 960;
 const HEIGHT = 320;
@@ -77,14 +78,6 @@ function x(index: number): number {
 
 function y(score: number): number {
   return PAD_TOP + (1 - score / 100) * (HEIGHT - PAD_TOP - PAD_BOTTOM);
-}
-
-function futureX(step: number): number {
-  return x(observedMonths.value.length - 1 + step);
-}
-
-function clamp(score: number): number {
-  return Math.max(0, Math.min(100, score));
 }
 
 function shortMonth(name: string): string {
@@ -199,46 +192,23 @@ function areaPath(run: Marker[]): string {
   return `${curve(run)} L${last.x},${y(0)} L${first.x},${y(0)} Z`;
 }
 
-function volatility(entries: MonthEntry[]): number {
-  const recent = new Set(windowMonths.value.slice(-12));
-  const scores = [...entries]
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .flatMap((entry) =>
-      recent.has(entry.month) && entry.score !== null ? [entry.score] : [],
-    );
-  const changes = scores
-    .slice(1)
-    .map((score, index) => score - (scores[index] ?? score));
-  if (changes.length < 3) {
-    return 0;
-  }
-  const mean =
-    changes.reduce((sum, change) => sum + change, 0) / changes.length;
-  const variance =
-    changes.reduce((sum, change) => sum + (change - mean) ** 2, 0) /
-    (changes.length - 1);
-  return Math.sqrt(variance);
-}
-
 function buildSeries(company: CompanyDetail, color: string) {
   const segments = runs(company.series);
   const drawable = segments.filter((run) => run.length > 1);
   const markers = segments.flat();
   const last = markers.at(-1);
-  const momentum = last?.entry.momentum ?? null;
   const projected =
-    last && momentum !== null
-      ? FUTURE_STEPS.map((step) => clamp(last.score + (momentum * step) / 3))
+    company.trend_projection.status === "available"
+      ? company.trend_projection.points
       : [];
-  const sigma = volatility(company.series);
-  const upper = projected.map((value, index) =>
-    clamp(value + sigma * Math.sqrt(index + 1)),
-  );
-  const lower = projected.map((value, index) =>
-    clamp(value - sigma * Math.sqrt(index + 1)),
-  );
-  const futurePoints = (values: number[]) =>
-    values.map((value, index) => `${futureX(index + 1)},${y(value)}`);
+  const scenarioPoints = (key: "base" | "favorable" | "adverse") =>
+    projected.flatMap((point) => {
+      const index = months.value.indexOf(point.month);
+      return index === -1 ? [] : [`${x(index)},${y(point[key])}`];
+    });
+  const base = scenarioPoints("base");
+  const favorable = scenarioPoints("favorable");
+  const adverse = scenarioPoints("adverse");
   return {
     companyId: company.company_id,
     label: companyLabel(company.company_id),
@@ -249,16 +219,10 @@ function buildSeries(company: CompanyDetail, color: string) {
     dots: markers.filter((marker) => marker === last || marker.entry.events.E1),
     projected,
     projection:
-      last && projected.length
-        ? [coordinate(last), ...futurePoints(projected)].join(" ")
-        : "",
+      last && base.length ? [coordinate(last), ...base].join(" ") : "",
     band:
-      last && projected.length
-        ? [
-            coordinate(last),
-            ...futurePoints(upper),
-            ...futurePoints(lower).reverse(),
-          ].join(" ")
+      last && favorable.length && adverse.length
+        ? [coordinate(last), ...favorable, ...adverse.reverse()].join(" ")
         : "",
   };
 }
@@ -297,14 +261,16 @@ const tooltip = computed(() => {
   const step = index - (observedMonths.value.length - 1);
   const rows = chartSeries.value.flatMap((item) => {
     if (step > 0) {
-      const value = item.projected[step - 1];
-      return value === undefined
+      const point = item.projected.find(
+        (projection) => projection.month === name,
+      );
+      return point === undefined
         ? []
         : [
             {
               label: item.label,
               color: item.color,
-              value: `proyección ${formatScore(value)}`,
+              value: `proyección ${formatScore(point.base)}`,
             },
           ];
     }
@@ -330,16 +296,32 @@ const tooltip = computed(() => {
   <div class="chart">
     <header class="chart-head">
       <h2>Evolución del score</h2>
-      <div class="range" role="group" aria-label="Meses observados">
-        <button
-          v-for="option in RANGES"
-          :key="option"
-          type="button"
-          :aria-pressed="range === option"
-          @click="range = option"
-        >
-          {{ option }}M
-        </button>
+      <div class="chart-controls">
+        <div class="chart-companies" aria-label="Empresas comparadas">
+          <span v-for="item in chartSeries" :key="item.companyId" class="chart-company">
+            <i :style="{ background: item.color }" />
+            {{ item.label }}
+            <button
+              type="button"
+              :aria-label="`Quitar ${item.companyId}`"
+              :disabled="chartSeries.length === 1"
+              @click="emit('remove', item.companyId)"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+        <div class="range" role="group" aria-label="Meses observados">
+          <button
+            v-for="option in RANGES"
+            :key="option"
+            type="button"
+            :aria-pressed="range === option"
+            @click="range = option"
+          >
+            {{ option }}M
+          </button>
+        </div>
       </div>
     </header>
     <div class="plot">
@@ -478,11 +460,7 @@ const tooltip = computed(() => {
         </span>
       </div>
     </div>
-    <div class="legend" aria-label="Empresas comparadas">
-      <span v-for="item in chartSeries" :key="item.companyId">
-        <i :style="{ background: item.color }" />
-        {{ item.label }}
-      </span>
+    <div class="legend" aria-label="Leyenda de proyección">
       <span>
         <i class="projection-sample" />
         proyección por tendencia (3 meses)
@@ -516,6 +494,59 @@ const tooltip = computed(() => {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+}
+
+.chart-controls,
+.chart-companies,
+.chart-company {
+  display: flex;
+  align-items: center;
+}
+
+.chart-controls {
+  min-width: 0;
+  gap: 14px;
+}
+
+.chart-companies {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 12px;
+}
+
+.chart-company {
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chart-company i {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.chart-company button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.chart-company button:not(:disabled):hover {
+  background: var(--chip-bg);
+  color: var(--ink);
+}
+
+.chart-company button:disabled {
+  display: none;
 }
 
 .range {
@@ -669,5 +700,17 @@ const tooltip = computed(() => {
   border-radius: 2px;
   background: currentColor;
   opacity: 0.18;
+}
+
+@media (max-width: 760px) {
+  .chart-head,
+  .chart-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chart-companies {
+    justify-content: flex-start;
+  }
 }
 </style>
