@@ -116,6 +116,26 @@ export function createStore(db: D1Database) {
       return row ? companyDetailSchema.parse(JSON.parse(row.payload)) : null;
     },
 
+    async details(companyIds: string[]): Promise<CompanyDetail[]> {
+      const placeholders = companyIds.map((_id, index) => `?${index + 1}`);
+      const { results } = await db
+        .prepare(
+          `SELECT detail AS payload FROM companies WHERE company_id IN (${placeholders.join(", ")})`,
+        )
+        .bind(...companyIds)
+        .all<PayloadRow>();
+      const byId = new Map(
+        results.map((row) => {
+          const detail = companyDetailSchema.parse(JSON.parse(row.payload));
+          return [detail.company_id, detail] as const;
+        }),
+      );
+      return companyIds.flatMap((id) => {
+        const detail = byId.get(id);
+        return detail ? [detail] : [];
+      });
+    },
+
     async group(groupId: string): Promise<Group | null> {
       const row = await db
         .prepare("SELECT payload FROM groups WHERE group_id = ?1")

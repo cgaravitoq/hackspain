@@ -47,6 +47,23 @@ describe("GET /companies", () => {
     ]);
   });
 
+  it("lists exactly the members the group map reports for a group", async () => {
+    const companies = z
+      .object({ companies: z.array(companySummarySchema) })
+      .parse(
+        await (
+          await SELF.fetch("https://agent.test/companies?group_id=GROUP_1")
+        ).json(),
+      );
+    const group = groupMapSchema.parse(
+      await (await SELF.fetch("https://agent.test/groups/GROUP_1")).json(),
+    );
+    expect(companies.companies.map((company) => company.company_id)).toEqual(
+      group.members.map((member) => member.company_id),
+    );
+    expect(companies.companies).toHaveLength(group.n_companies);
+  });
+
   it("rejects a state that is not one of the six trajectory states", async () => {
     const response = await SELF.fetch("https://agent.test/companies?state=bad");
     expect(response.status).toBe(400);
