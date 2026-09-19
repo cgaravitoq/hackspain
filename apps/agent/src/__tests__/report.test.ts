@@ -5,9 +5,8 @@ import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
-import { decisionSimulation } from "../xray/report.ts";
 import type { Narrative, Verdict } from "../xray/report-judge.ts";
-import { company, falling, seed } from "./fixtures.ts";
+import { company, seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
 beforeEach(() => env.DB.prepare("DELETE FROM reports").run());
@@ -360,13 +359,6 @@ describe("report tools", () => {
 });
 
 describe("GET /companies/:id/report", () => {
-  it("requests all receivables and only the undrawn line for the decision", () => {
-    const simulation = decisionSimulation(falling);
-    expect(simulation?.scenarios.map((scenario) => scenario.requested)).toEqual(
-      [33_333.33, 33_333.33],
-    );
-  });
-
   it("reserves the output budget for narrative rather than model reasoning", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) =>
@@ -450,16 +442,12 @@ describe("GET /companies/:id/report", () => {
       expect(response.status).toBe(200);
       const report = reportSchema.parse(await response.json());
       expect(report.role).toBe(role);
-      expect(report.sections.map((section) => section.code)).toEqual([
-        ...codes,
-        "decision",
-      ]);
+      expect(report.sections.map((section) => section.code)).toEqual(codes);
       const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
       for (const title of titles) {
         expect(prompt).toContain(title);
       }
       expect(prompt).toContain(role);
-      expect(prompt).not.toContain("Decisión");
       expect(
         report.sections.flatMap((section) => section.figures),
       ).toContainEqual({
@@ -627,25 +615,6 @@ describe("GET /companies/:id/report", () => {
     expect(row?.count).toBe(0);
   });
 
-  it("writes the no-scenario sentence with zero figures when nothing can be simulated", async () => {
-    const model = new MockLanguageModelV4({
-      doGenerate: reply(JSON.stringify(narrative)),
-    });
-    const response = await createApp({ model: () => model }).request(
-      "/companies/COMP_G/report?role=tesorero",
-      undefined,
-      env,
-    );
-    expect(response.status).toBe(200);
-    const report = reportSchema.parse(await response.json());
-    expect(report.sections.at(-1)).toEqual({
-      code: "decision",
-      title: "Decisión",
-      figures: [],
-      body: "Sin importes disponibles para construir escenarios.",
-    });
-  });
-
   it("keeps unavailable values absent instead of reusing an older score or inventing zeros", async () => {
     const detail = company("COMP_GAP", "GROUP_1", [
       { month: "2026-07", score: 60, state: "healthy" },
@@ -737,10 +706,10 @@ describe("GET /companies/:id/report", () => {
     );
     expect(response.status).toBe(200);
     const report = reportSchema.parse(await response.json());
-    expect(report.sections.map((section) => section.title)).toEqual([
-      ...narrative.sections.map((section) => section.title),
-      "Decisión",
-    ]);
+    expect(report.sections.map((section) => section.title)).toEqual(
+      narrative.sections.map((section) => section.title),
+    );
+    expect(report.sections.at(-1)?.code).not.toBe("decision");
     expect(report.sections[0]?.figures).toContainEqual({
       label: "score · 2026-08 · explain",
       value: 12.3,
@@ -756,72 +725,13 @@ describe("GET /companies/:id/report", () => {
       value: 2,
       unit: "companies",
     });
-    const decision = decisionSimulation(falling);
-    expect(report.sections.at(-1)).toEqual({
-      code: "decision",
-      title: "Decisión",
-      body: "Adelanto de cobros de 33.333\u00a0€: caja mínima -177.333\u00a0€, caja final -177.333\u00a0€, coste 667\u00a0€, delta score -1,3 puntos. Disposición de línea de 33.333\u00a0€: caja mínima -177.667\u00a0€, caja final -177.667\u00a0€, coste 1000\u00a0€, delta score -0,2 puntos. Escenario, no observación ni previsión: compara, no aconseja; la decisión corresponde a las personas autorizadas.",
-      figures: [
-        {
-          label: "adelanto de cobros · Caja mínima",
-          value: -177_333.34,
-          unit: "EUR",
-        },
-        {
-          label: "adelanto de cobros · Caja final",
-          value: -177_333.34,
-          unit: "EUR",
-        },
-        {
-          label: "adelanto de cobros · Coste",
-          value: 666.67,
-          unit: "EUR",
-        },
-        {
-          label: "adelanto de cobros · Delta score",
-          value: -1.3,
-          unit: "pts",
-        },
-        {
-          label: "disposición de línea · Caja mínima",
-          value: -177_666.69,
-          unit: "EUR",
-        },
-        {
-          label: "disposición de línea · Caja final",
-          value: -177_666.69,
-          unit: "EUR",
-        },
-        {
-          label: "disposición de línea · Coste",
-          value: 1000.02,
-          unit: "EUR",
-        },
-        {
-          label: "disposición de línea · Delta score",
-          value: -0.2,
-          unit: "pts",
-        },
-      ],
-    });
-    expect(
-      report.sections.at(-1)?.figures.map((figure) => figure.value),
-    ).toEqual(
-      decision?.scenarios.flatMap((scenario) =>
-        scenario.decision_figures.map((figure) => figure.value),
-      ),
-    );
     expect(judge).toHaveBeenCalledTimes(1);
-    expect(
-      judge.mock.calls[0]?.[0]?.sections.map((section) => section.title),
-    ).not.toContain("Decisión");
     expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
     expect(prompt).toContain("tesorero");
     for (const section of narrative.sections) {
       expect(prompt).toContain(section.title);
     }
-    expect(prompt).not.toContain("Decisión");
     expect(prompt).toContain("12.3");
     expect(prompt).toContain("-27.9");
     const repeated = await app.request(
