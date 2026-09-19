@@ -313,11 +313,12 @@ export function createTools(store: Store) {
     },
 
     async relations(input: z.infer<typeof toolInputs.relations>) {
+      const companyId = resolveCompanyId(input.company_id);
       const relations = await store.companyRelations(
-        input.company_id,
+        companyId,
         input.relation_type,
       );
-      return relations ?? unknownCompany(input.company_id);
+      return relations ?? unknownCompany(companyId);
     },
   };
 }
