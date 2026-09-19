@@ -104,7 +104,9 @@ describe("GET /graph", () => {
       "COMP_A",
       "COMP_B",
     ]);
-    expect(body.edges.map((edge) => edge.source)).toEqual(["COMP_A"]);
+    expect(body.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ["COMP_A", "COMP_B"],
+    ]);
   });
 
   it("omits isolated companies unless include_isolated is true", async () => {
