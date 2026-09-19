@@ -1,13 +1,15 @@
-import type {
-  Alert,
-  CompanyDetail,
-  Explain,
-  GroupMap,
-  Meta,
-  MonthEntry,
+import {
+  type Alert,
+  type CompanyDetail,
+  type Explain,
+  type GroupMap,
+  type Meta,
+  type MonthEntry,
+  type Report,
+  roleSchema,
 } from "@hackspain/shared";
 
-function month(
+export function month(
   name: string,
   score: number | null,
   state: MonthEntry["state"],
@@ -184,6 +186,27 @@ export const companies = ["COMP_B", "COMP_A"].map((id) => {
   return summary;
 });
 
+export const report: Report = {
+  company_id: "COMP_A",
+  month: "2026-08",
+  role: "financiero",
+  rule_version: "xray-score/0.1",
+  generated_at: "2026-09-19T12:00:00.000Z",
+  summary: "La tesorería necesita atención inmediata.",
+  sections: [
+    {
+      code: "resumen",
+      title: "Situación actual",
+      body: "Los cobros han caído.\n\nLas facturas vencidas presionan la caja.",
+      figures: [
+        { label: "Cobros", value: 40_000, unit: "EUR" },
+        { label: "Pagos", value: 100_000, unit: "EUR" },
+      ],
+    },
+  ],
+  export_url: "/companies/COMP_A/report.pdf?role=financiero",
+};
+
 export const group: GroupMap = {
   group_id: "GROUP_1",
   holdout: false,
@@ -221,7 +244,10 @@ export const group: GroupMap = {
   ],
 };
 
-type Route = { pattern: RegExp; body: (match: RegExpMatchArray) => object };
+type Route = {
+  pattern: RegExp;
+  body: (match: RegExpMatchArray, url: URL) => object;
+};
 
 const routes: Route[] = [
   { pattern: /^\/api\/meta$/, body: () => meta },
@@ -232,21 +258,41 @@ const routes: Route[] = [
     body: (match) => explain(match[1] ?? "", "GROUP_1"),
   },
   {
+    pattern: /^\/api\/companies\/(\w+)\/report$/,
+    body: (match, url) => ({
+      ...report,
+      company_id: match[1] ?? "",
+      role: roleSchema.parse(url.searchParams.get("role")),
+    }),
+  },
+  {
     pattern: /^\/api\/companies\/(\w+)$/,
     body: (match) => company(match[1] ?? "", "GROUP_1"),
   },
   { pattern: /^\/api\/groups\/(\w+)$/, body: () => group },
+  {
+    pattern: /^\/api\/compare$/,
+    body: (_match, url) => {
+      const ids = url.searchParams.get("ids")?.split(",") ?? [];
+      return {
+        months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+        companies: ids.map((id) => company(id, "GROUP_1")),
+      };
+    },
+  },
 ];
 
 export function fakeApi(seen: string[]) {
   return (input: RequestInfo | URL): Promise<Response> => {
-    const path = new URL(String(input), "https://web.test").pathname;
-    seen.push(path);
-    const route = routes.find((candidate) => candidate.pattern.test(path));
-    const match = path.match(route?.pattern ?? /$^/);
+    const url = new URL(String(input), "https://web.test");
+    seen.push(url.pathname);
+    const route = routes.find((candidate) =>
+      candidate.pattern.test(url.pathname),
+    );
+    const match = url.pathname.match(route?.pattern ?? /$^/);
     return Promise.resolve(
       route && match
-        ? Response.json(route.body(match))
+        ? Response.json(route.body(match, url))
         : new Response("not found", { status: 404 }),
     );
   };

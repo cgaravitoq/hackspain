@@ -46,7 +46,7 @@ async function toolResult(name: string, args: Params["arguments"]) {
 }
 
 describe("POST /mcp", () => {
-  it("lists the six X Ray tools with their input schemas", async () => {
+  it("lists the seven X Ray tools with their input schemas", async () => {
     const response = await rpc("tools/list", {});
     expect(response.status).toBe(200);
     const body = z
@@ -71,6 +71,7 @@ describe("POST /mcp", () => {
       "group_map",
       "compare",
       "alerts",
+      "report",
     ]);
     const compare = body.result.tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");

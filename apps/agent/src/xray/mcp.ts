@@ -1,5 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
+import {
+  type ReportTool,
+  reportDescription,
+  reportInput,
+} from "./report-tool.ts";
 import type { Store } from "./store.ts";
 import {
   createTools,
@@ -26,7 +31,7 @@ function register<Schema extends z.ZodObject>(
   );
 }
 
-export function createMcpServer(store: Store): McpServer {
+export function createMcpServer(store: Store, report: ReportTool): McpServer {
   const server = new McpServer({ name: "xray", version: "0.1.0" });
   const tools = createTools(store);
   register(
@@ -70,6 +75,22 @@ export function createMcpServer(store: Store): McpServer {
     toolDescriptions.alerts,
     toolInputs.alerts,
     tools.alerts,
+  );
+  server.registerTool(
+    "report",
+    { description: reportDescription, inputSchema: reportInput.shape },
+    async (input) => {
+      const file = await report(reportInput.parse(input));
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Informe listo (PDF, ${file.sizeBytes} bytes): ${file.url}`,
+          },
+        ],
+        structuredContent: file,
+      };
+    },
   );
   return server;
 }
