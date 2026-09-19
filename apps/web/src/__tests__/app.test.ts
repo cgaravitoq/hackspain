@@ -3,12 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
 import { company, fakeApi } from "./fixtures.ts";
 
-const sendConfirmation = vi.fn();
-
 const ChatPanelStub = {
   props: ["companyId", "compareIds", "alerts", "role", "confirmedCommitment"],
   emits: ["close", "compare", "report", "commitment", "draft"],
-  methods: { sendConfirmation },
   template:
     "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
 };
@@ -286,66 +283,18 @@ describe("App", () => {
     expect(wrapper.find(".selector-popover").exists()).toBe(false);
   });
 
-  it("keeps TellMe as the only assistant and opens the operation form from its draft", async () => {
+  it("hides the operation form and keeps TellMe as the only assistant", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find('[aria-label="Qué necesitas"]').exists()).toBe(false);
-    expect(wrapper.findAll(".chat-stub")).toHaveLength(1);
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    const chat = wrapper.findComponent(ChatPanelStub);
-    chat.vm.$emit("draft", {
-      company_id: "COMP_B",
-      draft: { opportunity: { title: "Otro" } },
-      missing: [],
-    });
-    await flushPromises();
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    chat.vm.$emit("draft", {
-      company_id: "COMP_A",
-      draft: { opportunity: { title: "Pedido" } },
-      missing: ["opportunity.costs"],
-    });
-    await flushPromises();
-    expect(wrapper.find(".commitment").text()).toContain("COMP_A");
-    expect(wrapper.find(".commitment").text()).toContain(
-      "TellMe ha rellenado el formulario",
-    );
-    await wrapper.find(".commitment .close").trigger("click");
-    expect(wrapper.find(".commitment").exists()).toBe(false);
-    await wrapper.find(".open-commitment").trigger("click");
-    expect(wrapper.find(".commitment").exists()).toBe(true);
     expect(wrapper.find("h1").text()).toBe("COMP_A");
-  });
-
-  it("tells TellMe when the operation form is confirmed", async () => {
-    vi.stubGlobal("fetch", fakeApi([]));
-    sendConfirmation.mockClear();
-    const wrapper = mountApp();
-    await flushPromises();
-    await flushPromises();
-    await wrapper.find(".open-commitment").trigger("click");
-    const request = { horizon_months: 1, reserve_floor_minor: 0 };
-    wrapper
-      .findComponent({ name: "CommitmentPanel" })
-      .vm.$emit("evaluated", request, {
-        evaluation: { company_id: "COMP_A" },
-        report_section: {
-          code: "decision",
-          title: "Evaluación de una operación",
-          body: "Sin anticipo, la caja mínima estimada es 10 €.",
-          figures: [],
-        },
-      });
-    await flushPromises();
-    expect(
-      wrapper.findComponent(ChatPanelStub).props("confirmedCommitment"),
-    ).toEqual(request);
-    expect(sendConfirmation).toHaveBeenCalledTimes(1);
-    expect(wrapper.find(".report-decision h3").text()).toBe(
-      "Evaluación de una operación",
+    expect(wrapper.findAll(".chat-stub")).toHaveLength(1);
+    expect(wrapper.find(".open-commitment").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "CommitmentPanel" }).exists()).toBe(
+      false,
     );
+    expect(wrapper.text()).not.toContain("Evaluar una operación");
   });
 
   it("does not replace the selected company with a late response from the previous company", async () => {
