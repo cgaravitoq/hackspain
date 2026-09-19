@@ -31,6 +31,8 @@ function entry(month: Month, previous: Month | undefined): MonthEntry {
     momentum: delta,
     adjustment: scored ? 0 : null,
     score,
+    delta_3: null,
+    delta_6: null,
     state: month.state,
     confidence: scored ? "high" : "none",
     components:
@@ -99,6 +101,8 @@ export function company(
     latest: {
       month: latest.month,
       score: latest.score,
+      delta_3: latest.delta_3,
+      delta_6: latest.delta_6,
       level: latest.level,
       momentum: latest.momentum,
       state: latest.state,

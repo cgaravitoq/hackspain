@@ -36,6 +36,8 @@ const stableMonth = {
   momentum: 0,
   adjustment: 0,
   score: 50,
+  delta_3: -1.2,
+  delta_6: 5.4,
   state: "stable",
   confidence: "high",
   components: { balance: 0 },
@@ -74,6 +76,8 @@ const demoCompanySummary = {
   latest: {
     month: "2026-08",
     score: 50,
+    delta_3: -1.2,
+    delta_6: 5.4,
     level: 50,
     momentum: 0,
     state: "stable",
@@ -137,6 +141,41 @@ const demoReport = {
 };
 
 describe("xray contracts", () => {
+  it.each([
+    { delta_3: -1.2, delta_6: 5.4 },
+    { delta_3: 0, delta_6: null },
+    { delta_3: null, delta_6: 0 },
+  ])("preserves score deltas in latest and series: %j", (deltas) => {
+    const detail = companyDetailSchema.parse({
+      ...demoCompanySummary,
+      latest: { ...demoCompanySummary.latest, ...deltas },
+      series: [{ ...stableMonth, ...deltas }],
+    });
+    expect(detail.latest).toMatchObject(deltas);
+    expect(detail.series[0]).toMatchObject(deltas);
+  });
+
+  it.each([
+    { field: "delta_3", value: "1.2" },
+    { field: "delta_6", value: "5.4" },
+    { field: "delta_3", value: undefined },
+    { field: "delta_6", value: undefined },
+  ])(
+    "rejects invalid score deltas at their exact paths: %j",
+    ({ field, value }) => {
+      const result = companyDetailSchema.safeParse({
+        ...demoCompanySummary,
+        latest: { ...demoCompanySummary.latest, [field]: value },
+        series: [{ ...stableMonth, [field]: value }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+        ["latest", field],
+        ["series", 0, field],
+      ]);
+    },
+  );
+
   it("accepts a company whose first months are not evaluable", () => {
     const detail = companyDetailSchema.parse({
       rule_version: "xray-score/0.1",
@@ -151,6 +190,8 @@ describe("xray contracts", () => {
       latest: {
         month: "2026-08",
         score: 51.2,
+        delta_3: null,
+        delta_6: null,
         level: 51.2,
         momentum: null,
         state: "stable",
@@ -164,6 +205,8 @@ describe("xray contracts", () => {
           momentum: null,
           adjustment: null,
           score: null,
+          delta_3: null,
+          delta_6: null,
           state: "not_evaluable",
           confidence: "none",
           components: {},
@@ -229,6 +272,8 @@ describe("xray contracts", () => {
       momentum: 0,
       adjustment: 0,
       score: 50,
+      delta_3: null,
+      delta_6: null,
       state: "stable",
       confidence: "high",
       components: { surprise: 1 },

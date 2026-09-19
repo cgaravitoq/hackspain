@@ -116,7 +116,7 @@ def _company_record(
         "months_observed": rows[-1]["months_observed"],
         "debt_outstanding": round(debt_by_company.get(company_id, 0.0), 2),
         "invoice_facts": invoice_facts.get(company_id, {}),
-        "latest": {key: latest[key] for key in ("month", "score", "level", "momentum", "state", "confidence")},
+        "latest": {key: latest[key] for key in ("month", "score", "delta_3", "delta_6", "level", "momentum", "state", "confidence")},
     }
 
 
@@ -167,6 +167,8 @@ def _unscorable(
             "latest": {
                 "month": None,
                 "score": None,
+                "delta_3": None,
+                "delta_6": None,
                 "level": None,
                 "momentum": None,
                 "state": NOT_EVALUABLE,
@@ -270,7 +272,15 @@ def build(dataset: Dataset, out_dir: Path, seed: int) -> dict[str, Any]:
         previous = None
         for row in rows:
             e2 = e2_month is not None and month_key(e2_month) == month_key(row["month"])
-            series.append(_month_entry(row, previous, sources, e2))
+            entry = _month_entry(row, previous, sources, e2)
+            for horizon in (3, 6):
+                earlier_score = series[-horizon]["score"] if len(series) >= horizon else None
+                entry[f"delta_{horizon}"] = (
+                    round(entry["score"] - earlier_score, 1)
+                    if entry["score"] is not None and earlier_score is not None
+                    else None
+                )
+            series.append(entry)
             previous = row
         latest = series[-1]
         before = series[-2] if len(series) > 1 else None
