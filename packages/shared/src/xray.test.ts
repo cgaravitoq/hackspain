@@ -71,6 +71,8 @@ const demoCompanySummary = {
   scorable: true,
   holdout: false,
   months_observed: 3,
+  last_observed_month: "2026-08",
+  stale: false,
   debt_outstanding: 1200,
   invoice_facts: {},
   latest: {
@@ -91,6 +93,7 @@ const demoAlert = {
   group_id: "GROUP_0001",
   month: "2026-08",
   kind: "down",
+  stage: "confirmed",
   state: "falling",
   previous_state: "slipping",
   score: 12.3,
@@ -98,17 +101,20 @@ const demoAlert = {
   driver: null,
 };
 
+const demoAlertStats = {
+  evaluated: 0,
+  false_alarms: 0,
+  false_alarm_rate: 0,
+  reverted_within_3_months: 0,
+  revert_rate: 0,
+  censored: 0,
+};
+
 const demoBacktest = {
   rule_version: "xray-score/0.1",
   events: {},
-  alerts: {
-    evaluated: 0,
-    false_alarms: 0,
-    false_alarm_rate: 0,
-    reverted_within_3_months: 0,
-    revert_rate: 0,
-    censored: 0,
-  },
+  alerts: demoAlertStats,
+  alerts_by_stage: { candidate: demoAlertStats, confirmed: demoAlertStats },
   definitions: {},
 };
 
@@ -119,6 +125,7 @@ const demoMeta = {
   state_labels: { healthy: "sana" },
   latest_month: "2026-08",
   holdout_groups: [],
+  gaps: { companies_with_gaps: 2, unobserved_months: 5, stale_companies: 1 },
 };
 
 const demoReport = {
@@ -185,6 +192,8 @@ describe("xray contracts", () => {
       scorable: true,
       holdout: false,
       months_observed: 3,
+      last_observed_month: "2026-08",
+      stale: false,
       debt_outstanding: 0,
       invoice_facts: {},
       latest: {
@@ -394,6 +403,71 @@ describe("xray contracts", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
       ["rule_version"],
+    ]);
+  });
+
+  it("rejects an alert whose stage is neither candidate nor confirmed", () => {
+    expect(
+      alertSchema.safeParse({ ...demoAlert, stage: "maybe" }).success,
+    ).toBe(false);
+    expect(alertSchema.parse({ ...demoAlert, stage: null }).stage).toBeNull();
+  });
+
+  it("rejects a backtest whose alerts_by_stage is missing", () => {
+    const { alerts_by_stage: _byStage, ...backtest } = demoBacktest;
+    const result = backtestSchema.safeParse(backtest);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["alerts_by_stage"],
+    ]);
+  });
+
+  it("rejects a backtest whose confirmed block loses one of the six alert fields", () => {
+    const { revert_rate: _revertRate, ...confirmed } = demoAlertStats;
+    const result = backtestSchema.safeParse({
+      ...demoBacktest,
+      alerts_by_stage: { ...demoBacktest.alerts_by_stage, confirmed },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["alerts_by_stage", "confirmed", "revert_rate"],
+    ]);
+  });
+
+  it("rejects a company summary without the last observed month", () => {
+    const { last_observed_month: _lastObserved, ...company } =
+      demoCompanySummary;
+    const result = companySummarySchema.safeParse(company);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["last_observed_month"],
+    ]);
+  });
+
+  it("rejects a company summary without the stale flag", () => {
+    const { stale: _stale, ...company } = demoCompanySummary;
+    const result = companySummarySchema.safeParse(company);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["stale"],
+    ]);
+  });
+
+  it("rejects a meta without the gap counts", () => {
+    const { gaps: _gaps, ...meta } = demoMeta;
+    const result = metaSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([["gaps"]]);
+  });
+
+  it("rejects a meta whose unobserved month count is not a non-negative integer", () => {
+    const result = metaSchema.safeParse({
+      ...demoMeta,
+      gaps: { ...demoMeta.gaps, unobserved_months: -1 },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["gaps", "unobserved_months"],
     ]);
   });
 
