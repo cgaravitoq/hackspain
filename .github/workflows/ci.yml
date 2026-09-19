@@ -23,6 +23,7 @@ jobs:
       pull-requests: read
     outputs:
       agent: ${{ steps.filter.outputs.agent }}
+      pipeline: ${{ steps.filter.outputs.pipeline }}
       web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +46,9 @@ jobs:
               - *root
               - *shared
               - apps/agent/**
+            pipeline:
+              - pipeline/**
+              - .github/workflows/ci.yml
             web:
               - *root
               - *shared
@@ -85,6 +89,27 @@ jobs:
       - run: bun --filter @hackspain/agent test
       - run: bun --filter @hackspain/agent deploy:dry
 
+  pipeline:
+    name: Pipeline
+    needs: changes
+    if: needs.changes.outputs.pipeline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+          working-directory: pipeline
+      - run: uv sync --locked
+      - run: uv run pytest
+
   web:
     name: Web
     needs: changes
@@ -104,7 +129,7 @@ jobs:
   # so a docs-only PR is not stuck waiting for a job that never runs.
   ci-ok:
     name: CI OK
-    needs: [changes, repo, agent, web]
+    needs: [changes, repo, agent, pipeline, web]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
