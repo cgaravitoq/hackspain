@@ -5,6 +5,8 @@ import {
   companySummarySchema,
   explainSchema,
   groupMapSchema,
+  metaSchema,
+  STATE_LABELS,
 } from "@hackspain/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -45,7 +47,7 @@ describe("GET /companies", () => {
     ]);
   });
 
-  it("rejects a state that is not one of the five", async () => {
+  it("rejects a state that is not one of the six trajectory states", async () => {
     const response = await SELF.fetch("https://agent.test/companies?state=bad");
     expect(response.status).toBe(400);
   });
@@ -84,6 +86,18 @@ describe("GET /companies/:id/explain", () => {
     expect(explanation.action).toBe(
       "Reclamar las 2 facturas vencidas desde Cuentas por cobrar",
     );
+  });
+});
+
+describe("GET /meta", () => {
+  it("returns the dataset labels and latest month stored in D1", async () => {
+    const response = await SELF.fetch("https://agent.test/meta");
+    expect(response.status).toBe(200);
+    expect(metaSchema.parse(await response.json())).toEqual({
+      state_labels: STATE_LABELS,
+      latest_month: "2026-08",
+      holdout_groups: [],
+    });
   });
 });
 
