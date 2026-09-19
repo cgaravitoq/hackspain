@@ -669,3 +669,71 @@ def test_cross_group_flows_need_an_amount_seen_at_most_four_times(tmp_path: Path
     )
     edges = edges_of(payload, "bank_mirror")
     assert [(edge["source"], edge["target"], edge["scope"]) for edge in edges] == [("C2", "C4", "intergroup")]
+
+
+def test_same_group_flows_are_high_confidence_from_five_matches(tmp_path: Path):
+    def flows(index: int, payer: str, receiver: str, amount: float, count: int) -> list[dict[str, Any]]:
+        return [
+            row
+            for offset in range(count)
+            for day in [f"2026-01-{offset + 1:02d}"]
+            for row in bank_pair(index + offset, payer, receiver, amount + offset, day, day)
+        ]
+
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G1"), ("C4", "G1")],
+        transactions=[*flows(10, "C1", "C2", 100.0, 5), *flows(20, "C3", "C4", 200.0, 4)],
+    )
+    edges = edges_of(payload, "bank_mirror")
+    assert [(edge["source"], edge["target"], edge["matches"], edge["confidence"]) for edge in edges] == [
+        ("C1", "C2", 5, "high"),
+        ("C3", "C4", 4, "medium"),
+    ]
+
+
+def test_cross_group_flows_are_high_confidence_from_three_strict_matches(tmp_path: Path):
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G3"), ("C4", "G3")],
+        transactions=[
+            *bank_pair(1, "C1", "C3", 100.0, "2026-01-10", "2026-01-10"),
+            *bank_pair(2, "C1", "C3", 200.0, "2026-01-20", "2026-01-20"),
+            *bank_pair(3, "C1", "C3", 300.0, "2026-01-30", "2026-01-30"),
+            *bank_pair(4, "C2", "C4", 400.0, "2026-02-10", "2026-02-10"),
+            *bank_pair(5, "C2", "C4", 500.0, "2026-02-20", "2026-02-20"),
+        ],
+    )
+    edges = edges_of(payload, "bank_mirror")
+    assert [(edge["source"], edge["target"], edge["matches"], edge["confidence"]) for edge in edges] == [
+        ("C1", "C3", 3, "high"),
+        ("C2", "C4", 2, "medium"),
+    ]
+
+
+def test_invoice_mirrors_are_high_confidence_from_five_matches_or_five_distinct_amounts(tmp_path: Path):
+    def sales(index: int, seller: str, buyer: str, amount: float, count: int) -> list[dict[str, Any]]:
+        return [
+            row
+            for offset in range(count)
+            for day in [f"2026-01-{offset + 1:02d}"]
+            for row in invoice_pair(index + offset, seller, buyer, amount + offset, day, day)
+        ]
+
+    payload = detect(
+        tmp_path,
+        companies=[("C1", "G1"), ("C2", "G1"), ("C3", "G1"), ("C4", "G1"), ("C5", "G5"), ("C6", "G6")],
+        invoices=[
+            *sales(10, "C1", "C2", 100.0, 5),
+            *sales(20, "C3", "C4", 200.0, 4),
+            *sales(30, "C1", "C5", 300.0, 5),
+            *sales(40, "C3", "C6", 400.0, 4),
+        ],
+    )
+    edges = edges_of(payload, "invoice_mirror")
+    assert [(edge["source"], edge["target"], edge["matches"], edge["confidence"]) for edge in edges] == [
+        ("C5", "C1", 5, "high"),
+        ("C6", "C3", 4, "medium"),
+        ("C2", "C1", 5, "high"),
+        ("C4", "C3", 4, "medium"),
+    ]
