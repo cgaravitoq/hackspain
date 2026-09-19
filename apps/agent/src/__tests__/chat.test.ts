@@ -1,6 +1,11 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
-import { compareSchema, type Role } from "@hackspain/shared";
+import {
+  companyRelationsSchema,
+  compareSchema,
+  type Role,
+  relationsArtifactSchema,
+} from "@hackspain/shared";
 import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -9,8 +14,15 @@ import { chat } from "../xray/chat.ts";
 import type { reportInput } from "../xray/report-tool.ts";
 import { createStore } from "../xray/store.ts";
 import { seed } from "./fixtures.ts";
+import { relationsJson, seedRelations } from "./relations.ts";
 
-beforeAll(() => seed(env.DB));
+beforeAll(async () => {
+  await seed(env.DB);
+  await seedRelations(
+    env.DB,
+    relationsArtifactSchema.parse(JSON.parse(JSON.stringify(relationsJson))),
+  );
+});
 
 const usage = {
   inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
@@ -110,6 +122,48 @@ function toolsHandedToModel(model: MockLanguageModelV4) {
     tool.type === "function" ? [tool] : [],
   );
 }
+
+function toolCallSentToModel(model: MockLanguageModelV4) {
+  const calls: { toolName: string; input: unknown }[] = [];
+  for (const message of model.doStreamCalls[1]?.prompt ?? []) {
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+    for (const part of message.content) {
+      if (part.type === "tool-call") {
+        calls.push({ toolName: part.toolName, input: part.input });
+      }
+    }
+  }
+  return calls;
+}
+
+const RELATIONS_PREAMBLE =
+  "Establece únicamente relaciones respaldadas por los registros recibidos.";
+
+const RELATION_RULES = [
+  "1. Usa los identificadores exactos; no emparejes códigos por semejanza numérica.",
+  "2. Separa relaciones observadas, inferidas y similitudes.",
+  "3. En movimientos espejo, identifica como pagador candidato al titular de la salida y como receptor candidato al titular de la entrada.",
+  "4. No conviertas una contraparte compartida, un grupo común o una correlación en un pago entre empresas.",
+  "5. No fusiones `COUNTERPARTY` y `COMP`: propone una equivalencia con sus evidencias y señala contradicciones.",
+  "6. No uses `[COMPANY]`, `[ACCOUNT]`, `[REF]` o `[NUM]` como identificadores compartidos.",
+  "7. Una fecha de pago en una factura no acredita por sí sola un pago efectivo.",
+  "8. No sumes factura, efecto y movimiento bancario como tres obligaciones independientes.",
+  "9. No declares una deuda actual usando una operación pagada.",
+  "10. No infieras riesgo de impago únicamente por existir una relación.",
+  "11. Si falta evidencia, devuelve «relación no determinable».",
+  "12. No utilices evidencias posteriores al corte para afirmar que el vínculo se conocía antes.",
+];
+
+const RELATION_ANSWER_RULES = [
+  "Toda relación que devuelve la herramienta relations está inferida de movimientos espejo (claim_status: inferred) y provider_identity_confirmed es siempre false",
+  "Nunca presentes un vínculo inferido como una obligación verificada ni como una deuda actual",
+  "solo los vínculos OPEN_OBLIGATION_TO describen un saldo pendiente",
+  "Cita cada importe con su divisa, su periodo (first_date a last_date) y su número de coincidencias (matches); nombra como tal un vínculo de confianza low.",
+  "si no devuelve ninguna o devuelve un error, di «relación no determinable» en lugar de suponer",
+  "llama a relations para la empresa en pantalla y lee counterpart_group_id y scope; no inventes una herramienta de grupo",
+];
 
 describe("POST /chat", () => {
   it("grounds the model in the radiography of the company on screen", async () => {
@@ -230,6 +284,87 @@ describe("POST /chat", () => {
       "COMP_B",
       "COMP_0176",
     ]);
+  });
+
+  it("hands the model a relations tool and feeds every inferred edge back", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "COMP_A" }),
+        textReply("COMP_A se relaciona con COMP_B y COMP_D."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_A" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("COMP_A se relaciona");
+    const relations = toolsHandedToModel(model).find(
+      (tool) => tool.name === "relations",
+    );
+    expect(relations?.description).toContain("inferred");
+    expect(relations?.description).toContain("not a verified obligation");
+    const [call] = toolCallSentToModel(model);
+    expect(call?.toolName).toBe("relations");
+    expect(call?.input).toEqual({ company_id: "COMP_A" });
+    expect(model.doStreamCalls).toHaveLength(2);
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    const parsed = z
+      .object({ type: z.literal("json"), value: companyRelationsSchema })
+      .parse(JSON.parse(output)).value;
+    expect(parsed.company_id).toBe("COMP_A");
+    expect(parsed.edges.map((edge) => edge.counterpart_company_id)).toEqual([
+      "COMP_B",
+      "COMP_D",
+    ]);
+    expect(parsed.edges[0]?.counterpart_state).toBe("healthy");
+    expect(parsed.edges[0]?.counterpart_score).toBe(91);
+  });
+
+  it("carries Miguel's twelve evidence rules and the relations answer rules", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    const response = await ask(model, { company_id: "COMP_A" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("ok");
+    expect(RELATION_RULES).toHaveLength(12);
+    const system = systemPrompt(model, 0);
+    const missing = [
+      RELATIONS_PREAMBLE,
+      ...RELATION_RULES,
+      ...RELATION_ANSWER_RULES,
+    ].filter((rule) => !system.includes(rule));
+    expect(missing).toEqual([]);
+  });
+
+  it("resolves a demo name to its id before reading the relations", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "Talleres Ribera" }),
+        textReply("Talleres Ribera no tiene vínculos registrados."),
+      ],
+    });
+    const response = await ask(model, { company_id: "COMP_0176" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Talleres Ribera");
+    expect(toolCallSentToModel(model)[0]?.input).toEqual({
+      company_id: "Talleres Ribera",
+    });
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    expect(output).toContain('"company_id":"COMP_0176"');
+  });
+
+  it("feeds an unknown company back to the model as the relations error", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("relations", { company_id: "COMP_ZZZ" }),
+        textReply("Relación no determinable."),
+      ],
+    });
+    const response = await ask(model, {});
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Relación no determinable");
+    const { toolName, output } = toolResult(model);
+    expect(toolName).toBe("relations");
+    expect(output).toContain('"error":"Unknown company COMP_ZZZ"');
   });
 
   it("rejects a body without messages", async () => {
