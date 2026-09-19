@@ -25,16 +25,23 @@ import {
 
 type View = "radiography" | "graph";
 
+const props = defineProps<{ initialRole?: Role }>();
+
 const TREASURER_COMPANY = "COMP_0176";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
-const role = ref<Role>("financiero");
+const role = ref<Role>(props.initialRole ?? "financiero");
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
 const onGraph = ref(window.location.hash === `#${GRAPH_ROUTE}`);
 const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
 const compareIds = ref<string[]>([]);
+if (role.value === "tesorero") {
+  onGraph.value = false;
+  selected.value = TREASURER_COMPANY;
+  compareIds.value = [TREASURER_COMPANY];
+}
 const comparison = ref<CompanyDetail[]>([]);
 const company = ref<CompanyDetail | null>(null);
 const explanation = ref<Explain | null>(null);
