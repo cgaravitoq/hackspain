@@ -829,6 +829,35 @@ describe("App", () => {
     );
   });
 
+  it("renders the Embat menu in order with Analytics open", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const menu = wrapper.find('[aria-label="Pantalla"]');
+    expect(
+      menu
+        .findAll(":scope > li > [data-sidebar='menu-button']")
+        .map((item) => item.text()),
+    ).toEqual([
+      "Inicio",
+      "Conectividad",
+      "Transacciones",
+      "Tesorería y previsiones",
+      "Analítica",
+      "Contabilidad",
+      "Pagos",
+      "Automatización",
+    ]);
+    expect(
+      menu
+        .findAll('[data-sidebar="menu-sub-button"]')
+        .map((item) => item.text()),
+    ).toEqual(["Radiografía", "Grafo"]);
+    expect(menu.find('[data-active="true"]').text()).toBe("Radiografía");
+    expect(wrapper.find('[data-sidebar="header"]').text()).toBe("Embat");
+  });
+
   it("removes the roles group and assistant button from the sidebar", async () => {
     vi.stubGlobal("fetch", fakeApi([]));
     const wrapper = mountApp();
@@ -854,12 +883,16 @@ describe("App", () => {
     await flushPromises();
     const hash = window.location.hash;
     const role = wrapper.find('[aria-label="Cambiar rol"]').text();
-    const alertItem = wrapper
-      .findAll('[aria-label="Pantalla"] button')
-      .find((button) => button.text() === "Alertas");
-    expect(alertItem?.attributes("aria-disabled")).toBe("true");
-    expect(alertItem?.attributes("title")).toBe("Próximamente");
-    await alertItem?.trigger("click");
+    const placeholders = wrapper
+      .find('[aria-label="Pantalla"]')
+      .findAll(":scope > li > [data-sidebar='menu-button']")
+      .filter((button) => button.text() !== "Analítica");
+    expect(placeholders).toHaveLength(7);
+    for (const placeholder of placeholders) {
+      expect(placeholder.attributes("aria-disabled")).toBe("true");
+      expect(placeholder.attributes("title")).toBe("Próximamente");
+      await placeholder.trigger("click");
+    }
     expect(window.location.hash).toBe(hash);
     expect(wrapper.find('[aria-label="Cambiar rol"]').text()).toBe(role);
   });

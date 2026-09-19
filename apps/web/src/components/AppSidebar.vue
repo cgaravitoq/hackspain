@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { ROLE_LABELS, type Role } from "@hackspain/shared";
 import {
+  Activity,
   Bell,
-  ChartNoAxesCombined,
-  FlaskConical,
-  Network,
+  BookOpen,
+  ChartLine,
+  ChartPie,
+  ChevronRight,
+  Landmark,
+  LayoutDashboard,
   ScanSearch,
+  Send,
   Settings,
-  TriangleAlert,
-  WalletCards,
+  Zap,
 } from "@lucide/vue";
+import {
+  CollapsibleContent,
+  CollapsibleRoot,
+  CollapsibleTrigger,
+} from "reka-ui";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
   DropdownMenu,
@@ -28,6 +37,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "./ui/sidebar";
 
@@ -51,6 +63,19 @@ const roleInitials = {
   financiero: "FI",
   ventas: "VE",
 } satisfies Record<Role, string>;
+
+const menuBeforeAnalytics = [
+  { label: "Inicio", icon: LayoutDashboard },
+  { label: "Conectividad", icon: Activity },
+  { label: "Transacciones", icon: Landmark },
+  { label: "Tesorería y previsiones", icon: ChartLine },
+];
+
+const menuAfterAnalytics = [
+  { label: "Contabilidad", icon: BookOpen },
+  { label: "Pagos", icon: Send },
+  { label: "Automatización", icon: Zap },
+];
 </script>
 
 <template>
@@ -58,13 +83,12 @@ const roleInitials = {
     <SidebarHeader>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" tooltip="X Ray">
+          <SidebarMenuButton size="lg" tooltip="Embat">
             <span class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ScanSearch class="size-4" />
             </span>
             <span class="grid flex-1 text-left text-sm leading-tight">
-              <span class="truncate font-semibold">X Ray</span>
-              <span class="truncate text-xs">Embat</span>
+              <span class="truncate font-semibold">Embat</span>
             </span>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -75,54 +99,63 @@ const roleInitials = {
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu aria-label="Pantalla">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Radiografía"
-                :is-active="view === 'radiography'"
-                @click="emit('view', 'radiography')"
-              >
-                <ChartNoAxesCombined />
-                <span>Radiografía</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Grafo"
-                :is-active="view === 'graph'"
-                @click="emit('view', 'graph')"
-              >
-                <Network />
-                <span>Grafo</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
+            <SidebarMenuItem
+              v-for="item in menuBeforeAnalytics"
+              :key="item.label"
+            >
               <SidebarMenuButton
                 tooltip="Próximamente"
                 aria-disabled="true"
                 title="Próximamente"
               >
-                <TriangleAlert />
-                <span>Alertas</span>
+                <component :is="item.icon" />
+                <span>{{ item.label }}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
+            <CollapsibleRoot default-open as-child>
+              <SidebarMenuItem>
+                <SidebarMenuButton as-child tooltip="Analítica">
+                  <CollapsibleTrigger>
+                    <ChartPie />
+                    <span>Analítica</span>
+                    <ChevronRight class="ml-auto transition-transform data-[state=open]:rotate-90" />
+                  </CollapsibleTrigger>
+                </SidebarMenuButton>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        as="button"
+                        :is-active="view === 'radiography'"
+                        @click="emit('view', 'radiography')"
+                      >
+                        <span>Radiografía</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        as="button"
+                        :is-active="view === 'graph'"
+                        @click="emit('view', 'graph')"
+                      >
+                        <span>Grafo</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </CollapsibleRoot>
+            <SidebarMenuItem
+              v-for="item in menuAfterAnalytics"
+              :key="item.label"
+            >
               <SidebarMenuButton
                 tooltip="Próximamente"
                 aria-disabled="true"
                 title="Próximamente"
               >
-                <FlaskConical />
-                <span>Simulador</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Próximamente"
-                aria-disabled="true"
-                title="Próximamente"
-              >
-                <WalletCards />
-                <span>Cartera</span>
+                <component :is="item.icon" />
+                <span>{{ item.label }}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
