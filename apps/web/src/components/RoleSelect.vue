@@ -10,19 +10,22 @@ const roles = [
   {
     value: "tesorero",
     icon: Landmark,
+    embat: false,
     text: "Sigues la caja de tu empresa día a día: radiografía, alertas y compromisos que puedes asumir.",
   },
   {
     value: "financiero",
     icon: ChartNoAxesCombined,
+    embat: true,
     text: "Ves toda la cartera: comparas empresas, recorres el grafo de relaciones y preparas informes.",
   },
   {
     value: "ventas",
     icon: Users,
+    embat: true,
     text: "Priorizas clientes por salud financiera y llegas a cada conversación con el contexto listo.",
   },
-] satisfies { value: Role; icon: Component; text: string }[];
+] satisfies { value: Role; icon: Component; embat: boolean; text: string }[];
 </script>
 
 <template>
@@ -45,12 +48,16 @@ const roles = [
           :key="role.value"
           type="button"
           class="role-card"
+          :class="{ embat: role.embat }"
           @click="emit('select', role.value)"
         >
           <span class="role-icon">
             <component :is="role.icon" class="size-5" />
           </span>
-          <span class="role-name">{{ ROLE_LABELS[role.value] }}</span>
+          <span class="role-title">
+            <span class="role-name">{{ ROLE_LABELS[role.value] }}</span>
+            <span class="role-team">{{ role.embat ? "Equipo Embat" : "Cliente" }}</span>
+          </span>
           <span class="role-text">{{ role.text }}</span>
           <span class="role-go">
             Entrar
@@ -143,6 +150,7 @@ h1 {
   background: #fff;
   border: 1px solid var(--embat-line);
   border-radius: 12px;
+  color: var(--embat-navy);
   box-shadow: var(--embat-shadow-1);
   transition:
     box-shadow 0.3s,
@@ -156,6 +164,12 @@ h1 {
   outline: none;
 }
 
+.role-card.embat {
+  background: var(--embat-navy);
+  border-color: var(--embat-navy);
+  color: #fff;
+}
+
 .role-icon {
   display: inline-flex;
   align-items: center;
@@ -167,14 +181,41 @@ h1 {
   color: #fff;
 }
 
+.role-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
 .role-name {
   font-size: 1.25rem;
   font-weight: 500;
 }
 
+.role-team {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--embat-gray);
+  color: var(--embat-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.role-card.embat .role-team {
+  background: var(--embat-navy-soft);
+  color: #fff;
+}
+
 .role-text {
   color: var(--embat-muted);
   flex: 1;
+}
+
+.role-card.embat .role-text {
+  color: #b4b7c6;
 }
 
 .role-go {
@@ -184,6 +225,10 @@ h1 {
   margin-top: 8px;
   font-weight: 500;
   color: var(--embat-blue);
+}
+
+.role-card.embat .role-go {
+  color: #fff;
 }
 
 @media (max-width: 899px) {

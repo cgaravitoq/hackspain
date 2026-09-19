@@ -48,6 +48,22 @@ describe("AppShell", () => {
     ]);
   });
 
+  it("paints Financiero and Ventas as the Embat team and Tesorero as the client", async () => {
+    const wrapper = mountShell();
+    await click(wrapper, "Empezar");
+    const cards = wrapper.findAll(".role-card");
+    expect(cards.map((card) => card.classes("embat"))).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(cards.map((card) => card.find(".role-team").text())).toEqual([
+      "Cliente",
+      "Equipo Embat",
+      "Equipo Embat",
+    ]);
+  });
+
   it("enters the dashboard with the chosen role in the path", async () => {
     const wrapper = mountShell();
     await click(wrapper, "Empezar");
