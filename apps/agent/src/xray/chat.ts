@@ -1,4 +1,4 @@
-import type { ChatRequest } from "@hackspain/shared";
+import { type ChatRequest, type Role, roleSchema } from "@hackspain/shared";
 import {
   convertToModelMessages,
   type LanguageModel,
@@ -8,6 +8,7 @@ import {
   validateUIMessages,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import { resolveCompany } from "./report.ts";
 import {
   type ReportTool,
   reportDescription,
@@ -30,8 +31,20 @@ export function workersAiModel(binding: Ai): LanguageModel {
 const SYSTEM = `Eres X Ray, el analista de salud financiera dentro de Embat.
 Respondes en español, en tres o cuatro frases como máximo, con las cifras y periodos que devuelven las herramientas.
 Nunca inventes números ni empresas: si no tienes el dato, llama a la herramienta o di que no está en los datos.
+Cuando te pidan datos de dos o tres empresas, llama a compare en una sola llamada para que la pantalla muestre todas sus series.
 El score va de 0 a 100 y mide cobros operativos frente a pagos en los últimos tres meses; los estados son sana, mejorando, estable, torciéndose, cayendo y no evaluable.
 Cuando una empresa está torciéndose o cayendo, termina con la acción sugerida y el módulo de Embat donde hacerla.`;
+
+const ROLE_CONTEXT: Record<Role, string> = {
+  tesorero:
+    "Hablas con el tesorero sobre su propia empresa. Usa lenguaje claro y termina con acciones concretas dentro de Embat.",
+  financiero:
+    "Hablas con el responsable financiero sobre el conjunto de la cartera. Empieza por la evidencia de la cartera y sus exposiciones antes de recomendar dónde profundizar.",
+  ventas:
+    "Hablas con ventas sobre oportunidades y preguntas para la conversación. No uses lenguaje interno de riesgo ni compartas clasificaciones internas.",
+};
+
+const chatReportInput = reportInput.extend({ role: roleSchema.optional() });
 
 async function context(
   tools: Tools,
@@ -62,18 +75,25 @@ export async function chat(
   report: ReportTool,
 ): Promise<Response> {
   const tools = createTools(store);
+  const role = request.role ?? "tesorero";
   const messages = await validateUIMessages({ messages: request.messages });
   const result = streamText({
     model,
-    system: `${SYSTEM}\n\nRol seleccionado: ${request.role ?? "tesorero"}. Para exportar un informe llama a report con company y este rol; devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
+    system: `${SYSTEM}\n\n${ROLE_CONTEXT[role]}\n\nPara exportar un informe llama a report con company; usa el rol ${role} y devuelve el enlace de la herramienta sin inventarlo. Nunca presentes el informe como solvencia, crédito, previsión o prueba de causas.\n\n${await context(tools, request.company_id)}`,
     messages: await convertToModelMessages(messages),
     tools: {
       report: tool({
         description: reportDescription,
-        inputSchema: reportInput,
+        inputSchema: chatReportInput,
         execute: async (input) => {
-          const { url, filename, sizeBytes } = await report(input);
-          return { url, filename, sizeBytes };
+          const reportRole = input.role ?? role;
+          const companyId = resolveCompany(input.company);
+          const { url } = await report({ ...input, role: reportRole });
+          return {
+            company_id: companyId,
+            role: reportRole,
+            export_url: url,
+          };
         },
       }),
       score: tool({

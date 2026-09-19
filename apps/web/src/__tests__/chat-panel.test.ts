@@ -76,6 +76,53 @@ describe("ChatPanel", () => {
     expect(wrapper.find(".tool").text()).toBe("score COMP_B");
   });
 
+  it("renders and emits the finished report as a PDF file", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        sse([
+          { type: "start" },
+          {
+            type: "tool-input-available",
+            toolCallId: "report-1",
+            toolName: "report",
+            input: { company: "COMP_A", role: "ventas" },
+          },
+          {
+            type: "tool-output-available",
+            toolCallId: "report-1",
+            output: {
+              company_id: "COMP_A",
+              role: "ventas",
+              export_url: "/api/companies/COMP_A/report.pdf?role=ventas",
+            },
+          },
+          { type: "finish" },
+        ]),
+      ),
+    );
+    const wrapper = mount(ChatPanel, {
+      props: { companyId: "COMP_A", alerts, role: "ventas" },
+    });
+    await wrapper.find("input").setValue("Exporta el informe");
+    await wrapper.find("form").trigger("submit");
+    await vi.waitFor(() => expect(wrapper.find(".file").exists()).toBe(true));
+    const file = wrapper.find(".file");
+    expect(file.text()).toBe("Informe listo: descargar PDF");
+    expect(file.attributes("href")).toBe(
+      "/api/companies/COMP_A/report.pdf?role=ventas",
+    );
+    expect(file.attributes("target")).toBe("_blank");
+    expect(wrapper.emitted("report")).toEqual([
+      [
+        {
+          company_id: "COMP_A",
+          role: "ventas",
+          export_url: "/api/companies/COMP_A/report.pdf?role=ventas",
+        },
+      ],
+    ]);
+  });
+
   it("labels each tool chip with the entity it queries, or the bare name without one", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(

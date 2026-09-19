@@ -6,6 +6,7 @@ import {
   type Explain,
   type GroupMap,
   type Meta,
+  type Report,
   ROLE_LABELS,
   type Role,
 } from "@hackspain/shared";
@@ -77,6 +78,18 @@ function removeComparison(companyId: string) {
   if (selected.value === companyId) {
     select(compareIds.value[0] ?? "");
   }
+}
+
+function replaceComparison(companyIds: string[]) {
+  compareIds.value = companyIds;
+  selected.value = companyIds[0] ?? selected.value;
+}
+
+function openReport(
+  result: Pick<Report, "company_id" | "role" | "export_url">,
+) {
+  role.value = result.role;
+  selected.value = result.company_id;
 }
 
 function selectRole(nextRole: Role) {
@@ -221,10 +234,11 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
     </div>
     <ChatPanel
       v-if="selected"
-      :key="selected"
       :company-id="selected"
       :alerts="alerts"
       :role="role"
+      @compare="replaceComparison"
+      @report="openReport"
     />
   </main>
 </template>

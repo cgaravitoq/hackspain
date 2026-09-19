@@ -265,20 +265,20 @@ describe("report tools", () => {
     const output = z
       .object({
         type: z.literal("json"),
-        value: z.strictObject({
-          url: z.string(),
-          filename: z.string(),
-          sizeBytes: z.number(),
+        value: reportSchema.pick({
+          company_id: true,
+          role: true,
+          export_url: true,
         }),
       })
       .parse(result?.output);
     expect(output.value).toEqual({
-      url: "/api/companies/COMP_A/report.pdf?role=tesorero",
-      filename: "xray-COMP_A-2026-08-tesorero.pdf",
-      sizeBytes: pdfBytes.byteLength,
+      company_id: "COMP_A",
+      role: "tesorero",
+      export_url: "/api/companies/COMP_A/report.pdf?role=tesorero",
     });
     expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
-      "Rol seleccionado: tesorero",
+      "Hablas con el tesorero sobre su propia empresa",
     );
   });
 

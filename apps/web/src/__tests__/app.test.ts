@@ -5,8 +5,19 @@ import { company, fakeApi } from "./fixtures.ts";
 
 const ChatPanelStub = {
   props: ["companyId", "alerts", "role"],
+  emits: ["compare", "report"],
   template: "<div class='chat-stub'>{{ companyId }} {{ role }}</div>",
 };
+
+function sse(chunks: object[]): Response {
+  const body = [
+    ...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}`),
+    "data: [DONE]",
+  ].join("\n\n");
+  return new Response(`${body}\n\n`, {
+    headers: { "content-type": "text/event-stream" },
+  });
+}
 
 let mounted: VueWrapper | undefined;
 
@@ -181,6 +192,67 @@ describe("App", () => {
       "COMP_C",
       "COMP_D",
     ]);
+  });
+
+  it("replaces the comparison with the companies returned by chat", async () => {
+    const base = fakeApi([]);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      return url.pathname === "/api/chat"
+        ? Promise.resolve(
+            sse([
+              { type: "start" },
+              {
+                type: "tool-input-available",
+                toolCallId: "compare-1",
+                toolName: "compare",
+                input: { company_ids: ["COMP_B", "COMP_C"] },
+              },
+              {
+                type: "tool-output-available",
+                toolCallId: "compare-1",
+                output: {
+                  months: ["2026-05", "2026-06", "2026-07", "2026-08"],
+                  companies: [
+                    company("COMP_B", "GROUP_1"),
+                    company("COMP_C", "GROUP_2"),
+                  ],
+                },
+              },
+              { type: "finish" },
+            ]),
+          )
+        : base(input);
+    });
+    mounted = mount(App);
+    const wrapper = mounted;
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#chat-input").setValue("Compara B y C");
+    await wrapper.find(".chat form").trigger("submit");
+    await vi.waitFor(() =>
+      expect(chips(wrapper)).toEqual(["COMP_B", "COMP_C"]),
+    );
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("opens the company and role returned by a report in chat", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    wrapper.findComponent(ChatPanelStub).vm.$emit("report", {
+      company_id: "COMP_B",
+      role: "ventas",
+      export_url: "/api/companies/COMP_B/report.pdf?role=ventas",
+    });
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_B ventas");
+    expect(wrapper.find(".report-export").attributes("href")).toBe(
+      "/api/companies/COMP_B/report.pdf?role=ventas",
+    );
   });
 
   it("keeps the newest comparison when an earlier response arrives late", async () => {

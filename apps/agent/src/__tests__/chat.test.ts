@@ -1,10 +1,13 @@
 import { env } from "cloudflare:test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
-import { compareSchema } from "@hackspain/shared";
+import { compareSchema, type Role } from "@hackspain/shared";
 import { MockLanguageModelV4, simulateReadableStream } from "ai/test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createApp } from "../app.ts";
+import { chat } from "../xray/chat.ts";
+import type { reportInput } from "../xray/report-tool.ts";
+import { createStore } from "../xray/store.ts";
 import { seed } from "./fixtures.ts";
 
 beforeAll(() => seed(env.DB));
@@ -37,7 +40,12 @@ function textReply(text: string) {
 
 function toolCall(
   name: string,
-  input: { company_id?: string; company_ids?: string[] },
+  input: {
+    company?: string;
+    company_id?: string;
+    company_ids?: string[];
+    role?: Role;
+  },
 ) {
   return stream([
     {
@@ -54,7 +62,10 @@ function toolCall(
   ]);
 }
 
-function ask(model: MockLanguageModelV4, body: { company_id?: string }) {
+function ask(
+  model: MockLanguageModelV4,
+  body: { company_id?: string; role?: Role },
+) {
   return createApp({ model: () => model }).request(
     "/chat",
     {
@@ -117,6 +128,51 @@ describe("POST /chat", () => {
     expect(system).not.toContain('"state_label"');
   });
 
+  it("adds the selected financial role guidance to the system prompt", async () => {
+    const model = new MockLanguageModelV4({ doStream: [textReply("ok")] });
+    const response = await ask(model, { role: "financiero" });
+    expect(await response.text()).toContain("ok");
+    expect(systemPrompt(model, 0)).toContain(
+      "Empieza por la evidencia de la cartera y sus exposiciones",
+    );
+  });
+
+  it("defaults a report tool call to the selected role", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: [
+        toolCall("report", { company: "Talleres Ribera" }),
+        textReply("Informe listo."),
+      ],
+    });
+    const calls: z.infer<typeof reportInput>[] = [];
+    const response = await chat(
+      model,
+      createStore(env.DB),
+      {
+        role: "ventas",
+        messages: [
+          {
+            id: "m1",
+            role: "user",
+            parts: [{ type: "text", text: "Exporta el informe" }],
+          },
+        ],
+      },
+      async (input) => {
+        calls.push(input);
+        return {
+          url: "/api/companies/COMP_0176/report.pdf?role=ventas",
+          filename: "xray-COMP_0176-2026-08-ventas.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 100,
+          generatedAt: "2026-09-19T12:00:00.000Z",
+        };
+      },
+    );
+    expect(await response.text()).toContain("Informe listo.");
+    expect(calls).toEqual([{ company: "Talleres Ribera", role: "ventas" }]);
+  });
+
   it("runs the tool the model asks for against D1 and feeds the result back", async () => {
     const model = new MockLanguageModelV4({
       doStream: [
@@ -143,6 +199,9 @@ describe("POST /chat", () => {
     const compare = tools.find((tool) => tool.name === "compare");
     expect(compare?.description).toContain("Up to three companies");
     expect(compare?.description).toContain("Talleres Ribera");
+    expect(systemPrompt(model, 0)).toContain(
+      "llama a compare en una sola llamada",
+    );
     expect(compare?.inputSchema).toMatchObject({
       type: "object",
       required: ["company_ids"],
