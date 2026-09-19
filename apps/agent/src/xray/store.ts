@@ -17,9 +17,9 @@ import type { z } from "zod";
 
 type PayloadRow = { payload: string };
 
-export type AlertKind = Alert["kind"];
+type AlertKind = Alert["kind"];
 
-export type CompanyFilter = {
+type CompanyFilter = {
   state?: State;
   group_id?: string;
   limit: number;
