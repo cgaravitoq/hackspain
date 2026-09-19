@@ -141,8 +141,10 @@ function whatChangedOf(company: CompanyDetail) {
       error: "Fewer than two scored months",
     };
   }
-  const stateSince =
-    scored.findLast((entry) => entry.state !== now.state)?.month ?? null;
+  const previousStateAt = scored.findLastIndex(
+    (entry) => entry.state !== now.state,
+  );
+  const stateSince = scored[previousStateAt + 1]?.month ?? null;
   return {
     company_id: company.company_id,
     month: now.month,

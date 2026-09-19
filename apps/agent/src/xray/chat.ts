@@ -9,7 +9,12 @@ import {
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import type { Store } from "./store.ts";
-import { createTools, toolDescriptions, toolInputs } from "./tools.ts";
+import {
+  createTools,
+  type Tools,
+  toolDescriptions,
+  toolInputs,
+} from "./tools.ts";
 
 export const CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 
@@ -24,23 +29,25 @@ El score va de 0 a 100 y mide cobros operativos frente a pagos en los últimos t
 Cuando una empresa está torciéndose o cayendo, termina con la acción sugerida y el módulo de Embat donde hacerla.`;
 
 async function context(
-  tools: ReturnType<typeof createTools>,
+  tools: Tools,
   companyId: string | undefined,
 ): Promise<string> {
-  const alerts = await tools.alerts({ limit: 5 });
-  const lines = [
-    `Alertas del último mes (${alerts.month ?? "sin datos"}): ${alerts.count} mostradas, las peores primero: ${JSON.stringify(alerts.alerts)}`,
-  ];
-  if (companyId) {
-    const explanation = await tools.explain({ company_id: companyId });
-    const changed = await tools.what_changed({ company_id: companyId });
-    lines.push(
-      `Empresa en pantalla: ${companyId}.`,
-      `Radiografía: ${JSON.stringify(explanation)}`,
-      `Qué cambió: ${JSON.stringify(changed)}`,
-    );
+  if (!companyId) {
+    return "No hay empresa en pantalla. Usa las herramientas para consultar cifras.";
   }
-  return lines.join("\n");
+  const explanation = await tools.explain({ company_id: companyId });
+  if ("error" in explanation) {
+    return `Empresa en pantalla: ${companyId}. ${explanation.error}`;
+  }
+  const drivers = explanation.drivers
+    .slice(0, 3)
+    .map((driver) => driver.text)
+    .join(" ");
+  return [
+    `Empresa en pantalla: ${companyId}.`,
+    `${explanation.state_label}, score ${explanation.score} en ${explanation.month}. ${drivers}`,
+    `Acción: ${explanation.action}`,
+  ].join("\n");
 }
 
 export async function chat(
