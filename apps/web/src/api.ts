@@ -28,6 +28,8 @@ async function get<Schema extends z.ZodType>(
 const companiesSchema = z.object({ companies: z.array(companySummarySchema) });
 const alertsSchema = z.object({ alerts: z.array(alertSchema) });
 
+export const ALERTS_LIMIT = 500;
+
 export const api = {
   meta: (): Promise<Meta> => get("/meta", metaSchema),
   companies: async (): Promise<CompanySummary[]> =>
@@ -39,5 +41,5 @@ export const api = {
   group: (id: string): Promise<GroupMap> =>
     get(`/groups/${id}`, groupMapSchema),
   alerts: async (): Promise<Alert[]> =>
-    (await get("/alerts?limit=500", alertsSchema)).alerts,
+    (await get(`/alerts?limit=${ALERTS_LIMIT}`, alertsSchema)).alerts,
 };

@@ -57,6 +57,79 @@ describe("App", () => {
     expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
+  it("shows the group error above the radiography when only the group request fails", async () => {
+    const seen: string[] = [];
+    const base = fakeApi(seen);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const path = new URL(String(input), "https://web.test").pathname;
+      return path.startsWith("/api/groups/")
+        ? Promise.resolve(new Response("down", { status: 500 }))
+        : base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(wrapper.find(".score").text()).toBe("12.3");
+    expect(wrapper.find(".error").text()).toBe("/groups/GROUP_1 answered 500");
+    expect(wrapper.text()).not.toContain("grupo en tensión");
+  });
+
+  it("opens the first company matching a typed id prefix", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find("#company-search").setValue("comp_");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    expect(window.location.hash).toBe("#COMP_B");
+  });
+
+  it("keeps the company on screen when the search is submitted empty", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    await wrapper.find("#company-search").setValue("  ");
+    await wrapper.find("form.search").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(seen).not.toContain("/api/companies/COMP_B");
+    expect(window.location.hash).toBe("#COMP_A");
+  });
+
+  it("shows the failing endpoint when the bootstrap requests fail", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response("down", { status: 500 })),
+    );
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".error").text()).toBe("/meta answered 500");
+  });
+
+  it("follows a hash change to another company", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    window.location.hash = "COMP_B";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(seen).toContain("/api/companies/COMP_B");
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
   it("loads another company when an alert is clicked", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));

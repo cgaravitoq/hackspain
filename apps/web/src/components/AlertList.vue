@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import type { Alert } from "@hackspain/shared";
+import { computed } from "vue";
+import { ALERTS_LIMIT } from "../api.ts";
 import { points, STATE_COLORS } from "../format.ts";
 
-defineProps<{ alerts: Alert[]; selected: string }>();
+const props = defineProps<{ alerts: Alert[]; selected: string }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
 
 const KIND_LABELS = { down: "empeora", recovered: "se recupera", up: "mejora" };
+
+const capped = computed(() => props.alerts.length >= ALERTS_LIMIT);
 </script>
 
 <template>
   <section class="panel alerts">
-    <h2 class="panel-title">Alertas del mes · {{ alerts.length }}</h2>
+    <h2 class="panel-title">
+      Alertas del mes · {{ alerts.length }}{{ capped ? "+" : "" }}
+    </h2>
     <ul>
       <li v-for="alert in alerts" :key="alert.company_id">
         <button
@@ -33,7 +39,7 @@ const KIND_LABELS = { down: "empeora", recovered: "se recupera", up: "mejora" };
 .alerts {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 110px);
+  min-height: 0;
 }
 
 ul {
@@ -42,6 +48,12 @@ ul {
   padding: 6px;
   min-height: 0;
   overflow-y: auto;
+}
+
+@media (max-width: 1100px) {
+  ul {
+    max-height: 60vh;
+  }
 }
 
 button {

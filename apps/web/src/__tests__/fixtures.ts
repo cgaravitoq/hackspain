@@ -76,6 +76,20 @@ export const alerts: Alert[] = [
   },
 ];
 
+export function alert(companyId: string, kind: Alert["kind"] = "down"): Alert {
+  return {
+    company_id: companyId,
+    group_id: "GROUP_1",
+    month: "2026-08",
+    kind,
+    state: "falling",
+    previous_state: "slipping",
+    score: 12.3,
+    delta: -27.9,
+    driver: null,
+  };
+}
+
 export function company(id: string, groupId: string): CompanyDetail {
   const series = [
     month("2026-05", null, "not_evaluable"),
@@ -165,6 +179,11 @@ export function explain(id: string, groupId: string): Explain {
   };
 }
 
+export const companies = ["COMP_B", "COMP_A"].map((id) => {
+  const { series: _series, ...summary } = company(id, "GROUP_1");
+  return summary;
+});
+
 export const group: GroupMap = {
   group_id: "GROUP_1",
   holdout: false,
@@ -207,7 +226,7 @@ type Route = { pattern: RegExp; body: (match: RegExpMatchArray) => object };
 const routes: Route[] = [
   { pattern: /^\/api\/meta$/, body: () => meta },
   { pattern: /^\/api\/alerts/, body: () => ({ alerts }) },
-  { pattern: /^\/api\/companies$/, body: () => ({ companies: [] }) },
+  { pattern: /^\/api\/companies$/, body: () => ({ companies }) },
   {
     pattern: /^\/api\/companies\/(\w+)\/explain$/,
     body: (match) => explain(match[1] ?? "", "GROUP_1"),

@@ -2,6 +2,7 @@
 import type { CompanyDetail, Explain } from "@hackspain/shared";
 import { computed } from "vue";
 import {
+  COMPONENT_CODES,
   CONFIDENCE_LABELS,
   componentLabel,
   euro,
@@ -19,15 +20,13 @@ const previous = computed(() => {
   return scored.at(-2) ?? null;
 });
 
-const delta = computed(() =>
-  previous.value?.score !== null &&
-  previous.value !== null &&
-  props.explanation.score !== null
-    ? props.explanation.score - previous.value.score
-    : null,
-);
+const previousScore = computed(() => previous.value?.score ?? null);
 
-const SCORED_CODES = new Set(["balance", "fees", "refunds", "momentum"]);
+const delta = computed(() => {
+  const now = props.explanation.score;
+  const before = previousScore.value;
+  return now === null || before === null ? null : now - before;
+});
 
 const mainDrivers = computed(() =>
   props.explanation.drivers.filter((driver) => driver.contribution !== 0),
@@ -35,7 +34,7 @@ const mainDrivers = computed(() =>
 
 const contextDrivers = computed(() =>
   props.explanation.drivers.filter(
-    (driver) => driver.contribution === 0 && !SCORED_CODES.has(driver.code),
+    (driver) => driver.contribution === 0 && !COMPONENT_CODES.has(driver.code),
   ),
 );
 </script>

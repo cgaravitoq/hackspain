@@ -7,7 +7,7 @@ import type {
   GroupMap,
   Meta,
 } from "@hackspain/shared";
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AlertList from "./components/AlertList.vue";
 import ChatPanel from "./components/ChatPanel.vue";
@@ -35,7 +35,6 @@ async function load(companyId: string) {
     company.value = detail;
     explanation.value = why;
     group.value = detail.group_id ? await api.group(detail.group_id) : null;
-    window.location.hash = companyId;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   }
@@ -45,10 +44,20 @@ function select(companyId: string) {
   selected.value = companyId;
 }
 
+function syncHash() {
+  selected.value = window.location.hash.slice(1);
+}
+
 function search() {
-  const id = query.value.trim().toUpperCase();
-  if (companies.value.some((item) => item.company_id === id)) {
-    select(id);
+  const text = query.value.trim().toUpperCase();
+  if (!text) {
+    return;
+  }
+  const hit =
+    companies.value.find((item) => item.company_id === text) ??
+    companies.value.find((item) => item.company_id.startsWith(text));
+  if (hit) {
+    select(hit.company_id);
   }
 }
 
@@ -56,6 +65,7 @@ watch(
   selected,
   (companyId) => {
     if (companyId) {
+      window.location.hash = companyId;
       load(companyId);
     }
   },
@@ -77,7 +87,10 @@ onMounted(async () => {
     selected.value =
       alerts.value[0]?.company_id ?? companies.value[0]?.company_id ?? "";
   }
+  window.addEventListener("hashchange", syncHash);
 });
+
+onUnmounted(() => window.removeEventListener("hashchange", syncHash));
 </script>
 
 <template>
@@ -132,6 +145,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .loading {
