@@ -3,9 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.vue";
 import { company, fakeApi } from "./fixtures.ts";
 
+const sendConfirmation = vi.fn();
+
 const ChatPanelStub = {
-  props: ["companyId", "alerts", "role"],
-  emits: ["close", "compare", "report"],
+  props: ["companyId", "alerts", "role", "confirmedCommitment"],
+  emits: ["close", "compare", "report", "commitment", "draft"],
+  methods: { sendConfirmation },
   template:
     "<div class='chat-stub'>{{ companyId }} {{ role }}<input id='chat-input' /></div>",
 };
@@ -74,23 +77,23 @@ async function openTab(wrapper: VueWrapper, label: string) {
   await flushPromises();
 }
 
-function chips(wrapper: VueWrapper) {
+function chartCompanies(wrapper: VueWrapper) {
   return wrapper
-    .findAll(".compare-chip")
+    .findAll(".chart-company")
     .map((chip) => chip.text().replace("×", "").trim());
 }
 
 async function openSelector(wrapper: VueWrapper) {
-  const trigger = wrapper.find('button[aria-label="Seleccionar empresa"]');
-  if (trigger.attributes("aria-expanded") !== "true") {
-    await trigger.trigger("click");
+  const input = wrapper.find("#company-search");
+  if (input.attributes("aria-expanded") !== "true") {
+    await input.trigger("focus");
     await flushPromises();
   }
 }
 
 function companyOption(wrapper: VueWrapper, companyId: string) {
   const option = wrapper
-    .findAll(".company-option")
+    .findAll(".option-row")
     .find((item) => item.find(".company-id").text() === companyId);
   if (!option) {
     throw new Error(`Missing selector option ${companyId}`);
@@ -100,7 +103,9 @@ function companyOption(wrapper: VueWrapper, companyId: string) {
 
 async function openCompanyFromSelector(wrapper: VueWrapper, companyId: string) {
   await openSelector(wrapper);
-  await companyOption(wrapper, companyId).trigger("click");
+  await companyOption(wrapper, companyId)
+    .find(".company-option")
+    .trigger("click");
   await flushPromises();
   await flushPromises();
 }
@@ -230,8 +235,135 @@ describe("App", () => {
     );
     expect(wrapper.find(".topbar").text()).not.toContain("datos hasta");
     expect(wrapper.find(".company-selector").exists()).toBe(true);
-    expect(wrapper.findAll(".company-selector .compare-chip")).toHaveLength(1);
+    expect(wrapper.find("#company-search").attributes("role")).toBe("combobox");
+    expect(wrapper.find(".company-selector .compare-chip").exists()).toBe(
+      false,
+    );
     expect(wrapper.find(".alerts").exists()).toBe(false);
+  });
+
+  it("shows eight loaded companies before filtering the search results", async () => {
+    const base = fakeApi([]);
+    const loadedCompanies = Array.from({ length: 10 }, (_, index) => {
+      const { series: _series, ...summary } = company(
+        `COMP_${String(index).padStart(2, "0")}`,
+        "GROUP_1",
+      );
+      return summary;
+    });
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(String(input), "https://web.test");
+      return url.pathname === "/api/companies"
+        ? Promise.resolve(Response.json({ companies: loadedCompanies }))
+        : base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    const input = wrapper.find("#company-search");
+    await input.trigger("focus");
+    expect(wrapper.findAll(".company-option")).toHaveLength(8);
+    await input.setValue("comp_09");
+    expect(
+      wrapper.findAll(".company-option").map((item) => item.text()),
+    ).toEqual(["COMP_09"]);
+    const result = wrapper.find(".company-option");
+    await input.trigger("focusout", { relatedTarget: null });
+    await result.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_09");
+    expect(wrapper.find(".selector-popover").exists()).toBe(false);
+  });
+
+  it("keeps TellMe as the only assistant and opens the operation form from its draft", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find('[aria-label="Qué necesitas"]').exists()).toBe(false);
+    expect(wrapper.findAll(".chat-stub")).toHaveLength(1);
+    expect(wrapper.find(".commitment").exists()).toBe(false);
+    const chat = wrapper.findComponent(ChatPanelStub);
+    chat.vm.$emit("draft", {
+      company_id: "COMP_B",
+      draft: { opportunity: { title: "Otro" } },
+      missing: [],
+    });
+    await flushPromises();
+    expect(wrapper.find(".commitment").exists()).toBe(false);
+    chat.vm.$emit("draft", {
+      company_id: "COMP_A",
+      draft: { opportunity: { title: "Pedido" } },
+      missing: ["opportunity.costs"],
+    });
+    await flushPromises();
+    expect(wrapper.find(".commitment").text()).toContain("COMP_A");
+    expect(wrapper.find(".commitment").text()).toContain(
+      "TellMe ha rellenado el formulario",
+    );
+    await wrapper.find(".commitment .close").trigger("click");
+    expect(wrapper.find(".commitment").exists()).toBe(false);
+    await wrapper.find(".open-commitment").trigger("click");
+    expect(wrapper.find(".commitment").exists()).toBe(true);
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+  });
+
+  it("tells TellMe when the operation form is confirmed", async () => {
+    vi.stubGlobal("fetch", fakeApi([]));
+    sendConfirmation.mockClear();
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    await wrapper.find(".open-commitment").trigger("click");
+    const request = { horizon_months: 1, reserve_floor_minor: 0 };
+    wrapper
+      .findComponent({ name: "CommitmentPanel" })
+      .vm.$emit("evaluated", request, {
+        evaluation: { company_id: "COMP_A" },
+        report_section: {
+          code: "decision",
+          title: "Evaluación de una operación",
+          body: "Sin anticipo, la caja mínima estimada es 10 €.",
+          figures: [],
+        },
+      });
+    await flushPromises();
+    expect(
+      wrapper.findComponent(ChatPanelStub).props("confirmedCommitment"),
+    ).toEqual(request);
+    expect(sendConfirmation).toHaveBeenCalledTimes(1);
+    expect(wrapper.find(".report-decision h3").text()).toBe(
+      "Evaluación de una operación",
+    );
+  });
+
+  it("does not replace the selected company with a late response from the previous company", async () => {
+    const base = fakeApi([]);
+    const pending: {
+      input: RequestInfo | URL;
+      resolve: (response: Response) => void;
+    }[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+      const path = new URL(String(input), "https://web.test").pathname;
+      if (
+        path === "/api/companies/COMP_A" ||
+        path === "/api/companies/COMP_A/explain"
+      ) {
+        return new Promise((resolve) => pending.push({ input, resolve }));
+      }
+      return base(input);
+    });
+    const wrapper = mountApp();
+    await flushPromises();
+    await openCompanyFromSelector(wrapper, "COMP_B");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
+    for (const request of pending) request.resolve(await base(request.input));
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
 
   it("opens on the worst alert and shows its radiography, action and group", async () => {
@@ -252,11 +384,11 @@ describe("App", () => {
     expect(wrapper.find(".score").text()).toBe("12.3");
     expect(wrapper.find(".chip").text()).toBe("cayendo");
     expect(wrapper.text()).toContain("▼ -27,9 vs mes anterior");
-    expect(
-      wrapper.find('.details [role="tab"][aria-selected="true"]').text(),
-    ).toBe("Acción");
-    expect(wrapper.find('[role="tabpanel"]').text()).toBe(
-      "Reclamar las 2 facturas vencidas desde Cuentas por cobrar",
+    expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe(
+      "Informe",
+    );
+    expect(wrapper.find(".report-summary").text()).toBe(
+      "La tesorería necesita atención inmediata.",
     );
     await openTab(wrapper, "Grupo");
     expect(wrapper.text()).toContain("grupo en tensión");
@@ -311,7 +443,7 @@ describe("App", () => {
     expect(window.location.hash).toBe("#COMP_0176");
     expect(seen).not.toContain("/api/companies/COMP_B");
     await selectRole(wrapper, "Financiero");
-    expect(chips(wrapper)).toEqual(["COMP_0176"]);
+    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
   });
 
   it("draws one series when the treasurer takes over the company already on screen", async () => {
@@ -325,13 +457,13 @@ describe("App", () => {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
-    expect(chips(wrapper)).toEqual(["COMP_0176", "COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(2);
     await selectRole(wrapper, "Tesorero");
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
+    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "Talleres Ribera",
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
     ]);
@@ -344,13 +476,13 @@ describe("App", () => {
     await flushPromises();
     await compareCompany(wrapper, "COMP_B");
     await compareCompany(wrapper, "COMP_C");
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(3);
     await selectRole(wrapper, "Tesorero");
     expect(wrapper.find("h1").text()).toBe("COMP_0176");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
+    expect(chartCompanies(wrapper)).toEqual(["Talleres Ribera"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "Talleres Ribera",
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
     ]);
@@ -363,17 +495,23 @@ describe("App", () => {
     await flushPromises();
     await compareCompany(wrapper, "COMP_B");
     await compareCompany(wrapper, "COMP_C");
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     window.location.hash = "COMP_D";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
     expect(wrapper.find("h1").text()).toBe("COMP_D");
-    expect(chips(wrapper)).toEqual(["COMP_B", "COMP_C", "COMP_D"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_C", "COMP_D"]);
+    expect(
+      wrapper
+        .findAll(".chart-company i")
+        .map((item) => item.attributes("style")),
+    ).toEqual([
+      "background: rgb(29, 78, 216);",
+      "background: rgb(180, 83, 9);",
+      "background: rgb(15, 118, 110);",
+    ]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "COMP_B",
-      "COMP_C",
-      "COMP_D",
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
     ]);
@@ -419,7 +557,7 @@ describe("App", () => {
     await wrapper.find("#chat-input").setValue("Compara B y C");
     await wrapper.find(".chat form").trigger("submit");
     await vi.waitFor(() =>
-      expect(chips(wrapper)).toEqual(["COMP_B", "COMP_C"]),
+      expect(chartCompanies(wrapper)).toEqual(["COMP_B", "COMP_C"]),
     );
     expect(wrapper.find("h1").text()).toBe("COMP_B");
   });
@@ -477,9 +615,8 @@ describe("App", () => {
       );
       await flushPromises();
     }
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B"]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "COMP_A",
-      "COMP_B",
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
     ]);
@@ -492,7 +629,7 @@ describe("App", () => {
     await flushPromises();
     await openCompanyFromSelector(wrapper, "COMP_B");
     expect(wrapper.find("h1").text()).toBe("COMP_B");
-    expect(chips(wrapper)).toEqual(["COMP_B"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_B"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
   });
 
@@ -534,16 +671,25 @@ describe("App", () => {
     await flushPromises();
     await compareCompany(wrapper, "COMP_B");
     await compareCompany(wrapper, "COMP_C");
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_B", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(3);
+    expect(wrapper.find(".details").exists()).toBe(false);
+    expect(wrapper.find(".comparison-detail-hint").text()).toBe(
+      "Vista comparativa. Deja una sola empresa para consultar su detalle.",
+    );
     await wrapper.find('button[aria-label="Quitar COMP_B"]').trigger("click");
     await flushPromises();
-    expect(chips(wrapper)).toEqual(["COMP_A", "COMP_C"]);
+    expect(chartCompanies(wrapper)).toEqual(["COMP_A", "COMP_C"]);
     expect(wrapper.findAll(".series-line")).toHaveLength(2);
+    await wrapper.find('button[aria-label="Quitar COMP_A"]').trigger("click");
+    await flushPromises();
+    expect(chartCompanies(wrapper)).toEqual(["COMP_C"]);
+    expect(wrapper.find(".details").exists()).toBe(true);
+    expect(seen).toContain("/api/companies/COMP_C/report");
     expect(seen).toContain("/api/compare");
   });
 
-  it("renders the role report with figures and a PDF export", async () => {
+  it("renders the role summary by default with a full PDF export", async () => {
     const requested: string[] = [];
     const base = fakeApi([]);
     vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
@@ -553,23 +699,11 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(requested).not.toContain(
-      "/api/companies/COMP_A/report?role=financiero",
-    );
-    await openTab(wrapper, "Informe");
+    expect(requested).toContain("/api/companies/COMP_A/report?role=financiero");
     expect(wrapper.find(".report-summary").text()).toBe(
       "La tesorería necesita atención inmediata.",
     );
-    expect(wrapper.find(".report-section h3").text()).toBe("Situación actual");
-    expect(
-      wrapper.findAll(".report-body p").map((item) => item.text()),
-    ).toEqual([
-      "Los cobros han caído.",
-      "Las facturas vencidas presionan la caja.",
-    ]);
-    expect(wrapper.find(".report-section table").text()).toContain(
-      "Cobros40.000EUR",
-    );
+    expect(wrapper.find(".report-section").exists()).toBe(false);
     const exportLink = wrapper.find(".report-export");
     expect(exportLink.attributes("href")).toBe(
       "/api/companies/COMP_A/report.pdf?role=financiero",
@@ -594,10 +728,9 @@ describe("App", () => {
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    await openTab(wrapper, "Informe");
     expect(wrapper.find("h1").text()).toBe("COMP_A");
     expect(wrapper.find(".report .error p").text()).toBe(
-      "No se pudo generar el informe",
+      "No se pudo generar el resumen",
     );
     expect(wrapper.find(".report .error small").text()).toBe(
       "/companies/COMP_A/report?role=financiero answered 500",
@@ -775,5 +908,6 @@ describe("App", () => {
     expect(seen).toContain("/api/companies/COMP_C/report");
     expect(wrapper.find("h1").text()).toBe("COMP_C");
     expect(window.location.hash).toBe("#COMP_C");
+    expect(wrapper.find(".comparison-detail-hint").exists()).toBe(false);
   });
 });

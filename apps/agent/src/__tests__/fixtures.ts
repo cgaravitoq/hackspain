@@ -83,6 +83,17 @@ function entry(month: Month, previous: Month | undefined): MonthEntry {
   };
 }
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type RequestBody = { [key: string]: JsonValue };
+
 export function company(
   id: string,
   groupId: string,
@@ -94,6 +105,10 @@ export function company(
   if (!latest) {
     throw new Error("a company needs at least one month");
   }
+  const observedMonths = months.filter(
+    (month) => month.observed !== false,
+  ).length;
+  const scored = series.filter((entry) => entry.score !== null);
   return {
     rule_version: "xray-score/0.1",
     company_id: id,
@@ -101,7 +116,7 @@ export function company(
     currency: "EUR",
     scorable: latest.score !== null,
     holdout: false,
-    months_observed: months.filter((month) => month.observed !== false).length,
+    months_observed: observedMonths,
     last_observed_month: latest.month,
     stale: false,
     debt_outstanding: 0,
@@ -120,6 +135,22 @@ export function company(
       momentum: latest.momentum,
       state: latest.state,
       confidence: latest.confidence,
+    },
+    trend_projection: {
+      rule_version: "xray-trend-projection/0.1",
+      status: "insufficient_data",
+      reason: "insufficient_history",
+      semantics: "scenario_range_not_confidence_interval",
+      observed_months: observedMonths,
+      min_months_required: 6,
+      months_missing: Math.max(0, 6 - observedMonths),
+      points: [],
+      evidence: {
+        latest_score: latest.score,
+        momentum: latest.momentum,
+        volatility: 0,
+        source_months: scored.map((entry) => entry.month),
+      },
     },
     series,
   };

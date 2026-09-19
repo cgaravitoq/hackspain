@@ -2,17 +2,31 @@
 import { Chat } from "@ai-sdk/vue";
 import {
   type Alert,
+  COMMITMENT_CONFIRMATION,
+  type CommitmentDraftResult,
+  type CommitmentRequest,
+  type CommitmentResponse,
+  commitmentDraftResultSchema,
+  commitmentResponseSchema,
   compareSchema,
   type Report,
   type Role,
   reportSchema,
 } from "@hackspain/shared";
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { z } from "zod";
 import { ALERTS_LIMIT } from "../api.ts";
 
-const props = defineProps<{ companyId: string; alerts: Alert[]; role: Role }>();
+const props = withDefaults(
+  defineProps<{
+    companyId: string;
+    alerts: Alert[];
+    role: Role;
+    confirmedCommitment?: CommitmentRequest | null;
+  }>(),
+  { confirmedCommitment: null },
+);
 
 type ReportResult = Pick<Report, "company_id" | "role" | "export_url">;
 
@@ -20,12 +34,18 @@ const emit = defineEmits<{
   close: [];
   compare: [companyIds: string[]];
   report: [result: ReportResult];
+  commitment: [result: CommitmentResponse];
+  draft: [result: CommitmentDraftResult];
 }>();
 
 const chat = new Chat({
   transport: new DefaultChatTransport({
     api: "/api/chat",
-    body: () => ({ company_id: props.companyId, role: props.role }),
+    body: () => ({
+      company_id: props.companyId,
+      role: props.role,
+      confirmed_commitment: props.confirmedCommitment ?? undefined,
+    }),
   }),
 });
 
@@ -57,6 +77,21 @@ function handleFinishedTools() {
             "compare",
             comparison.data.companies.map((company) => company.company_id),
           );
+        }
+      } else if (part.type === "tool-simulate_commitment") {
+        const result = commitmentResponseSchema.safeParse(part.output);
+        if (
+          result.success &&
+          result.data.evaluation.company_id === props.companyId
+        ) {
+          handledTools.add(part.toolCallId);
+          emit("commitment", result.data);
+        }
+      } else if (part.type === "tool-draft_commitment") {
+        const result = commitmentDraftResultSchema.safeParse(part.output);
+        if (result.success && result.data.company_id === props.companyId) {
+          handledTools.add(part.toolCallId);
+          emit("draft", result.data);
         }
       } else if (part.type === "tool-report") {
         const report = reportResultSchema.safeParse(part.output);
@@ -94,6 +129,10 @@ watch(
   },
 );
 
+onBeforeUnmount(() => {
+  chat.stop();
+});
+
 const intro = computed(() => {
   const month = props.alerts[0]?.month ?? "este mes";
   const down = props.alerts.filter((alert) => alert.kind === "down").length;
@@ -101,17 +140,18 @@ const intro = computed(() => {
     (alert) => alert.kind === "recovered",
   ).length;
   const total = `${props.alerts.length}${props.alerts.length >= ALERTS_LIMIT ? "+" : ""}`;
-  return `${month}: ${total} alertas, ${down} empresas empeoran y ${recovered} se recuperan. Pregunta por ${props.companyId} o por cualquier otra empresa o grupo.`;
+  return `${month}: ${total} alertas, ${down} empresas empeoran y ${recovered} se recuperan. Pregunta por ${props.companyId}, por cualquier otra empresa o grupo, o si puedes asumir una operación.`;
 });
 
 const roleSuggestions: Record<Role, string[]> = {
   tesorero: [
     "¿Por qué está así?",
-    "¿Qué cambió este mes?",
+    "¿Puedo aceptar un pedido de 50.000 € con un 30 % de anticipo?",
     "Exporta mi informe",
   ],
   financiero: [
     "Compara Talleres Ribera y Bodegas Altamira",
+    "¿Puede asumir un pedido de 50.000 € con un 30 % de anticipo?",
     "¿Qué empresas han empeorado este mes?",
     "Exporta el informe de Talleres Ribera",
   ],
@@ -142,6 +182,14 @@ function send(text: string) {
   chat.sendMessage({ text: question });
 }
 
+function sendConfirmation() {
+  if (!busy.value && props.confirmedCommitment) {
+    chat.sendMessage({ text: COMMITMENT_CONFIRMATION });
+  }
+}
+
+defineExpose({ sendConfirmation });
+
 function toolLabel(part: UIMessage["parts"][number]): string | null {
   if (!isToolUIPart(part)) {
     return null;
@@ -170,7 +218,7 @@ function reportOutput(part: UIMessage["parts"][number]): ReportResult | null {
 <template>
   <section class="panel chat">
     <header class="chat-header">
-      <h2>Asistente</h2>
+      <h2 class="panel-title">TellMe · X Ray</h2>
       <button type="button" aria-label="Cerrar el asistente" @click="emit('close')">
         ×
       </button>

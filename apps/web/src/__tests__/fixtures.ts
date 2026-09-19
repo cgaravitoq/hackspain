@@ -14,6 +14,7 @@ import {
   relationScopeSchema,
   relationTypeSchema,
   roleSchema,
+  type TrendProjection,
 } from "@hackspain/shared";
 import type { z } from "zod";
 
@@ -108,6 +109,23 @@ export const alerts: Alert[] = [
   },
 ];
 
+export const trendProjectionRefusal: TrendProjection = {
+  rule_version: "xray-trend-projection/0.1",
+  status: "insufficient_data",
+  reason: "insufficient_history",
+  semantics: "scenario_range_not_confidence_interval",
+  observed_months: 4,
+  min_months_required: 6,
+  months_missing: 2,
+  points: [],
+  evidence: {
+    latest_score: 12.3,
+    momentum: -49.2,
+    volatility: 0,
+    source_months: ["2026-06", "2026-07", "2026-08"],
+  },
+};
+
 export function alert(companyId: string, kind: Alert["kind"] = "down"): Alert {
   return {
     rule_version: "xray-score/0.1",
@@ -163,6 +181,7 @@ export function company(id: string, groupId: string): CompanyDetail {
       state: "falling",
       confidence: "high",
     },
+    trend_projection: trendProjectionRefusal,
     series,
   };
 }
@@ -230,24 +249,25 @@ export const companies = ["COMP_B", "COMP_A"].map((id) => {
 });
 
 export const report: Report = {
+  schema_version: "human-v2",
   company_id: "COMP_A",
   month: "2026-08",
   role: "financiero",
   rule_version: "xray-score/0.1",
   generated_at: "2026-09-19T12:00:00.000Z",
+  score: 12,
+  state: "falling",
+  state_label: "cayendo",
+  headline: "Los pagos superan con claridad a los cobros",
   summary: "La tesorería necesita atención inmediata.",
-  sections: [
-    {
-      code: "resumen",
-      title: "Situación actual",
-      body: "Los cobros han caído.\n\nLas facturas vencidas presionan la caja.",
-      figures: [
-        { label: "Cobros", value: 40_000, unit: "EUR" },
-        { label: "Pagos", value: 100_000, unit: "EUR" },
-      ],
-    },
-  ],
+  score_explanation:
+    "Los cobros han caído.\n\nLas facturas vencidas presionan la caja.",
+  outlook: "Si nada cambia, la lectura seguirá débil.",
+  caveat: "La actividad registrada es escasa.",
+  next_steps: ["Revisar las facturas vencidas."],
+  source: "llm",
   export_url: "/companies/COMP_A/report.pdf?role=financiero",
+  trend_projection: trendProjectionRefusal,
 };
 
 export const group: GroupMap = {

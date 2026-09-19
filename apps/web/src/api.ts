@@ -1,9 +1,15 @@
 import {
   type Alert,
   alertSchema,
+  type CommitmentContext,
+  type CommitmentRequest,
+  type CommitmentResponse,
   type CompanyDetail,
   type CompanySummary,
   type Compare,
+  commitmentContextSchema,
+  commitmentRequestSchema,
+  commitmentResponseSchema,
   companyDetailSchema,
   companySummarySchema,
   compareSchema,
@@ -29,8 +35,9 @@ import { z } from "zod";
 async function get<Schema extends z.ZodType>(
   path: string,
   schema: Schema,
+  signal?: AbortSignal,
 ): Promise<z.infer<Schema>> {
-  const response = await fetch(`/api${path}`);
+  const response = await fetch(`/api${path}`, { signal });
   if (!response.ok) {
     const parsed = z
       .object({ error: z.string() })
@@ -91,6 +98,36 @@ function simulateSearch(query: SimulateQuery): string {
 }
 
 export const api = {
+  commitmentContext: (
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<CommitmentContext> =>
+    get(
+      `/companies/${encodeURIComponent(id)}/commitment-context`,
+      commitmentContextSchema,
+      signal,
+    ),
+  commitment: async (
+    id: string,
+    input: CommitmentRequest,
+    signal?: AbortSignal,
+  ): Promise<CommitmentResponse> => {
+    const response = await fetch(
+      `/api/companies/${encodeURIComponent(id)}/commitment`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(commitmentRequestSchema.parse(input)),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `No se pudo evaluar la operación (${response.status}). Revisa los datos y vuelve a intentarlo.`,
+      );
+    }
+    return commitmentResponseSchema.parse(await response.json());
+  },
   meta: (): Promise<Meta> => get("/meta", metaSchema),
   companies: async (): Promise<CompanySummary[]> =>
     (await get("/companies", companiesSchema)).companies,

@@ -14,6 +14,8 @@ import {
   graphSchema,
   metaSchema,
   monthEntrySchema,
+  REPORT_HEADINGS,
+  REPORT_WORD_LIMITS,
   ROLE_LABELS,
   relationArtifactNodeSchema,
   relationEdgeSchema,
@@ -30,6 +32,7 @@ import {
   simulateSchema,
   stateSchema,
   treasurySchema,
+  trendProjectionSchema,
 } from "./index.ts";
 
 const stableMonth = {
@@ -73,6 +76,44 @@ const demoTreasury = {
   credit_line_drawn: 40_000,
 };
 
+const demoTrendProjection = {
+  rule_version: "xray-trend-projection/0.1",
+  status: "available",
+  reason: null,
+  semantics: "scenario_range_not_confidence_interval",
+  observed_months: 8,
+  min_months_required: 6,
+  months_missing: 0,
+  points: [
+    { month: "2026-09", base: 45, favorable: 50, adverse: 40 },
+    { month: "2026-10", base: 40, favorable: 48, adverse: 32 },
+    { month: "2026-11", base: 35, favorable: 45, adverse: 25 },
+  ],
+  evidence: {
+    latest_score: 50,
+    momentum: -15,
+    volatility: 5,
+    source_months: [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ],
+  },
+} as const;
+
+const demoTrendProjectionRefusal = {
+  ...demoTrendProjection,
+  status: "insufficient_data",
+  reason: "insufficient_history",
+  observed_months: 3,
+  months_missing: 3,
+  points: [],
+  evidence: { ...demoTrendProjection.evidence, momentum: null },
+} as const;
+
 const demoCompanySummary = {
   rule_version: "xray-score/0.1",
   company_id: "COMP_0176",
@@ -96,6 +137,7 @@ const demoCompanySummary = {
     state: "stable",
     confidence: "high",
   },
+  trend_projection: demoTrendProjection,
 };
 
 const demoAlert = {
@@ -140,22 +182,24 @@ const demoMeta = {
 };
 
 const demoReport = {
+  schema_version: "human-v2",
   company_id: "COMP_0176",
   month: "2026-08",
   role: "tesorero",
   rule_version: "xray-report/0.1",
   generated_at: "2026-09-19T10:00:00.000Z",
-  summary: "La empresa se mantiene estable.",
-  sections: [
-    {
-      code: "resumen",
-      title: "Resumen",
-      body: "Todo en orden.",
-      figures: [{ label: "Score", value: 50, unit: "pts" }],
-    },
-    { code: "que_hacer", title: "Qué hacer", body: "Nada." },
-  ],
-  export_url: "/reports/COMP_0176/2026-08.pdf",
+  score: 72,
+  state: "stable",
+  state_label: "estable",
+  headline: "La tesorería se mantiene estable con cobros que cubren los pagos",
+  summary: "Los cobros de los últimos tres meses cubren los pagos.",
+  score_explanation: "Entre junio y agosto los cobros superaron a los pagos.",
+  outlook: "Si el ritmo se mantiene, la lectura seguirá estable.",
+  caveat: "",
+  next_steps: ["Revisar los cobros pendientes más antiguos."],
+  source: "llm",
+  export_url: "/api/companies/COMP_0176/report.pdf?role=tesorero",
+  trend_projection: demoTrendProjection,
 };
 
 const demoScenario = {
@@ -195,6 +239,42 @@ const demoSimulate = {
 };
 
 describe("xray contracts", () => {
+  it("accepts a versioned three-month trend scenario with evidence pointers", () => {
+    expect(trendProjectionSchema.parse(demoTrendProjection)).toEqual(
+      demoTrendProjection,
+    );
+  });
+
+  it("rejects an available trend scenario without all three months", () => {
+    expect(
+      trendProjectionSchema.safeParse({
+        ...demoTrendProjection,
+        points: demoTrendProjection.points.slice(0, 2),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts an explicit refusal without scenario points", () => {
+    const refusal = trendProjectionSchema.parse({
+      ...demoTrendProjection,
+      status: "insufficient_data",
+      reason: "company_stale",
+      points: [],
+    });
+    expect(refusal.status).toBe("insufficient_data");
+    expect(refusal.reason).toBe("company_stale");
+  });
+
+  it("rejects a refused trend scenario that still carries points", () => {
+    expect(
+      trendProjectionSchema.safeParse({
+        ...demoTrendProjection,
+        status: "insufficient_data",
+        reason: "insufficient_history",
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     { delta_3: -1.2, delta_6: 5.4 },
     { delta_3: 0, delta_6: null },
@@ -254,6 +334,7 @@ describe("xray contracts", () => {
         state: "stable",
         confidence: "low",
       },
+      trend_projection: demoTrendProjectionRefusal,
       series: [
         {
           month: "2026-06",
@@ -496,6 +577,21 @@ describe("xray contracts", () => {
     expect(backtest.alerts_by_stage.confirmed.false_alarm_rate).toBeNull();
   });
 
+  it("accepts null event coverage when the pipeline observed no events", () => {
+    const backtest = backtestSchema.parse({
+      ...demoBacktest,
+      events: {
+        E3: {
+          events: 0,
+          with_prior_alert: 0,
+          coverage: null,
+          median_lead_months: null,
+        },
+      },
+    });
+    expect(backtest.events.E3?.coverage).toBeNull();
+  });
+
   it("rejects a company summary without the last observed month", () => {
     const { last_observed_month: _lastObserved, ...company } =
       demoCompanySummary;
@@ -620,10 +716,10 @@ describe("xray contracts", () => {
     });
   });
 
-  it("accepts a report and defaults missing figures to an empty list", () => {
+  it("accepts a human-v2 report with an empty caveat", () => {
     const report = reportSchema.parse(demoReport);
-    expect(report.sections).toHaveLength(2);
-    expect(report.sections[1]?.figures).toEqual([]);
+    expect(report.caveat).toBe("");
+    expect(report.next_steps).toHaveLength(1);
   });
 
   it("rejects a report whose role is not one of the three product roles", () => {
@@ -632,56 +728,51 @@ describe("xray contracts", () => {
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([["role"]]);
   });
 
-  it("rejects a report section whose code is not one of the six section codes", () => {
-    const result = reportSchema.safeParse({
-      ...demoReport,
-      sections: [{ code: "intro", title: "Intro", body: "Texto" }],
-    });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections", 0, "code"],
-    ]);
-  });
-
-  it("rejects a report figure whose value is not a number", () => {
-    const result = reportSchema.safeParse({
-      ...demoReport,
-      sections: [
-        {
-          code: "resumen",
-          title: "Resumen",
-          body: "Texto",
-          figures: [{ label: "Score", value: "50", unit: "pts" }],
-        },
-      ],
-    });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections", 0, "figures", 0, "value"],
-    ]);
-  });
-
-  it("rejects a report without sections", () => {
-    const result = reportSchema.safeParse({ ...demoReport, sections: [] });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections"],
-    ]);
-  });
-
-  it("rejects a report that omits the sections key", () => {
-    const { sections: _sections, ...reportWithoutSections } = demoReport;
-    const result = reportSchema.safeParse(reportWithoutSections);
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections"],
-    ]);
-  });
-
   it("accepts a report for each of the three product roles", () => {
     for (const role of ["tesorero", "financiero", "ventas"]) {
       expect(reportSchema.parse({ ...demoReport, role }).role).toBe(role);
     }
+  });
+
+  it("rejects more than two next steps", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      next_steps: ["uno", "dos", "tres"],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["next_steps"],
+    ]);
+  });
+
+  it("rejects a report that is not in the human-v2 format", () => {
+    const result = reportSchema.safeParse({
+      ...demoReport,
+      schema_version: "v1",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["schema_version"],
+    ]);
+  });
+
+  it("accepts a report without a score when the company is not evaluable", () => {
+    expect(reportSchema.parse({ ...demoReport, score: null }).score).toBeNull();
+  });
+
+  it("names headings and a word ceiling for every role", () => {
+    for (const role of roleSchema.options) {
+      expect(Object.keys(REPORT_HEADINGS[role])).toEqual([
+        "score_explanation",
+        "outlook",
+        "caveat",
+        "next_steps",
+      ]);
+      expect(REPORT_WORD_LIMITS[role]).toBeGreaterThan(0);
+    }
+    expect(REPORT_HEADINGS.financiero.score_explanation).toBe(
+      "Por qué tiene esta puntuación",
+    );
   });
 
   it("admits exactly the six section codes, decision included, in order", () => {
@@ -695,15 +786,6 @@ describe("xray contracts", () => {
     ]);
   });
 
-  it("accepts a report generated at the current instant", () => {
-    const generatedAt = new Date().toISOString();
-    const report = reportSchema.parse({
-      ...demoReport,
-      generated_at: generatedAt,
-    });
-    expect(report.generated_at).toBe(generatedAt);
-  });
-
   it("rejects a report whose generated_at is not an ISO datetime", () => {
     const result = reportSchema.safeParse({
       ...demoReport,
@@ -715,48 +797,16 @@ describe("xray contracts", () => {
     ]);
   });
 
-  it("rejects a report without an export url", () => {
-    const { export_url: _exportUrl, ...reportWithoutExportUrl } = demoReport;
-    const result = reportSchema.safeParse(reportWithoutExportUrl);
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["export_url"],
-    ]);
-  });
-
-  it("rejects a report figure without a label", () => {
-    const result = reportSchema.safeParse({
-      ...demoReport,
-      sections: [
-        {
-          code: "resumen",
-          title: "Resumen",
-          body: "Texto",
-          figures: [{ value: 50, unit: "pts" }],
-        },
-      ],
+  it("rejects a report section figure whose value is not a number", () => {
+    const result = reportSectionSchema.safeParse({
+      code: "decision",
+      title: "Operación",
+      body: "Texto",
+      figures: [{ label: "Caja", value: "50", unit: "EUR" }],
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections", 0, "figures", 0, "label"],
-    ]);
-  });
-
-  it("rejects a report figure without a unit", () => {
-    const result = reportSchema.safeParse({
-      ...demoReport,
-      sections: [
-        {
-          code: "resumen",
-          title: "Resumen",
-          body: "Texto",
-          figures: [{ label: "Score", value: 50 }],
-        },
-      ],
-    });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["sections", 0, "figures", 0, "unit"],
+      ["figures", 0, "value"],
     ]);
   });
 
@@ -867,14 +917,24 @@ describe("xray contracts", () => {
     const result = reportSchema.safeParse({});
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      ["schema_version"],
       ["company_id"],
       ["month"],
       ["role"],
       ["rule_version"],
       ["generated_at"],
+      ["score"],
+      ["state"],
+      ["state_label"],
+      ["headline"],
       ["summary"],
-      ["sections"],
+      ["score_explanation"],
+      ["outlook"],
+      ["caveat"],
+      ["next_steps"],
+      ["source"],
       ["export_url"],
+      ["trend_projection"],
     ]);
   });
 

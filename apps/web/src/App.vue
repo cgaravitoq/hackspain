@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type {
   Alert,
+  CommitmentDraft,
+  CommitmentDraftResult,
+  CommitmentRequest,
+  CommitmentResponse,
   CompanyDetail,
   CompanySummary,
   Explain,
@@ -9,10 +13,11 @@ import type {
   Report,
   Role,
 } from "@hackspain/shared";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AppSidebar from "./components/AppSidebar.vue";
 import ChatBubble from "./components/ChatBubble.vue";
+import CommitmentPanel from "./components/CommitmentPanel.vue";
 import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
@@ -29,6 +34,12 @@ const TREASURER_COMPANY = "COMP_0176";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
 const role = ref<Role>("financiero");
+const commitmentOpen = ref(false);
+const commitmentDraft = ref<CommitmentDraft | null>(null);
+type TellMeHandle = { sendConfirmation: () => void };
+const tellMe = ref<TellMeHandle | null>(null);
+const confirmedCommitment = ref<CommitmentRequest | null>(null);
+const commitmentResult = ref<CommitmentResponse | null>(null);
 const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
@@ -41,19 +52,66 @@ const explanation = ref<Explain | null>(null);
 const group = ref<GroupMap | null>(null);
 const error = ref("");
 let compareRequest = 0;
+let companyRequest = 0;
+
+function invalidateCommitment() {
+  confirmedCommitment.value = null;
+  commitmentResult.value = null;
+}
+
+function closeCommitment() {
+  commitmentOpen.value = false;
+  commitmentDraft.value = null;
+  invalidateCommitment();
+}
+
+function openDraft(result: CommitmentDraftResult) {
+  if (result.company_id === selected.value) {
+    commitmentDraft.value = result.draft;
+    commitmentOpen.value = true;
+  }
+}
+
+async function confirmCommitment(
+  request: CommitmentRequest,
+  result: CommitmentResponse,
+) {
+  if (result.evaluation.company_id !== selected.value) {
+    return;
+  }
+  confirmedCommitment.value = request;
+  commitmentResult.value = result;
+  await nextTick();
+  tellMe.value?.sendConfirmation();
+}
+
+function showChatCommitment(result: CommitmentResponse) {
+  if (
+    confirmedCommitment.value &&
+    result.evaluation.company_id === selected.value
+  ) {
+    commitmentResult.value = result;
+  }
+}
+
+watch([selected, role], closeCommitment);
 
 async function load(companyId: string) {
+  const request = ++companyRequest;
   error.value = "";
   try {
     const [detail, why] = await Promise.all([
       api.company(companyId),
       api.explain(companyId),
     ]);
+    if (request !== companyRequest) return;
     company.value = detail;
     explanation.value = why;
-    group.value = detail.group_id ? await api.group(detail.group_id) : null;
+    const nextGroup = detail.group_id ? await api.group(detail.group_id) : null;
+    if (request === companyRequest) group.value = nextGroup;
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    if (request === companyRequest)
+      error.value = cause instanceof Error ? cause.message : String(cause);
   }
 }
 
@@ -99,6 +157,16 @@ function addComparison(companyId: string) {
   compareIds.value = [...compareIds.value, companyId].slice(-MAX_COMPARED);
 }
 
+function removeComparison(companyId: string) {
+  if (compareIds.value.length === 1) {
+    return;
+  }
+  compareIds.value = compareIds.value.filter((id) => id !== companyId);
+  if (selected.value === companyId) {
+    select(compareIds.value[0] ?? "");
+  }
+}
+
 function openCompany(companyId: string) {
   compareIds.value = [companyId];
   select(companyId);
@@ -117,6 +185,7 @@ function openReport(
   result: Pick<Report, "company_id" | "role" | "export_url">,
 ) {
   role.value = result.role;
+  compareIds.value = [result.company_id];
   selected.value = result.company_id;
 }
 
@@ -182,7 +251,11 @@ onMounted(async () => {
   window.addEventListener("hashchange", syncHash);
 });
 
-onUnmounted(() => window.removeEventListener("hashchange", syncHash));
+onUnmounted(() => {
+  companyRequest++;
+  compareRequest++;
+  window.removeEventListener("hashchange", syncHash);
+});
 </script>
 
 <template>
@@ -224,19 +297,43 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
             :group="group"
             :selected="selected"
             :role="role"
+            :decision-section="commitmentResult?.report_section"
+            :comparing="compareIds.length > 1"
+            @remove="removeComparison"
             @select="select"
           />
+          <CommitmentPanel
+            v-if="company && explanation && commitmentOpen"
+            :key="selected"
+            :company-id="selected"
+            :draft="commitmentDraft"
+            @evaluated="confirmCommitment"
+            @invalidated="invalidateCommitment"
+            @closed="closeCommitment"
+          />
+          <button
+            v-else-if="company && explanation"
+            type="button"
+            class="open-commitment"
+            @click="commitmentOpen = true"
+          >
+            Evaluar una operación
+          </button>
           <p v-else-if="!error" class="loading">Cargando radiografía…</p>
         </div>
       </div>
     </SidebarInset>
     <ChatBubble
       v-if="selected"
+      ref="tellMe"
       :company-id="selected"
       :alerts="alerts"
       :role="role"
+      :confirmed-commitment="confirmedCommitment"
       @compare="replaceComparison"
       @report="openReport"
+      @commitment="showChatCommitment"
+      @draft="openDraft"
     />
   </SidebarProvider>
 </template>
@@ -259,6 +356,15 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
   overflow: auto;
 }
 
+.open-commitment {
+  align-self: flex-start;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+}
 .center {
   display: flex;
   flex-direction: column;

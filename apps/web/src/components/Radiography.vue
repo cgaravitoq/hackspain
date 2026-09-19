@@ -4,6 +4,7 @@ import type {
   CompanyDetail,
   Explain,
   GroupMap,
+  ReportSection,
   Role,
 } from "@hackspain/shared";
 import { CONFIDENCE_LABELS, monthLabel } from "../format.ts";
@@ -20,8 +21,13 @@ defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  decisionSection?: ReportSection;
+  comparing: boolean;
 }>();
-const emit = defineEmits<{ select: [companyId: string] }>();
+const emit = defineEmits<{
+  remove: [companyId: string];
+  select: [companyId: string];
+}>();
 </script>
 
 <template>
@@ -38,17 +44,22 @@ const emit = defineEmits<{ select: [companyId: string] }>();
     <KpiCards :company="company" :explanation="explanation" :alerts="alerts" />
 
     <Card class="chart-card">
-      <Sparkline :companies="comparison" />
+      <Sparkline :companies="comparison" @remove="emit('remove', $event)" />
     </Card>
 
     <DetailTabs
+      v-if="!comparing"
       :company="company"
       :explanation="explanation"
       :group="group"
       :selected="selected"
       :role="role"
+      :decision-section="decisionSection"
       @select="emit('select', $event)"
     />
+    <p v-else class="comparison-detail-hint panel">
+      Vista comparativa. Deja una sola empresa para consultar su detalle.
+    </p>
   </section>
 </template>
 
@@ -90,5 +101,12 @@ h1 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.comparison-detail-hint {
+  margin: 0;
+  padding: 18px;
+  color: var(--ink-soft);
+  text-align: center;
 }
 </style>

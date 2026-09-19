@@ -1,29 +1,19 @@
 <script setup lang="ts">
 import {
   type Alert,
-  type CompanyDetail,
   type CompanySummary,
   STATE_LABELS,
 } from "@hackspain/shared";
 import { computed, ref } from "vue";
 import { points, STATE_COLORS } from "../format.ts";
 import { Badge } from "./ui/badge";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "./ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 const MAX_COMPARED = 3;
+const SEARCH_RESULTS_LIMIT = 8;
 
 const props = defineProps<{
   alerts: Alert[];
   companies: CompanySummary[];
-  company: CompanyDetail | null;
   selected: string;
   comparison: string[];
 }>();
@@ -34,28 +24,27 @@ const emit = defineEmits<{
 }>();
 
 const open = ref(false);
-const alertIds = computed(
-  () => new Set(props.alerts.map((alert) => alert.company_id)),
+const query = ref("");
+const alertsByCompany = computed(
+  () => new Map(props.alerts.map((alert) => [alert.company_id, alert])),
 );
-const otherCompanies = computed(() =>
-  props.companies.filter((item) => !alertIds.value.has(item.company_id)),
-);
-const monthDelta = computed(() => {
-  if (!props.company) {
-    return null;
+const results = computed(() => {
+  const text = query.value.trim().toUpperCase();
+  const byId = new Map<string, { company_id: string }>();
+  for (const alert of props.alerts) {
+    byId.set(alert.company_id, alert);
   }
-  const scores = props.company.series
-    .map((entry) => entry.score)
-    .filter((score) => score !== null);
-  const latest = scores.at(-1);
-  const previous = scores.at(-2);
-  return latest === undefined || previous === undefined
-    ? null
-    : latest - previous;
+  for (const company of props.companies) {
+    byId.set(company.company_id, company);
+  }
+  return [...byId.values()]
+    .filter((item) => !text || item.company_id.toUpperCase().includes(text))
+    .slice(0, SEARCH_RESULTS_LIMIT);
 });
 
 function openCompany(companyId: string) {
   emit("open", companyId);
+  query.value = "";
   open.value = false;
 }
 
@@ -78,147 +67,138 @@ function canCompare(companyId: string): boolean {
     props.comparison.length < MAX_COMPARED
   );
 }
+
+function leaveSearch(event: FocusEvent) {
+  const container = event.currentTarget;
+  if (
+    container instanceof HTMLElement &&
+    event.relatedTarget instanceof Node &&
+    container.contains(event.relatedTarget)
+  ) {
+    return;
+  }
+  window.setTimeout(() => {
+    open.value = false;
+  }, 0);
+}
 </script>
 
 <template>
-  <div class="company-selector">
-    <Popover v-model:open="open">
-      <PopoverTrigger as-child>
+  <div class="company-selector" @focusout="leaveSearch">
+    <input
+      id="company-search"
+      v-model="query"
+      role="combobox"
+      aria-label="Buscar empresa"
+      aria-autocomplete="list"
+      aria-controls="company-results"
+      :aria-expanded="open"
+      autocomplete="off"
+      :placeholder="`Buscar entre ${companies.length} empresas`"
+      @focus="open = true"
+      @input="open = true"
+      @keydown.escape="open = false"
+    />
+    <div v-if="open" id="company-results" class="selector-popover" role="listbox">
+      <p v-if="results.length === 0" class="empty">No hay empresas que coincidan.</p>
+      <div v-for="item in results" :key="item.company_id" class="option-row">
         <button
           type="button"
-          class="selector-trigger"
-          aria-label="Seleccionar empresa"
+          class="company-option"
+          role="option"
+          :aria-selected="selected === item.company_id"
+          @pointerdown.prevent="openCompany(item.company_id)"
+          @click="openCompany(item.company_id)"
         >
-          <span>{{ selected }}</span>
-          <span class="selector-delta">{{ points(monthDelta) }}</span>
-          <span aria-hidden="true">⌄</span>
+          <span class="company-id">{{ item.company_id }}</span>
+          <template v-if="alertsByCompany.get(item.company_id)">
+            <Badge
+              class="state-badge"
+              :style="{
+                background: STATE_COLORS[alertsByCompany.get(item.company_id)!.state],
+              }"
+            >
+              {{ STATE_LABELS[alertsByCompany.get(item.company_id)!.state] }}
+            </Badge>
+            <span class="company-delta">
+              {{ points(alertsByCompany.get(item.company_id)!.delta) }}
+            </span>
+          </template>
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        class="selector-popover w-[420px] p-0"
-        :portal-disabled="true"
-      >
-        <Command>
-          <CommandInput
-            id="company-search"
-            placeholder="Buscar empresa..."
-          />
-          <CommandList class="selector-list">
-            <CommandEmpty>No hay empresas que coincidan.</CommandEmpty>
-            <CommandGroup heading="Alertas del mes">
-              <CommandItem
-                v-for="alert in alerts"
-                :key="alert.company_id"
-                class="company-option"
-                :value="alert.company_id"
-                @select="openCompany(alert.company_id)"
-              >
-                <span class="company-id">{{ alert.company_id }}</span>
-                <Badge
-                  class="state-badge"
-                  :style="{ background: STATE_COLORS[alert.state] }"
-                >
-                  {{ STATE_LABELS[alert.state] }}
-                </Badge>
-                <span class="company-delta">{{ points(alert.delta) }}</span>
-                <button
-                  type="button"
-                  class="compare-toggle"
-                  :aria-pressed="comparison.includes(alert.company_id)"
-                  :disabled="!canCompare(alert.company_id)"
-                  @pointerdown.stop
-                  @click.stop="toggleComparison(alert.company_id)"
-                >
-                  Comparar
-                </button>
-              </CommandItem>
-            </CommandGroup>
-            <CommandGroup heading="Todas">
-              <CommandItem
-                v-for="item in otherCompanies"
-                :key="item.company_id"
-                class="company-option"
-                :value="item.company_id"
-                @select="openCompany(item.company_id)"
-              >
-                <span class="company-id">{{ item.company_id }}</span>
-                <button
-                  type="button"
-                  class="compare-toggle"
-                  :aria-pressed="comparison.includes(item.company_id)"
-                  :disabled="!canCompare(item.company_id)"
-                  @pointerdown.stop
-                  @click.stop="toggleComparison(item.company_id)"
-                >
-                  Comparar
-                </button>
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
-        </Command>
-        <footer class="selector-footer">
-          <span>Comparando {{ comparison.length }}</span>
-          <span aria-hidden="true">·</span>
-          <button type="button" @click="emit('compare', [])">Limpiar</button>
-        </footer>
-      </PopoverContent>
-    </Popover>
-    <span v-for="companyId in comparison" :key="companyId" class="compare-chip">
-      {{ companyId }}
-      <button
-        type="button"
-        :aria-label="`Quitar ${companyId}`"
-        @click="toggleComparison(companyId)"
-      >
-        ×
-      </button>
-    </span>
+        <button
+          type="button"
+          class="compare-toggle"
+          :aria-pressed="comparison.includes(item.company_id)"
+          :disabled="!canCompare(item.company_id)"
+          @pointerdown.prevent.stop
+          @click.stop="toggleComparison(item.company_id)"
+        >
+          Comparar
+        </button>
+      </div>
+      <footer class="selector-footer">
+        <span>Comparando {{ comparison.length }}</span>
+        <span aria-hidden="true">·</span>
+        <button type="button" @click="emit('compare', [])">Limpiar</button>
+      </footer>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .company-selector {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
   margin-left: auto;
   min-width: 0;
 }
 
-.selector-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+.company-selector > input {
+  width: min(320px, 36vw);
+  padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--card);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.selector-trigger:hover {
-  background: var(--paper);
-}
-
-.selector-delta {
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .selector-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 420px;
   overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgb(22 32 42 / 14%);
 }
 
-.selector-list {
-  max-height: 360px;
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
 }
 
 .company-option {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+}
+
+.company-option:hover,
+.company-option:focus-visible {
+  background: var(--chip-bg);
+  outline: none;
 }
 
 .company-id {
@@ -276,30 +256,10 @@ function canCompare(companyId: string): boolean {
   font-weight: 600;
 }
 
-.compare-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 4px 2px 8px;
-  border-radius: 999px;
-  background: var(--chip-bg);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.compare-chip button {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+.empty {
+  margin: 0;
+  padding: 14px;
   color: var(--ink-soft);
-  line-height: 1;
-}
-
-.compare-chip button:hover {
-  background: var(--line);
+  text-align: center;
 }
 </style>

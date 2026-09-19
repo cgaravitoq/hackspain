@@ -118,5 +118,12 @@ export function createMcpServer(store: Store, report: ReportTool): McpServer {
     toolInputs.relations,
     tools.relations,
   );
+  register(
+    server,
+    "simulate_commitment",
+    toolDescriptions.simulate_commitment,
+    toolInputs.simulate_commitment,
+    tools.simulate_commitment,
+  );
   return server;
 }

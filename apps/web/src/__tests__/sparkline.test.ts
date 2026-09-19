@@ -1,3 +1,4 @@
+import type { CompanyDetail } from "@hackspain/shared";
 import { type DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import Sparkline from "../components/Sparkline.vue";
@@ -18,7 +19,79 @@ function withScores(id: string, scores: number[], momentum: number | null) {
   if (last) {
     last.momentum = momentum;
   }
-  return { ...company(id, "GROUP_1"), series };
+  const detail = { ...company(id, "GROUP_1"), series };
+  if (!(last && momentum !== null)) {
+    return detail;
+  }
+  const changes = scores
+    .slice(1)
+    .map((value, index) => value - (scores[index] ?? value));
+  const average =
+    changes.reduce((total, value) => total + value, 0) / changes.length;
+  const volatility =
+    changes.length < 3
+      ? 0
+      : Math.sqrt(
+          changes.reduce((total, value) => total + (value - average) ** 2, 0) /
+            (changes.length - 1),
+        );
+  return withProjection(
+    detail,
+    [1, 2, 3].map((horizon) => {
+      const base = Math.max(
+        0,
+        Math.min(100, (last.score ?? 0) + (momentum * horizon) / 3),
+      );
+      const spread = volatility * Math.sqrt(horizon);
+      return {
+        base,
+        favorable: Math.max(0, Math.min(100, base + spread)),
+        adverse: Math.max(0, Math.min(100, base - spread)),
+      };
+    }),
+  );
+}
+
+function futureMonth(month: string, offset: number) {
+  const [year, number] = month.split("-").map(Number);
+  const index = (year ?? 0) * 12 + (number ?? 1) - 1 + offset;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+function withProjection(
+  detail: CompanyDetail,
+  points: { base: number; favorable: number; adverse: number }[],
+): CompanyDetail {
+  const latest = [...detail.series]
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .findLast((entry) => entry.score !== null);
+  if (!latest) {
+    return detail;
+  }
+  return {
+    ...detail,
+    trend_projection: {
+      rule_version: "xray-trend-projection/test",
+      status: "available",
+      reason: null,
+      semantics: "scenario_range_not_confidence_interval",
+      observed_months: detail.months_observed,
+      min_months_required: 1,
+      months_missing: 0,
+      points: points.map((point, index) => ({
+        month: futureMonth(latest.month, index + 1),
+        ...point,
+      })),
+      evidence: {
+        latest_score: latest.score ?? 0,
+        momentum: latest.momentum ?? 0,
+        volatility: 0,
+        source_months: detail.series
+          .filter((entry) => entry.score !== null)
+          .map((entry) => entry.month),
+      },
+    },
+  };
 }
 
 function twoYears() {
@@ -199,19 +272,11 @@ describe("Sparkline", () => {
     { score: 40, momentum: 15, values: [40, 45, 50, 55] },
     { score: 50, momentum: 0, values: [50, 50, 50, 50] },
   ])(
-    "projects three months from score $score with momentum $momentum",
+    "renders the three server trend points from score $score and momentum $momentum",
     ({ score: last, momentum, values }) => {
       const wrapper = mount(Sparkline, {
         props: {
-          companies: [
-            {
-              ...company("COMP_A", "GROUP_1"),
-              series: [
-                month("2026-11", 50, "stable"),
-                { ...month("2026-12", last, "stable"), momentum },
-              ],
-            },
-          ],
+          companies: [withScores("COMP_A", [50, last], momentum)],
         },
       });
       const projection = wrapper.get("polyline.projection-line");
@@ -231,7 +296,31 @@ describe("Sparkline", () => {
     },
   );
 
-  it("projects only the series whose last scored entry has momentum", () => {
+  it("renders the server scenario instead of recalculating it from momentum", () => {
+    const detail = company("COMP_A", "GROUP_1");
+    const series = [
+      month("2026-11", 30, "stable"),
+      { ...month("2026-12", 40, "stable"), momentum: 99 },
+    ];
+    const wrapper = mount(Sparkline, {
+      props: {
+        companies: [
+          withProjection({ ...detail, series }, [
+            { base: 12, favorable: 20, adverse: 4 },
+            { base: 34, favorable: 45, adverse: 23 },
+            { base: 56, favorable: 70, adverse: 42 },
+          ]),
+        ],
+      },
+    });
+    expect(
+      coordinates(wrapper.get("polyline.projection-line")).map(([, y]) =>
+        Math.round(score(Number(y))),
+      ),
+    ).toEqual([40, 12, 34, 56]);
+  });
+
+  it("projects only the series whose server contract is available", () => {
     const wrapper = mount(Sparkline, {
       props: {
         companies: [
@@ -242,14 +331,21 @@ describe("Sparkline", () => {
               month("2026-11", 60, "healthy"),
             ],
           },
-          {
-            ...company("COMP_B", "GROUP_1"),
-            series: [
-              month("2026-12", null, "not_evaluable"),
-              { ...month("2026-11", 60, "healthy"), momentum: -30 },
-              month("2026-10", 50, "stable"),
+          withProjection(
+            {
+              ...company("COMP_B", "GROUP_1"),
+              series: [
+                month("2026-12", null, "not_evaluable"),
+                { ...month("2026-11", 60, "healthy"), momentum: -30 },
+                month("2026-10", 50, "stable"),
+              ],
+            },
+            [
+              { base: 50, favorable: 50, adverse: 50 },
+              { base: 40, favorable: 40, adverse: 40 },
+              { base: 30, favorable: 30, adverse: 30 },
             ],
-          },
+          ),
           {
             ...company("COMP_C", "GROUP_1"),
             series: [month("2026-12", null, "not_evaluable")],
@@ -267,8 +363,8 @@ describe("Sparkline", () => {
     expect(points[0]?.[0]).toBe(
       pointX(wrapper.findAll("circle"), "COMP_B", "2026-11"),
     );
-    expect(points[1]?.[0]).toBeCloseTo(579.2);
-    expect(points[3]?.[0]).toBe(936);
+    expect(points[1]?.[0]).toBeCloseTo(400.8);
+    expect(points[3]?.[0]).toBeCloseTo(757.6);
     expect(points[3]?.[1]).toBeCloseTo(208.8);
     expect(wrapper.findAll("circle")).toHaveLength(2);
   });
@@ -331,16 +427,19 @@ describe("Sparkline", () => {
   });
 
   it("cuts the observed window to six months when 6M is pressed while the projection stays", async () => {
+    const detail = company("COMP_A", "GROUP_1");
+    const series = twoYears().map((name, index) => ({
+      ...month(name, 40 + (index % 5), "stable"),
+      momentum: index === 24 ? 9 : null,
+    }));
     const wrapper = mount(Sparkline, {
       props: {
         companies: [
-          {
-            ...company("COMP_A", "GROUP_1"),
-            series: twoYears().map((name, index) => ({
-              ...month(name, 40 + (index % 5), "stable"),
-              momentum: index === 24 ? 9 : null,
-            })),
-          },
+          withProjection({ ...detail, series }, [
+            { base: 47, favorable: 47, adverse: 47 },
+            { base: 50, favorable: 50, adverse: 50 },
+            { base: 53, favorable: 53, adverse: 53 },
+          ]),
         ],
       },
     });
@@ -381,16 +480,19 @@ describe("Sparkline", () => {
   });
 
   it("shows the hovered month with each score, the projected value on future months, and hides on leave", async () => {
+    const detail = company("COMP_A", "GROUP_1");
+    const series = [
+      month("2026-11", 30, "stable"),
+      { ...month("2026-12", 40, "stable"), momentum: 15 },
+    ];
     const wrapper = mount(Sparkline, {
       props: {
         companies: [
-          {
-            ...company("COMP_A", "GROUP_1"),
-            series: [
-              month("2026-11", 30, "stable"),
-              { ...month("2026-12", 40, "stable"), momentum: 15 },
-            ],
-          },
+          withProjection({ ...detail, series }, [
+            { base: 45, favorable: 45, adverse: 45 },
+            { base: 50, favorable: 50, adverse: 50 },
+            { base: 55, favorable: 55, adverse: 55 },
+          ]),
           withMonths("COMP_B", ["2026-12"]),
         ],
       },
@@ -471,7 +573,7 @@ describe("Sparkline", () => {
     );
   });
 
-  it("labels the legend with the demo name when there is one, else the id", () => {
+  it("places colored company controls before the range buttons", async () => {
     const wrapper = mount(Sparkline, {
       props: {
         companies: [
@@ -480,11 +582,30 @@ describe("Sparkline", () => {
         ],
       },
     });
+    expect(
+      wrapper
+        .findAll(".chart-company")
+        .map((item) => item.text().replace("×", "").trim()),
+    ).toEqual(["Talleres Ribera", "COMP_A"]);
+    expect(
+      wrapper
+        .findAll(".chart-company i")
+        .map((item) => item.attributes("style")),
+    ).toEqual([
+      "background: rgb(29, 78, 216);",
+      "background: rgb(180, 83, 9);",
+    ]);
+    expect(wrapper.get(".chart-controls").element.children[0]?.className).toBe(
+      "chart-companies",
+    );
+    expect(wrapper.get(".chart-controls").element.children[1]?.className).toBe(
+      "range",
+    );
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
-      "Talleres Ribera",
-      "COMP_A",
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
     ]);
+    await wrapper.get('button[aria-label="Quitar COMP_A"]').trigger("click");
+    expect(wrapper.emitted("remove")).toEqual([["COMP_A"]]);
   });
 });

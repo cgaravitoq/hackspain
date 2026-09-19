@@ -20,6 +20,7 @@ function mountRadiography(
       group: withGroup ? group : null,
       selected: "COMP_A",
       role: "financiero",
+      comparing: false,
     },
   });
 }
@@ -86,21 +87,24 @@ describe("Radiography", () => {
     expect(kpi(wrapper, "Δ 6 meses").find(".kpi-value").text()).toBe("–");
   });
 
-  it("opens on the Acción tab with the single action sentence", () => {
+  it("opens on Informe as the first tab with only the executive summary", async () => {
     const wrapper = mountRadiography();
+    await flushPromises();
     expect(tabs(wrapper).map((tab) => tab.text())).toEqual([
+      "Informe",
       "Acción",
       "Por qué",
       "Qué cambió",
-      "Informe",
       "Grupo",
     ]);
     expect(tabs(wrapper).map((tab) => tab.attributes("aria-selected"))).toEqual(
       ["true", "false", "false", "false", "false"],
     );
-    expect(wrapper.find('[role="tabpanel"] .action').text()).toBe(ACTION);
+    expect(wrapper.find(".report-summary").text()).toBe(
+      "La tesorería necesita atención inmediata.",
+    );
+    expect(wrapper.find(".action").exists()).toBe(false);
     expect(wrapper.find(".drivers").exists()).toBe(false);
-    expect(wrapper.find(".report").exists()).toBe(false);
     expect(wrapper.find(".group").exists()).toBe(false);
   });
 
@@ -115,12 +119,16 @@ describe("Radiography", () => {
     expect(wrapper.find(".drivers").exists()).toBe(false);
   });
 
-  it("mounts the report under Informe and hides the action", async () => {
+  it("switches between the summary and the action", async () => {
     const wrapper = mountRadiography();
-    await openTab(wrapper, "Informe");
+    await flushPromises();
     expect(wrapper.find(".report .report-summary").text()).toBe(
       "La tesorería necesita atención inmediata.",
     );
+    await openTab(wrapper, "Acción");
+    expect(wrapper.find('[role="tabpanel"] .action').text()).toBe(ACTION);
+    expect(wrapper.find(".report").exists()).toBe(false);
+    await openTab(wrapper, "Informe");
     expect(wrapper.find(".action").exists()).toBe(false);
     expect(
       tabs(wrapper)

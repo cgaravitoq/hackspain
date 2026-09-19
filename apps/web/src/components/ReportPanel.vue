@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import type { Report, Role } from "@hackspain/shared";
+import type { Report, ReportSection, Role } from "@hackspain/shared";
 import { computed, ref, watch } from "vue";
 import { api } from "../api.ts";
+import { STATE_COLORS } from "../format.ts";
 
-const props = defineProps<{ companyId: string; role: Role }>();
+const props = defineProps<{
+  companyId: string;
+  role: Role;
+  decisionSection?: ReportSection | null;
+}>();
 
 const report = ref<Report | null>(null);
+const decisionBlocks = computed(() =>
+  props.decisionSection ? blocks(props.decisionSection.body) : [],
+);
+const decisionLead = computed(() => decisionBlocks.value.slice(0, 1));
+const decisionDetails = computed(() => decisionBlocks.value.slice(1));
 const loading = ref(true);
 const error = ref("");
 let requestId = 0;
@@ -42,7 +52,6 @@ function figureValue(value: number): string {
     value,
   );
 }
-
 async function load() {
   const currentRequest = ++requestId;
   loading.value = true;
@@ -70,36 +79,47 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
 <template>
   <section class="panel report">
     <header class="report-header">
-      <h2 class="panel-title">Informe</h2>
+      <h2 class="panel-title">Resumen</h2>
       <a
         class="report-export"
         :href="exportUrl"
         target="_blank"
         rel="noopener noreferrer"
       >
-        Exportar PDF
+        Exportar informe completo
       </a>
     </header>
-    <p v-if="loading" class="loading">Generando informe…</p>
+    <p v-if="loading" class="loading">Generando resumen…</p>
     <div v-else-if="error" class="error">
-      <p>No se pudo generar el informe</p>
+      <p>No se pudo generar el resumen</p>
       <small>{{ error }}</small>
     </div>
     <div v-else-if="report" class="report-content">
+      <div class="report-lead">
+        <p class="report-headline">{{ report.headline }}</p>
+        <p class="report-score">
+          <strong :style="{ color: STATE_COLORS[report.state] }">{{ report.score ?? "–" }}</strong>
+          <span v-if="report.role !== 'ventas'">{{ report.state_label }}</span>
+        </p>
+      </div>
       <p class="report-summary">{{ report.summary }}</p>
-      <article v-for="section in report.sections" :key="section.code" class="report-section">
-        <h3>{{ section.title }}</h3>
+      <article v-if="decisionSection" class="report-section report-decision">
+        <h3>{{ decisionSection.title }}</h3>
         <div class="report-body">
-          <template v-for="block in blocks(section.body)" :key="block.source">
-            <ul v-if="block.items">
-              <li v-for="item in block.items" :key="item">{{ item }}</li>
-            </ul>
-            <p v-else>{{ block.text }}</p>
-          </template>
+          <p v-for="block in decisionLead" :key="block.source">{{ block.text }}</p>
+          <details v-if="decisionDetails.length">
+            <summary>Supuestos y límites de la simulación</summary>
+            <template v-for="block in decisionDetails" :key="block.source">
+              <ul v-if="block.items">
+                <li v-for="item in block.items" :key="item">{{ item }}</li>
+              </ul>
+              <p v-else>{{ block.text }}</p>
+            </template>
+          </details>
         </div>
-        <table v-if="section.figures.length">
+        <table v-if="decisionSection.figures.length">
           <tbody>
-            <tr v-for="figure in section.figures" :key="figure.label">
+            <tr v-for="figure in decisionSection.figures" :key="figure.label">
               <th scope="row">{{ figure.label }}</th>
               <td>{{ figureValue(figure.value) }}</td>
               <td>{{ figure.unit }}</td>
@@ -138,19 +158,76 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
   padding: 16px 20px 20px;
 }
 
-.report-summary {
-  margin: 0 0 18px;
-  font-size: 16px;
-  font-weight: 600;
+.report-lead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 8px;
 }
 
-.report-section + .report-section {
+.report-headline {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.report-score {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.report-score strong {
+  font-size: 30px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.report-score span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.report-summary {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.report-decision {
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
 }
 
-.report-section h3 {
+.report-decision p {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+}
+
+.report-decision ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-soft);
+}
+
+.report-decision details {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.report-decision summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.report-decision h3 {
   margin: 0 0 8px;
   font-size: 14px;
 }
@@ -186,7 +263,6 @@ td {
 th {
   text-align: left;
   font-weight: 500;
-  color: var(--ink-soft);
 }
 
 .loading {

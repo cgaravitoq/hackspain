@@ -1,18 +1,24 @@
 import {
   type Alert,
   alertKindSchema,
+  type CommitmentDraftResult,
   type CompanyDetail,
   type Compare,
+  commitmentDraftSchema,
+  commitmentRequestSchema,
   DEMO_COMPANY_NAMES,
   type Explain,
   type Group,
   type GroupMap,
   type MonthEntry,
+  missingDraftFields,
   relationTypeSchema,
   STATE_LABELS,
   type State,
 } from "@hackspain/shared";
 import { z } from "zod";
+import { evaluateCommitment } from "./commitment.ts";
+import { diagnose } from "./diagnosis.ts";
 import type { Store } from "./store.ts";
 
 const COMPANY_NAMES = new Map(
@@ -41,6 +47,14 @@ const companyId = z
   );
 
 export const toolInputs = {
+  draft_commitment: z.strictObject({
+    company_id: companyId.min(1).max(120),
+    ...commitmentDraftSchema.shape,
+  }),
+  simulate_commitment: z.strictObject({
+    company_id: companyId.min(1).max(120),
+    ...commitmentRequestSchema.shape,
+  }),
   score: z.object({ company_id: companyId }),
   explain: z.object({
     company_id: companyId,
@@ -78,6 +92,10 @@ export const toolInputs = {
 };
 
 export const toolDescriptions = {
+  draft_commitment:
+    "Turn an operation the user describes (an order, contract or purchase: revenue, advance options, payment dates, costs) into a draft that opens the review form on screen. Amounts in integer cents, dates as YYYY-MM-DD, advances in basis points. Leave out anything the user did not state; never guess. It does not simulate anything.",
+  simulate_commitment:
+    "Compare user-confirmed order terms against the company's server-loaded EUR ledger and a labelled historical run-rate scenario. Integer cents, at most six months and one third of usable history. Never reserves cash, lends, pays or approves a contract.",
   score:
     "Current X Ray health score (0-100), trajectory state and confidence of a company",
   explain:
@@ -179,6 +197,7 @@ function explainOf(company: CompanyDetail, entry: MonthEntry): Explain {
     flows: entry.flows,
     invoice_facts: company.invoice_facts,
     action: action(company, entry),
+    diagnosis: diagnose(company, entry),
   };
 }
 
@@ -256,8 +275,30 @@ function withLabel(alert: Alert) {
   return { ...alert, state_label: STATE_LABELS[alert.state] };
 }
 
+export function draftCommitment(
+  input: z.infer<typeof toolInputs.draft_commitment>,
+): CommitmentDraftResult {
+  const { company_id: requested, ...draft } = input;
+  return {
+    company_id: resolveCompanyId(requested),
+    draft,
+    missing: missingDraftFields(draft),
+  };
+}
+
 export function createTools(store: Store) {
   return {
+    async simulate_commitment(
+      input: z.infer<typeof toolInputs.simulate_commitment>,
+    ) {
+      const companyId = resolveCompanyId(input.company_id);
+      const company = await store.company(companyId);
+      const { company_id: _companyId, ...request } = input;
+      return company
+        ? evaluateCommitment(company, commitmentRequestSchema.parse(request))
+        : unknownCompany(companyId);
+    },
+
     async score(input: z.infer<typeof toolInputs.score>) {
       const companyId = resolveCompanyId(input.company_id);
       const company = await store.company(companyId);
@@ -278,16 +319,15 @@ export function createTools(store: Store) {
           error: `No scored month ${input.month ?? ""} for ${companyId}`,
         };
       }
-      return explainOf(
-        company,
-        input.month
-          ? entry
-          : {
-              ...entry,
-              state: company.latest.state,
-              confidence: company.latest.confidence,
-            },
-      );
+      const explanation = explainOf(company, entry);
+      return input.month
+        ? explanation
+        : {
+            ...explanation,
+            state: company.latest.state,
+            state_label: STATE_LABELS[company.latest.state],
+            confidence: company.latest.confidence,
+          };
     },
 
     async what_changed(input: z.infer<typeof toolInputs.what_changed>) {
@@ -335,4 +375,6 @@ export function createTools(store: Store) {
 
 export type Tools = ReturnType<typeof createTools>;
 
-export type ToolOutput = Awaited<ReturnType<Tools[ToolName]>>;
+export type ToolOutput = Awaited<
+  ReturnType<Tools[Exclude<ToolName, "draft_commitment">]>
+>;

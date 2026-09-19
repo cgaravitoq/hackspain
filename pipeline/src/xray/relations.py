@@ -504,7 +504,7 @@ def build(data_dir: Path, out_dir: Path) -> dict[str, Any]:
         "edges": edges,
     }
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "relations.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    (out_dir / "relations.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return {
         "companies": len(tables.companies),
         "groups": int(tables.companies["group_id"].nunique()),

@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { CompanyDetail, Explain, GroupMap, Role } from "@hackspain/shared";
-import { computed, ref } from "vue";
+import type {
+  CompanyDetail,
+  Explain,
+  GroupMap,
+  ReportSection,
+  Role,
+} from "@hackspain/shared";
+import { computed, ref, watch } from "vue";
 import {
   COMPONENT_CODES,
   componentLabel,
@@ -18,27 +24,38 @@ const props = defineProps<{
   group: GroupMap | null;
   selected: string;
   role: Role;
+  decisionSection?: ReportSection;
 }>();
 const emit = defineEmits<{ select: [companyId: string] }>();
 
+watch(
+  () => props.decisionSection,
+  (section) => {
+    if (section) {
+      active.value = "report";
+    }
+  },
+  { immediate: true },
+);
+
 const TABS = [
+  { id: "report", label: "Informe" },
   { id: "action", label: "Acción" },
   { id: "why", label: "Por qué" },
   { id: "changed", label: "Qué cambió" },
-  { id: "report", label: "Informe" },
   { id: "group", label: "Grupo" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
-const active = ref<TabId>("action");
+const active = ref<TabId>("report");
 
 const tabs = computed(() =>
   TABS.filter((tab) => tab.id !== "group" || props.group !== null),
 );
 
 const current = computed<TabId>(() =>
-  active.value === "group" && props.group === null ? "action" : active.value,
+  active.value === "group" && props.group === null ? "report" : active.value,
 );
 
 const framed = computed(
@@ -121,7 +138,12 @@ const sources = computed(() =>
         <p v-else class="quiet">Sin cambios frente al mes anterior.</p>
       </template>
 
-      <ReportPanel v-else-if="current === 'report'" :company-id="selected" :role="role" />
+      <ReportPanel
+        v-else-if="current === 'report'"
+        :company-id="selected"
+        :role="role"
+        :decision-section="decisionSection"
+      />
 
       <GroupStrip
         v-else-if="group"
