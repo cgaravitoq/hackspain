@@ -20,7 +20,9 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def seed_dataset(folder: Path, *, tx_date_override: str | None = None) -> Path:
+def seed_dataset(
+    folder: Path, *, tx_date_override: str | None = None, invoice_date_override: dict[str, str] | None = None
+) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     _write_csv(folder / "companies.csv", [{"company_id": "C1", "group_id": "G1", "currency": "EUR"}])
     _write_csv(folder / "groups.csv", [{"group_id": "G1", "erp": "holded"}])
@@ -51,21 +53,17 @@ def seed_dataset(folder: Path, *, tx_date_override: str | None = None) -> Path:
             }
         )
     _write_csv(folder / "transactions.csv", txs)
-    _write_csv(
-        folder / "invoices.csv",
-        [
-            {
-                "company_id": "C1",
-                "document_type": "invoice",
-                "amount": 50.0,
-                "pending_amount": 50.0,
-                "issuance_date": "2026-01-01",
-                "due_date": "2026-01-31",
-                "status": "open",
-                "counterparty_id": "X1",
-            }
-        ],
-    )
+    invoice: dict[str, object] = {
+        "company_id": "C1",
+        "document_type": "invoice",
+        "amount": 50.0,
+        "pending_amount": 50.0,
+        "issuance_date": "2026-01-01",
+        "due_date": "2026-01-31",
+        "status": "open",
+        "counterparty_id": "X1",
+    }
+    _write_csv(folder / "invoices.csv", [{**invoice, **(invoice_date_override or {})}])
     _write_csv(folder / "debt_products.csv", [{"company_id": "C1", "type": "loan", "outstanding": 10.0}])
     return folder
 
@@ -177,7 +175,14 @@ def test_backtest_keeps_the_third_month_of_an_e1_run_as_a_hit():
 
 def test_read_rejects_unparsable_transaction_dates(tmp_path: Path):
     seed_dataset(tmp_path, tx_date_override="not-a-date")
-    with pytest.raises(pl.exceptions.InvalidOperationError):
+    with pytest.raises(pl.exceptions.InvalidOperationError, match=r"column 'date' .*\"not-a-date\""):
+        read(tmp_path)
+
+
+@pytest.mark.parametrize("column", ["issuance_date", "due_date"])
+def test_read_rejects_unparsable_invoice_dates(tmp_path: Path, column: str):
+    seed_dataset(tmp_path, invoice_date_override={column: "not-a-date"})
+    with pytest.raises(pl.exceptions.InvalidOperationError, match=rf"column '{column}' .*\"not-a-date\""):
         read(tmp_path)
 
 
