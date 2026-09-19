@@ -104,6 +104,7 @@ const menuAfterAnalytics = [
               :key="item.label"
             >
               <SidebarMenuButton
+                class="aria-disabled:pointer-events-auto"
                 tooltip="Próximamente"
                 aria-disabled="true"
                 title="Próximamente"
@@ -150,6 +151,7 @@ const menuAfterAnalytics = [
               :key="item.label"
             >
               <SidebarMenuButton
+                class="aria-disabled:pointer-events-auto"
                 tooltip="Próximamente"
                 aria-disabled="true"
                 title="Próximamente"

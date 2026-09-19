@@ -916,6 +916,9 @@ describe("App", () => {
     for (const placeholder of placeholders) {
       expect(placeholder.attributes("aria-disabled")).toBe("true");
       expect(placeholder.attributes("title")).toBe("Próximamente");
+      expect(placeholder.classes()).toContain(
+        "aria-disabled:pointer-events-auto",
+      );
       await placeholder.trigger("click");
     }
     expect(window.location.hash).toBe(hash);
