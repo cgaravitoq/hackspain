@@ -3,14 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ReportPanel from "../components/ReportPanel.vue";
 import { report } from "./fixtures.ts";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 function answer(body = report) {
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json(body)));
 }
 
 describe("ReportPanel", () => {
-  it("says the report is being generated until it arrives", async () => {
+  it("says the report is loading without claiming generation when it arrives quickly", async () => {
+    vi.useFakeTimers();
     let resolve: ((response: Response) => void) | undefined;
     vi.stubGlobal(
       "fetch",
@@ -23,12 +27,30 @@ describe("ReportPanel", () => {
       props: { companyId: "COMP_A", role: "financiero" },
     });
     await flushPromises();
-    expect(wrapper.find(".loading").text()).toBe("Generando resumen…");
+    expect(wrapper.find(".loading").text()).toBe("Cargando informe…");
+    expect(wrapper.text()).not.toContain("Generando el resumen con IA");
     expect(wrapper.find(".report-headline").exists()).toBe(false);
     resolve?.(Response.json(report));
     await flushPromises();
+    await vi.advanceTimersByTimeAsync(3000);
     expect(wrapper.find(".loading").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Generando el resumen con IA");
     expect(wrapper.find(".report-headline").text()).toBe(report.headline);
+  });
+
+  it("explains that AI is generating a report after three seconds", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+    const wrapper = mount(ReportPanel, {
+      props: { companyId: "COMP_A", role: "financiero" },
+    });
+    await flushPromises();
+    expect(wrapper.find(".loading").text()).toBe("Cargando informe…");
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(wrapper.find(".loading").text()).toBe(
+      "Generando el resumen con IA, puede tardar un minuto…",
+    );
+    wrapper.unmount();
   });
 
   it("keeps the dashboard report concise and leaves detail to the export", async () => {

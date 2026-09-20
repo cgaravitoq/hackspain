@@ -10,6 +10,7 @@ import {
   nodeAt,
   nodeRadius,
   PADDING,
+  selectLabelPositions,
 } from "../graph-layout.ts";
 import { filterGraph, graphEdge, graphNode, starGraph } from "./fixtures.ts";
 
@@ -36,6 +37,26 @@ function crowded() {
 const crowdedLayout = crowded();
 
 describe("graph layout", () => {
+  it("labels every company in a small graph with hubs first", () => {
+    const { nodes, edges } = starGraph(2, 3);
+    const positions = [...layoutGraph(nodes, edges).positions.values()];
+    const labels = selectLabelPositions(positions);
+    expect(labels).toHaveLength(nodes.length);
+    expect(labels.slice(0, 2).map(({ node }) => node.company_id)).toEqual([
+      "HUB_000",
+      "HUB_001",
+    ]);
+  });
+
+  it("labels only hubs in a graph above the small graph limit", () => {
+    const { nodes, edges } = starGraph(2, 25);
+    const positions = [...layoutGraph(nodes, edges).positions.values()];
+    expect(positions.length).toBeGreaterThan(40);
+    expect(
+      selectLabelPositions(positions).map(({ node }) => node.company_id),
+    ).toEqual(["HUB_000", "HUB_001"]);
+  });
+
   it("lays the same graph out at the same positions twice", () => {
     expect(positions()).toEqual(positions());
     for (const [, x, y] of positions()) {

@@ -19,6 +19,7 @@ import {
   layoutGraph,
   type NodePosition,
   nodeAt,
+  selectLabelPositions,
   visibleEdges,
   visibleNodes,
 } from "../graph-layout.ts";
@@ -99,7 +100,6 @@ const GROUP_VARIABLES: [string, string][] = [
   ["--group-5", "#14a38b"],
 ];
 
-const HUB_LABEL_DEGREE = 25;
 const ISOLATED_ALPHA = 0.45;
 const LABEL_HEIGHT = 16;
 const LABEL_PADDING = 4;
@@ -385,7 +385,7 @@ function paint() {
     context.stroke();
   }
   context.globalAlpha = 1;
-  const hubs: NodePosition[] = [];
+  const positions: NodePosition[] = [];
   const groupColors = new Map<string | null, string>();
   const colorForGroup = (group: string | null) => {
     let color = groupColors.get(group);
@@ -419,12 +419,9 @@ function paint() {
     context.lineWidth = hovered ? 2.2 : 1.4;
     context.stroke();
     context.globalAlpha = 1;
-    if (node.degree >= HUB_LABEL_DEGREE) {
-      hubs.push(position);
-    }
+    positions.push(position);
   }
-  hubs.sort((left, right) => right.node.degree - left.node.degree);
-  paintLabels(context, palette, hubs);
+  paintLabels(context, palette, selectLabelPositions(positions));
   context.restore();
 }
 
