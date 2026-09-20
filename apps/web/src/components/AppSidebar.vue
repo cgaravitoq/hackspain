@@ -11,6 +11,7 @@ import {
   ScanSearch,
   Send,
   Sparkles,
+  Upload,
   Zap,
 } from "@lucide/vue";
 import {
@@ -34,7 +35,7 @@ import {
   SidebarRail,
 } from "./ui/sidebar";
 
-type View = "radiography" | "graph";
+type View = "radiography" | "graph" | "uploads";
 
 defineProps<{
   view: View;
@@ -128,6 +129,16 @@ const menuAfterAnalytics = [
                 </CollapsibleContent>
               </SidebarMenuItem>
             </CollapsibleRoot>
+            <SidebarMenuItem v-if="role !== 'tesorero'">
+              <SidebarMenuButton
+                tooltip="Cargar datos"
+                :is-active="view === 'uploads'"
+                @click="emit('view', 'uploads')"
+              >
+                <Upload />
+                <span>Cargar datos</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem
               v-for="item in menuAfterAnalytics"
               :key="item.label"

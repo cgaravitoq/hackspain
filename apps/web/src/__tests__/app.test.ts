@@ -872,6 +872,7 @@ describe("App", () => {
       "Transacciones",
       "Tesorería y previsiones",
       "Analítica",
+      "Cargar datos",
       "Contabilidad",
       "Pagos",
       "Automatización",
@@ -912,7 +913,9 @@ describe("App", () => {
     const placeholders = wrapper
       .find('[aria-label="Pantalla"]')
       .findAll(":scope > li > [data-sidebar='menu-button']")
-      .filter((button) => button.text() !== "Analítica");
+      .filter(
+        (button) => !["Analítica", "Cargar datos"].includes(button.text()),
+      );
     expect(placeholders).toHaveLength(7);
     for (const placeholder of placeholders) {
       expect(placeholder.attributes("aria-disabled")).toBe("true");
@@ -971,6 +974,59 @@ describe("App", () => {
     await openRoute(wrapper, "Radiografía");
     expect(window.location.hash).toBe("#COMP_B");
     expect(wrapper.find("h1").text()).toBe("COMP_B");
+  });
+
+  it("hides Cargar datos from the treasurer", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    window.location.hash = "uploads";
+    const wrapper = mountApp({ initialRole: "tesorero" });
+    await flushPromises();
+    await flushPromises();
+    const labels = wrapper
+      .findAll('[aria-label="Pantalla"] [data-sidebar="menu-button"]')
+      .map((item) => item.text());
+    expect(labels).not.toContain("Cargar datos");
+    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find(".upload").exists()).toBe(false);
+    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
+    expect(seen).not.toContain("/api/uploads");
+    window.location.hash = "uploads";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flushPromises();
+    await flushPromises();
+    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find(".upload").exists()).toBe(false);
+  });
+
+  it("opens the upload view from the sidebar", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", fakeApi(seen));
+    const wrapper = mountApp();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.find(".view-title").text()).toBe("Radiografía");
+    await openRoute(wrapper, "Cargar datos");
+    expect(window.location.hash).toBe("#uploads");
+    expect(wrapper.find(".view-title").text()).toBe("Cargar datos");
+    expect(
+      wrapper.find('[aria-label="Pantalla"] [data-active="true"]').text(),
+    ).toBe("Cargar datos");
+    expect(wrapper.find(".company-selector").exists()).toBe(false);
+    expect(wrapper.find(".upload .panel-title").text()).toBe("Cargar datos");
+    expect(wrapper.find(".upload .banner").text()).toMatch(
+      /^Pendiente de recalcular/,
+    );
+    expect(seen).toContain("/api/uploads");
+    expect(
+      wrapper
+        .find('button[aria-label="Abrir el asistente"]')
+        .attributes("disabled"),
+    ).toBeUndefined();
+    await openRoute(wrapper, "Radiografía");
+    expect(window.location.hash).toBe("#COMP_A");
+    expect(wrapper.find("h1").text()).toBe("COMP_A");
+    expect(wrapper.find(".company-selector").exists()).toBe(true);
   });
 
   it("shows the failing endpoint when the bootstrap requests fail", async () => {

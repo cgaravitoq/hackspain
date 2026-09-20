@@ -29,15 +29,19 @@ import {
   reportSchema,
   type Simulate,
   simulateSchema,
+  type UploadBatch,
+  type Uploads,
+  uploadBatchSchema,
+  uploadsSchema,
 } from "@hackspain/shared";
 import { z } from "zod";
 
-async function get<Schema extends z.ZodType>(
+async function send<Schema extends z.ZodType>(
   path: string,
+  init: RequestInit,
   schema: Schema,
-  signal?: AbortSignal,
 ): Promise<z.infer<Schema>> {
-  const response = await fetch(`/api${path}`, { signal });
+  const response = await fetch(`/api${path}`, init);
   if (!response.ok) {
     const parsed = z
       .object({ error: z.string() })
@@ -48,6 +52,14 @@ async function get<Schema extends z.ZodType>(
     throw new Error(`${path} answered ${response.status}`);
   }
   return schema.parse(await response.json());
+}
+
+function get<Schema extends z.ZodType>(
+  path: string,
+  schema: Schema,
+  signal?: AbortSignal,
+): Promise<z.infer<Schema>> {
+  return send(path, { signal }, schema);
 }
 
 const companiesSchema = z.object({ companies: z.array(companySummarySchema) });
@@ -153,4 +165,7 @@ export const api = {
     ),
   simulate: (id: string, query: SimulateQuery): Promise<Simulate> =>
     get(`/companies/${id}/simulate?${simulateSearch(query)}`, simulateSchema),
+  uploads: (): Promise<Uploads> => get("/uploads", uploadsSchema),
+  upload: (form: FormData): Promise<UploadBatch> =>
+    send("/uploads", { method: "POST", body: form }, uploadBatchSchema),
 };
