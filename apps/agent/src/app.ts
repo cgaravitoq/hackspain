@@ -9,6 +9,7 @@ import {
   relationTypeSchema,
   roleSchema,
   stateSchema,
+  uploadFileSchema,
 } from "@hackspain/shared";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { LanguageModel } from "ai";
@@ -29,6 +30,7 @@ import { createReportTool } from "./xray/report-tool.ts";
 import { simulateCompany, simulateQuery } from "./xray/simulate.ts";
 import { createStore } from "./xray/store.ts";
 import { createTools } from "./xray/tools.ts";
+import { createUploads } from "./xray/uploads.ts";
 
 export type AppOptions = {
   model?: (env: Env) => LanguageModel;
@@ -273,6 +275,42 @@ export function createApp(options: AppOptions = {}) {
     return meta
       ? context.json(meta)
       : context.json({ error: "No dataset loaded" }, 404);
+  });
+
+  app.post("/uploads", async (context) => {
+    const form = await context.req.formData().catch(() => null);
+    if (!form) {
+      return context.json({ error: "Se esperaba multipart/form-data" }, 400);
+    }
+    const batch = await createUploads(context.env.BUCKET).store(form);
+    return "error" in batch
+      ? context.json(batch, 400)
+      : context.json(batch, 201);
+  });
+
+  app.get("/uploads", async (context) => {
+    const meta = await createStore(context.env.DB).meta();
+    const uploads = await createUploads(context.env.BUCKET).list(
+      meta?.generated_at ?? null,
+    );
+    return context.json(uploads);
+  });
+
+  app.get("/uploads/:batch_id/:file", async (context) => {
+    const file = uploadFileSchema.safeParse(context.req.param("file"));
+    if (!file.success) {
+      return context.json({ error: "Unknown upload file" }, 400);
+    }
+    const object = await createUploads(context.env.BUCKET).file(
+      context.req.param("batch_id"),
+      file.data,
+    );
+    if (!object) {
+      return context.json({ error: "Unknown upload" }, 404);
+    }
+    return new Response(object.body, {
+      headers: { "content-type": "text/csv" },
+    });
   });
 
   app.post("/chat", async (context) => {
