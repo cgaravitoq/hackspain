@@ -30,6 +30,8 @@ const MAX_SCALE = 8;
 const VERTICAL_REACH = 0.9;
 const EDGE_TOLERANCE = 5;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const HUB_LABEL_DEGREE = 25;
+const SMALL_GRAPH_LABEL_LIMIT = 40;
 
 export type NodePosition = {
   node: RelationNode;
@@ -53,6 +55,17 @@ export type GraphFilters = {
   state: State | "all";
   query: string;
 };
+
+export function selectLabelPositions(
+  positions: NodePosition[],
+): NodePosition[] {
+  const ordered = [...positions].sort(
+    (left, right) => right.node.degree - left.node.degree,
+  );
+  return positions.length <= SMALL_GRAPH_LABEL_LIMIT
+    ? ordered
+    : ordered.filter(({ node }) => node.degree >= HUB_LABEL_DEGREE);
+}
 
 type SimNode = SimulationNodeDatum & { node: RelationNode; radius: number };
 type SimLink = SimulationLinkDatum<SimNode> & { edge: RelationEdge };
