@@ -155,9 +155,11 @@ export function company(id: string, groupId: string): CompanyDetail {
     name:
       id === "COMP_0176"
         ? "Talleres Ribera"
-        : id === "COMP_0077"
-          ? "Bodegas Altamira"
-          : id,
+        : id === "COMP_0471"
+          ? "Logística Cabrera S.L."
+          : id === "COMP_0077"
+            ? "Bodegas Altamira"
+            : id,
     group_id: groupId,
     currency: "EUR",
     scorable: true,
