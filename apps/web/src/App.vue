@@ -196,7 +196,9 @@ watch(
   selected,
   (companyId) => {
     if (companyId) {
-      window.location.hash = companyId;
+      if (!onGraph.value) {
+        window.location.hash = companyId;
+      }
       addComparison(companyId);
       load(companyId);
     }
@@ -236,8 +238,8 @@ onMounted(async () => {
     error.value = cause instanceof Error ? cause.message : String(cause);
     return;
   }
-  if (!selected.value && !onGraph.value) {
-    selected.value = defaultCompany();
+  if (!selected.value) {
+    selected.value = onGraph.value ? DEFAULT_COMPANY : defaultCompany();
   }
   window.addEventListener("hashchange", syncHash);
 });
@@ -277,7 +279,12 @@ onUnmounted(() => {
         />
       </header>
       <div v-if="onGraph" class="graph-layout">
-        <RelationGraph @analyze="analyzeFromGraph" />
+        <RelationGraph
+          v-if="company"
+          :focus-group="company.group_id"
+          :focus-name="company.name"
+          @analyze="analyzeFromGraph"
+        />
       </div>
       <div v-else class="layout">
         <div class="center">

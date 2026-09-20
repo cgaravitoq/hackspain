@@ -23,6 +23,11 @@ import {
   visibleNodes,
 } from "../graph-layout.ts";
 
+const props = defineProps<{
+  focusGroup: string | null;
+  focusName: string | null;
+}>();
+
 const TYPE_LABELS: Record<RelationType, string> = {
   INFERRED_PAYMENT_TO: "pago inferido",
   OPEN_OBLIGATION_TO: "obligación abierta",
@@ -136,8 +141,9 @@ const scopes: RelationScope[] = ["intragroup", "intergroup"];
 
 const graph = ref<Graph | null>(null);
 const error = ref("");
-const minConfidence = ref<RelationConfidence>("low");
+const minConfidence = ref<RelationConfidence>("high");
 const scope = ref<RelationScope | "all">("all");
+const focus = ref<"group" | "all">(props.focusGroup ? "group" : "all");
 const state = ref<State | "all">("all");
 const query = ref("");
 const hover = ref<
@@ -584,6 +590,8 @@ async function load() {
     const result = await api.graph({
       confidence: minConfidence.value,
       scope: scope.value === "all" ? undefined : scope.value,
+      group_id:
+        focus.value === "group" ? (props.focusGroup ?? undefined) : undefined,
       include_isolated: false,
     });
     if (request !== graphRequest) {
@@ -600,7 +608,19 @@ async function load() {
   }
 }
 
-watch([minConfidence, scope], () => load());
+watch([minConfidence, scope, focus], () => load());
+
+watch(
+  () => props.focusGroup,
+  (nextGroup) => {
+    const nextFocus = nextGroup ? "group" : "all";
+    if (focus.value === nextFocus) {
+      load();
+      return;
+    }
+    focus.value = nextFocus;
+  },
+);
 
 let paintScheduled = false;
 function schedulePaint() {
@@ -639,6 +659,15 @@ onUnmounted(() => resizeObserver?.disconnect());
 <template>
   <section class="graph-screen">
     <div class="graph-toolbar panel">
+      <label>
+        Vista
+        <select id="graph-focus" v-model="focus">
+          <option v-if="focusGroup" value="group">
+            Grupo de {{ focusName ?? focusGroup }}
+          </option>
+          <option value="all">Todo el mapa</option>
+        </select>
+      </label>
       <label>
         Confianza mínima
         <select id="graph-confidence" v-model="minConfidence">
