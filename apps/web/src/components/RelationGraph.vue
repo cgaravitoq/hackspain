@@ -136,14 +136,10 @@ const scopes: RelationScope[] = ["intragroup", "intergroup"];
 
 const graph = ref<Graph | null>(null);
 const error = ref("");
-const relationType = ref<RelationType | "all">("all");
 const minConfidence = ref<RelationConfidence>("low");
 const scope = ref<RelationScope | "all">("all");
-const groupId = ref<string>("all");
 const state = ref<State | "all">("all");
 const query = ref("");
-const includeIsolated = ref(false);
-const knownGroups = ref<string[]>([]);
 const hover = ref<
   | { kind: "node"; node: RelationNode }
   | { kind: "edge"; edge: RelationEdge }
@@ -586,11 +582,9 @@ async function load() {
   error.value = "";
   try {
     const result = await api.graph({
-      type: relationType.value === "all" ? undefined : relationType.value,
       confidence: minConfidence.value,
       scope: scope.value === "all" ? undefined : scope.value,
-      group_id: groupId.value === "all" ? undefined : groupId.value,
-      include_isolated: includeIsolated.value,
+      include_isolated: false,
     });
     if (request !== graphRequest) {
       return;
@@ -599,12 +593,6 @@ async function load() {
     hover.value = null;
     selectedNode.value = null;
     resetView();
-    knownGroups.value = [
-      ...new Set([
-        ...knownGroups.value,
-        ...result.nodes.flatMap((node) => node.group_id ?? []),
-      ]),
-    ].sort();
   } catch (cause) {
     if (request === graphRequest) {
       error.value = cause instanceof Error ? cause.message : String(cause);
@@ -612,9 +600,7 @@ async function load() {
   }
 }
 
-watch([relationType, minConfidence, scope, groupId, includeIsolated], () =>
-  load(),
-);
+watch([minConfidence, scope], () => load());
 
 let paintScheduled = false;
 function schedulePaint() {
@@ -654,15 +640,6 @@ onUnmounted(() => resizeObserver?.disconnect());
   <section class="graph-screen">
     <div class="graph-toolbar panel">
       <label>
-        Tipo
-        <select id="graph-type" v-model="relationType">
-          <option value="all">Todos</option>
-          <option v-for="item in types" :key="item" :value="item">
-            {{ TYPE_LABELS[item] }}
-          </option>
-        </select>
-      </label>
-      <label>
         Confianza mínima
         <select id="graph-confidence" v-model="minConfidence">
           <option v-for="item in confidences" :key="item" :value="item">
@@ -676,15 +653,6 @@ onUnmounted(() => resizeObserver?.disconnect());
           <option value="all">Todos</option>
           <option v-for="item in scopes" :key="item" :value="item">
             {{ SCOPE_LABELS[item] }}
-          </option>
-        </select>
-      </label>
-      <label>
-        Grupo
-        <select id="graph-group" v-model="groupId">
-          <option value="all">Todos</option>
-          <option v-for="item in knownGroups" :key="item" :value="item">
-            {{ item }}
           </option>
         </select>
       </label>
@@ -705,10 +673,6 @@ onUnmounted(() => resizeObserver?.disconnect());
           type="text"
           placeholder="Buscar por nombre"
         />
-      </label>
-      <label class="graph-toggle">
-        <input id="graph-isolated" v-model="includeIsolated" type="checkbox" />
-        Ver aisladas
       </label>
       <p class="graph-counter">{{ counter }}</p>
     </div>

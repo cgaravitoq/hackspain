@@ -93,20 +93,6 @@ describe("RelationGraph", () => {
     expect(relations(wrapper)).toBe("5 relaciones");
   });
 
-  it("keeps only the relations of the chosen type", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    await wrapper.find("#graph-type").setValue("OPEN_OBLIGATION_TO");
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("type=OPEN_OBLIGATION_TO");
-    expect(relations(wrapper)).toBe("1 relación");
-    await wrapper.find("#graph-type").setValue("all");
-    await flushPromises();
-    await flushPromises();
-    expect(relations(wrapper)).toBe("5 relaciones");
-  });
-
   it("keeps only the relations at or above the minimum confidence", async () => {
     const requests: string[] = [];
     const wrapper = await mountGraph(requests);
@@ -141,27 +127,6 @@ describe("RelationGraph", () => {
     await flushPromises();
     expect(requests.at(-1)).toContain("scope=intergroup");
     expect(relations(wrapper)).toBe("3 relaciones");
-  });
-
-  it("keeps only the companies of the chosen group", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    await wrapper.find("#graph-group").setValue("GROUP_1");
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("group_id=GROUP_1");
-    expect(text(wrapper, ".graph-counter")).toBe("3 empresas, 2 relaciones");
-  });
-
-  it("hides the isolated companies until the toggle asks for them", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    expect(text(wrapper, ".graph-counter")).toBe("4 empresas, 5 relaciones");
-    await wrapper.find("#graph-isolated").setValue(true);
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("include_isolated=true");
-    expect(text(wrapper, ".graph-counter")).toBe("6 empresas, 5 relaciones");
   });
 
   it("keeps only the companies of the chosen state", async () => {
