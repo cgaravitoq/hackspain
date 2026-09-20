@@ -41,6 +41,7 @@ Everything runs on Cloudflare from a single account: two Workers, TypeScript end
 - The agent reads everything from the D1 binding `DB` (`hackspain-xray`, `hackspain-xray-staging` on staging); migrations live in `apps/agent/migrations/`.
 - One row per company carries the summary and the whole series as JSON, written by the load script.
 - GET routes: `/health`, `/companies?state&group_id&limit`, `/companies/:id`, `/companies/:id/explain`, `/groups/:id`, `/alerts?kind&limit`, `/backtest`, `/meta`.
+- Uploads: `POST /uploads` (multipart, one part per Embat CSV named after the file) stores an additive batch in the R2 binding `BUCKET` under `uploads/<batch_id>/`; `GET /uploads` lists batches with `pending` against `meta.generated_at`; `GET /uploads/:batch_id/:file` serves a CSV. `bun --filter @hackspain/agent pull -- --url <agent> --out <dir>` merges every batch into the seven pipeline CSVs.
 - `POST /chat` streams an AI SDK response from Workers AI `@cf/deepseek-ai/deepseek-v4-flash-0731` through the `AI` binding (`remote: true`).
 - `ALL /mcp` serves a stateless Streamable HTTP MCP server with tools `score`, `explain`, `what_changed`, `group_map` and `alerts`.
 
