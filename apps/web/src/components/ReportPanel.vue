@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Report, ReportSection, Role } from "@hackspain/shared";
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { api } from "../api.ts";
 import { STATE_COLORS } from "../format.ts";
 
@@ -17,8 +17,10 @@ const decisionBlocks = computed(() =>
 const decisionLead = computed(() => decisionBlocks.value.slice(0, 1));
 const decisionDetails = computed(() => decisionBlocks.value.slice(1));
 const loading = ref(true);
+const generating = ref(false);
 const error = ref("");
 let requestId = 0;
+let generationTimer: ReturnType<typeof setTimeout> | undefined;
 
 const exportUrl = computed(
   () =>
@@ -54,8 +56,15 @@ function figureValue(value: number): string {
 }
 async function load() {
   const currentRequest = ++requestId;
+  clearTimeout(generationTimer);
   loading.value = true;
+  generating.value = false;
   error.value = "";
+  generationTimer = setTimeout(() => {
+    if (currentRequest === requestId && loading.value) {
+      generating.value = true;
+    }
+  }, 3000);
   try {
     const nextReport = await api.report(props.companyId, props.role);
     if (currentRequest === requestId) {
@@ -68,12 +77,15 @@ async function load() {
     }
   } finally {
     if (currentRequest === requestId) {
+      clearTimeout(generationTimer);
+      generationTimer = undefined;
       loading.value = false;
     }
   }
 }
 
 watch([() => props.companyId, () => props.role], load, { immediate: true });
+onUnmounted(() => clearTimeout(generationTimer));
 </script>
 
 <template>
@@ -89,7 +101,9 @@ watch([() => props.companyId, () => props.role], load, { immediate: true });
         Exportar informe completo
       </a>
     </header>
-    <p v-if="loading" class="loading">Generando resumen…</p>
+    <p v-if="loading" class="loading">
+      {{ generating ? "Generando el resumen con IA, puede tardar un minuto…" : "Cargando informe…" }}
+    </p>
     <div v-else-if="error" class="error">
       <p>No se pudo generar el resumen</p>
       <small>{{ error }}</small>

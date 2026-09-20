@@ -787,8 +787,8 @@ describe("App", () => {
     await flushPromises();
     expect(wrapper.find(".graph-screen").exists()).toBe(true);
     expect(wrapper.find(".layout").exists()).toBe(false);
-    expect(seen).toContain("/api/companies/COMP_0077");
-    expect(seen).toContain("/api/companies/COMP_0077/explain");
+    expect(seen).toContain("/api/companies/COMP_0471");
+    expect(seen).toContain("/api/companies/COMP_0471/explain");
     const tellMe = wrapper.find('button[aria-label="Abrir el asistente"]');
     expect(tellMe.attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".insight").exists()).toBe(true);
