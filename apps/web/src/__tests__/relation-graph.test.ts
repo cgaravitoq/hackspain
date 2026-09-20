@@ -26,11 +26,30 @@ function trace(requests: string[]) {
   };
 }
 
-async function mountGraph(requests: string[] = []) {
+type MountGraphOptions = {
+  focusGroup?: string | null;
+  focusName?: string | null;
+  preserveDefaults?: boolean;
+};
+
+async function mountGraph(
+  requests: string[] = [],
+  options: MountGraphOptions = {},
+) {
   vi.stubGlobal("fetch", trace(requests));
-  mounted = mount(RelationGraph);
+  mounted = mount(RelationGraph, {
+    props: {
+      focusGroup: options.focusGroup ?? null,
+      focusName: options.focusName ?? null,
+    },
+  });
   await flushPromises();
   await flushPromises();
+  if (!options.preserveDefaults) {
+    await mounted.find("#graph-confidence").setValue("low");
+    await flushPromises();
+    await flushPromises();
+  }
   return mounted;
 }
 
@@ -84,26 +103,65 @@ afterEach(() => {
 });
 
 describe("RelationGraph", () => {
+  it("opens focused on the company group with high confidence", async () => {
+    const requests: string[] = [];
+    const wrapper = await mountGraph(requests, {
+      focusGroup: "GROUP_1",
+      focusName: "COMP_A",
+      preserveDefaults: true,
+    });
+    const first = new URL(requests[0] ?? "", "https://web.test");
+    expect(first.searchParams.get("group_id")).toBe("GROUP_1");
+    expect(first.searchParams.get("confidence")).toBe("high");
+    expect(first.searchParams.has("type")).toBe(false);
+    expect(first.searchParams.get("include_isolated")).toBe("false");
+    expect(text(wrapper, "#graph-focus")).toContain("Grupo de COMP_A");
+  });
+
+  it("widens to the full map and focuses the company group again", async () => {
+    const requests: string[] = [];
+    const wrapper = await mountGraph(requests, {
+      focusGroup: "GROUP_1",
+      focusName: "COMP_A",
+      preserveDefaults: true,
+    });
+    await wrapper.find("#graph-focus").setValue("all");
+    await flushPromises();
+    await flushPromises();
+    expect(
+      new URL(requests.at(-1) ?? "", "https://web.test").searchParams.has(
+        "group_id",
+      ),
+    ).toBe(false);
+    expect(text(wrapper, "#graph-focus")).toContain("Todo el mapa");
+    await wrapper.find("#graph-focus").setValue("group");
+    await flushPromises();
+    await flushPromises();
+    expect(requests.at(-1)).toContain("group_id=GROUP_1");
+  });
+
+  it("reloads focused when the company group changes", async () => {
+    const requests: string[] = [];
+    const wrapper = await mountGraph(requests, {
+      focusGroup: "GROUP_1",
+      focusName: "COMP_A",
+      preserveDefaults: true,
+    });
+    await wrapper.find("#graph-focus").setValue("all");
+    await flushPromises();
+    await wrapper.setProps({ focusGroup: "GROUP_2", focusName: "COMP_D" });
+    await flushPromises();
+    await flushPromises();
+    expect(requests.at(-1)).toContain("group_id=GROUP_2");
+    expect(text(wrapper, "#graph-focus")).toContain("Grupo de COMP_D");
+  });
+
   it("asks the agent for the graph and counts what it answers", async () => {
     const requests: string[] = [];
     const wrapper = await mountGraph(requests);
     expect(requests.some((request) => request.startsWith("/api/graph?"))).toBe(
       true,
     );
-    expect(relations(wrapper)).toBe("5 relaciones");
-  });
-
-  it("keeps only the relations of the chosen type", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    await wrapper.find("#graph-type").setValue("OPEN_OBLIGATION_TO");
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("type=OPEN_OBLIGATION_TO");
-    expect(relations(wrapper)).toBe("1 relación");
-    await wrapper.find("#graph-type").setValue("all");
-    await flushPromises();
-    await flushPromises();
     expect(relations(wrapper)).toBe("5 relaciones");
   });
 
@@ -141,27 +199,6 @@ describe("RelationGraph", () => {
     await flushPromises();
     expect(requests.at(-1)).toContain("scope=intergroup");
     expect(relations(wrapper)).toBe("3 relaciones");
-  });
-
-  it("keeps only the companies of the chosen group", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    await wrapper.find("#graph-group").setValue("GROUP_1");
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("group_id=GROUP_1");
-    expect(text(wrapper, ".graph-counter")).toBe("3 empresas, 2 relaciones");
-  });
-
-  it("hides the isolated companies until the toggle asks for them", async () => {
-    const requests: string[] = [];
-    const wrapper = await mountGraph(requests);
-    expect(text(wrapper, ".graph-counter")).toBe("4 empresas, 5 relaciones");
-    await wrapper.find("#graph-isolated").setValue(true);
-    await flushPromises();
-    await flushPromises();
-    expect(requests.at(-1)).toContain("include_isolated=true");
-    expect(text(wrapper, ".graph-counter")).toBe("6 empresas, 5 relaciones");
   });
 
   it("keeps only the companies of the chosen state", async () => {
@@ -251,7 +288,9 @@ describe("RelationGraph", () => {
       ],
     };
     vi.stubGlobal("fetch", () => Promise.resolve(Response.json(pair)));
-    mounted = mount(RelationGraph);
+    mounted = mount(RelationGraph, {
+      props: { focusGroup: null, focusName: null },
+    });
     await flushPromises();
     await flushPromises();
     const position = layoutGraph(pair.nodes, pair.edges).positions.get(

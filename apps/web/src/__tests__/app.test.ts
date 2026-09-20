@@ -12,6 +12,7 @@ const ChatPanelStub = {
 };
 
 const RelationGraphStub = {
+  props: ["focusGroup", "focusName"],
   emits: ["analyze"],
   template: "<div class='graph-stub' />",
 };
@@ -786,11 +787,11 @@ describe("App", () => {
     await flushPromises();
     expect(wrapper.find(".graph-screen").exists()).toBe(true);
     expect(wrapper.find(".layout").exists()).toBe(false);
-    expect(seen).toContain("/api/graph");
-    expect(seen).not.toContain("/api/companies/COMP_A");
+    expect(seen).toContain("/api/companies/COMP_0077");
+    expect(seen).toContain("/api/companies/COMP_0077/explain");
     const tellMe = wrapper.find('button[aria-label="Abrir el asistente"]');
-    expect(tellMe.attributes("disabled")).toBeDefined();
-    expect(wrapper.find(".insight").exists()).toBe(false);
+    expect(tellMe.attributes("disabled")).toBeUndefined();
+    expect(wrapper.find(".insight").exists()).toBe(true);
     window.location.hash = "COMP_B";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
@@ -808,6 +809,9 @@ describe("App", () => {
     await flushPromises();
     await openRoute(wrapper, "Grafo");
     expect(window.location.hash).toBe("#graph");
+    expect(
+      wrapper.findComponent({ name: "RelationGraph" }).props("focusGroup"),
+    ).toBe("GROUP_1");
   });
 
   it("keeps the entered role without an avatar or a menu to change it", async () => {

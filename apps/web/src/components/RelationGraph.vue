@@ -23,6 +23,11 @@ import {
   visibleNodes,
 } from "../graph-layout.ts";
 
+const props = defineProps<{
+  focusGroup: string | null;
+  focusName: string | null;
+}>();
+
 const TYPE_LABELS: Record<RelationType, string> = {
   INFERRED_PAYMENT_TO: "pago inferido",
   OPEN_OBLIGATION_TO: "obligación abierta",
@@ -136,14 +141,11 @@ const scopes: RelationScope[] = ["intragroup", "intergroup"];
 
 const graph = ref<Graph | null>(null);
 const error = ref("");
-const relationType = ref<RelationType | "all">("all");
-const minConfidence = ref<RelationConfidence>("low");
+const minConfidence = ref<RelationConfidence>("high");
 const scope = ref<RelationScope | "all">("all");
-const groupId = ref<string>("all");
+const focus = ref<"group" | "all">(props.focusGroup ? "group" : "all");
 const state = ref<State | "all">("all");
 const query = ref("");
-const includeIsolated = ref(false);
-const knownGroups = ref<string[]>([]);
 const hover = ref<
   | { kind: "node"; node: RelationNode }
   | { kind: "edge"; edge: RelationEdge }
@@ -586,11 +588,11 @@ async function load() {
   error.value = "";
   try {
     const result = await api.graph({
-      type: relationType.value === "all" ? undefined : relationType.value,
       confidence: minConfidence.value,
       scope: scope.value === "all" ? undefined : scope.value,
-      group_id: groupId.value === "all" ? undefined : groupId.value,
-      include_isolated: includeIsolated.value,
+      group_id:
+        focus.value === "group" ? (props.focusGroup ?? undefined) : undefined,
+      include_isolated: false,
     });
     if (request !== graphRequest) {
       return;
@@ -599,12 +601,6 @@ async function load() {
     hover.value = null;
     selectedNode.value = null;
     resetView();
-    knownGroups.value = [
-      ...new Set([
-        ...knownGroups.value,
-        ...result.nodes.flatMap((node) => node.group_id ?? []),
-      ]),
-    ].sort();
   } catch (cause) {
     if (request === graphRequest) {
       error.value = cause instanceof Error ? cause.message : String(cause);
@@ -612,8 +608,18 @@ async function load() {
   }
 }
 
-watch([relationType, minConfidence, scope, groupId, includeIsolated], () =>
-  load(),
+watch([minConfidence, scope, focus], () => load());
+
+watch(
+  () => props.focusGroup,
+  (nextGroup) => {
+    const nextFocus = nextGroup ? "group" : "all";
+    if (focus.value === nextFocus) {
+      load();
+      return;
+    }
+    focus.value = nextFocus;
+  },
 );
 
 let paintScheduled = false;
@@ -654,12 +660,12 @@ onUnmounted(() => resizeObserver?.disconnect());
   <section class="graph-screen">
     <div class="graph-toolbar panel">
       <label>
-        Tipo
-        <select id="graph-type" v-model="relationType">
-          <option value="all">Todos</option>
-          <option v-for="item in types" :key="item" :value="item">
-            {{ TYPE_LABELS[item] }}
+        Vista
+        <select id="graph-focus" v-model="focus">
+          <option v-if="focusGroup" value="group">
+            Grupo de {{ focusName ?? focusGroup }}
           </option>
+          <option value="all">Todo el mapa</option>
         </select>
       </label>
       <label>
@@ -680,15 +686,6 @@ onUnmounted(() => resizeObserver?.disconnect());
         </select>
       </label>
       <label>
-        Grupo
-        <select id="graph-group" v-model="groupId">
-          <option value="all">Todos</option>
-          <option v-for="item in knownGroups" :key="item" :value="item">
-            {{ item }}
-          </option>
-        </select>
-      </label>
-      <label>
         Estado
         <select id="graph-state" v-model="state">
           <option value="all">Todos</option>
@@ -705,10 +702,6 @@ onUnmounted(() => resizeObserver?.disconnect());
           type="text"
           placeholder="Buscar por nombre"
         />
-      </label>
-      <label class="graph-toggle">
-        <input id="graph-isolated" v-model="includeIsolated" type="checkbox" />
-        Ver aisladas
       </label>
       <p class="graph-counter">{{ counter }}</p>
     </div>
