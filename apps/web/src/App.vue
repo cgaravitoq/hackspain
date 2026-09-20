@@ -27,7 +27,7 @@ type View = "radiography" | "graph";
 
 const props = defineProps<{ initialRole?: Role }>();
 
-const DEFAULT_COMPANY = "COMP_0077";
+const DEFAULT_COMPANY = "COMP_0471";
 const GRAPH_ROUTE = "graph";
 const MAX_COMPARED = 3;
 const CHAT_SEEN_KEY = "xray.chat.seen";

@@ -321,7 +321,7 @@ describe("App", () => {
     const seen: string[] = [];
     const base = fakeApi(seen);
     const { series: _series, ...defaultCompany } = company(
-      "COMP_0077",
+      "COMP_0471",
       "GROUP_1",
     );
     vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
@@ -341,13 +341,13 @@ describe("App", () => {
     expect(seen).toEqual(
       expect.arrayContaining([
         "/api/alerts",
-        "/api/companies/COMP_0077",
-        "/api/companies/COMP_0077/explain",
+        "/api/companies/COMP_0471",
+        "/api/companies/COMP_0471/explain",
         "/api/groups/GROUP_1",
       ]),
     );
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
+    expect(window.location.hash).toBe("#COMP_0471");
     expect(wrapper.find(".score").text()).toBe("12.3");
     expect(wrapper.find(".chip").text()).toBe("cayendo");
     expect(wrapper.text()).toContain("▼ -27,9 vs mes anterior");
@@ -361,7 +361,7 @@ describe("App", () => {
     expect(wrapper.text()).toContain("grupo en tensión");
     expect(wrapper.text()).toContain("1 de 2 empresas cayendo o torciéndose");
     expect(wrapper.findAll(".chart-card svg circle")).toHaveLength(1);
-    expect(wrapper.find(".chat-stub").text()).toBe("COMP_0077 financiero");
+    expect(wrapper.find(".chat-stub").text()).toBe("COMP_0471 financiero");
   });
 
   it("pins the treasurer to its company without search, alerts or comparison", async () => {
@@ -370,9 +370,9 @@ describe("App", () => {
     const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    expect(seen).toContain("/api/companies/COMP_0077");
+    expect(seen).toContain("/api/companies/COMP_0471");
     expect(seen).not.toContain("/api/compare");
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
     expect(wrapper.find(".company-selector").exists()).toBe(false);
     expect(wrapper.find(".alerts").exists()).toBe(false);
     expect(wrapper.find(".compare-chip").exists()).toBe(false);
@@ -387,8 +387,8 @@ describe("App", () => {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
+    expect(window.location.hash).toBe("#COMP_0471");
   });
 
   it("keeps the treasurer on its company when a group member is clicked", async () => {
@@ -402,8 +402,8 @@ describe("App", () => {
     await wrapper.findAll("section.group button")[1]?.trigger("click");
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
+    expect(window.location.hash).toBe("#COMP_0471");
     expect(seen).not.toContain("/api/companies/COMP_B");
   });
 
@@ -413,10 +413,10 @@ describe("App", () => {
     const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
+    expect(window.location.hash).toBe("#COMP_0471");
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
-    expect(chartCompanies(wrapper)).toEqual(["Bodegas Altamira"]);
+    expect(chartCompanies(wrapper)).toEqual(["Logística Cabrera S.L."]);
     expect(wrapper.findAll(".legend span").map((item) => item.text())).toEqual([
       "proyección por tendencia (3 meses)",
       "rango por tendencia",
@@ -631,16 +631,16 @@ describe("App", () => {
     expect(wrapper.findAll(".series-line")).toHaveLength(1);
   });
 
-  it("opens COMP_0176 when it is named in the URL hash", async () => {
+  it("opens Bodegas Altamira when COMP_0077 is named in the URL hash", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", fakeApi(seen));
-    window.location.hash = "COMP_0176";
+    window.location.hash = "COMP_0077";
     const wrapper = mountApp();
     await flushPromises();
     await flushPromises();
-    expect(seen).toContain("/api/companies/COMP_0176");
-    expect(seen).not.toContain("/api/companies/COMP_0077");
-    expect(wrapper.find("h1").text()).toBe("Talleres Ribera");
+    expect(seen).toContain("/api/companies/COMP_0077");
+    expect(seen).not.toContain("/api/companies/COMP_0471");
+    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
   });
 
   it("shows the group error above the radiography when only the group request fails", async () => {
@@ -839,9 +839,9 @@ describe("App", () => {
     const wrapper = mountApp({ initialRole: "tesorero" });
     await flushPromises();
     await flushPromises();
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(window.location.hash).toBe("#COMP_0471");
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
-    expect(wrapper.find("h1").text()).toBe("Bodegas Altamira");
+    expect(wrapper.find("h1").text()).toBe("Logística Cabrera S.L.");
     expect(
       wrapper
         .findAll('[data-sidebar="menu-sub-button"]')
@@ -851,7 +851,7 @@ describe("App", () => {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await flushPromises();
     await flushPromises();
-    expect(window.location.hash).toBe("#COMP_0077");
+    expect(window.location.hash).toBe("#COMP_0471");
     expect(wrapper.find(".graph-screen").exists()).toBe(false);
     expect(wrapper.find('[data-active="true"]').text()).toBe("Radiografía");
   });
