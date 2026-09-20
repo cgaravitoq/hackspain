@@ -10,7 +10,8 @@
     "deploy:dry": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "deploy:staging": "wrangler deploy --env staging",
-    "load": "bun scripts/load-artifacts.ts"
+    "load": "bun scripts/load-artifacts.ts",
+    "pull": "bun scripts/pull-uploads.ts"
   },
   "dependencies": {
     "@hackspain/shared": "workspace:*",

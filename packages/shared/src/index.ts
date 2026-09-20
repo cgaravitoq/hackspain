@@ -35,6 +35,20 @@ export {
   healthResponseSchema,
 } from "./health.ts";
 export {
+  missingUploadColumns,
+  UPLOAD_COLUMNS,
+  UPLOAD_FILES,
+  type UploadBatch,
+  type UploadBatchFile,
+  type UploadFile,
+  type Uploads,
+  uploadBatchFileSchema,
+  uploadBatchSchema,
+  uploadFileFor,
+  uploadFileSchema,
+  uploadsSchema,
+} from "./uploads.ts";
+export {
   type Alert,
   alertKindSchema,
   alertSchema,

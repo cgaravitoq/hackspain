@@ -15,6 +15,8 @@ import {
   relationTypeSchema,
   roleSchema,
   type TrendProjection,
+  type UploadBatch,
+  type Uploads,
 } from "@hackspain/shared";
 import type { z } from "zod";
 
@@ -323,6 +325,21 @@ export const group: GroupMap = {
   ],
 };
 
+export const uploadBatch: UploadBatch = {
+  batch_id: "20260920T101500000Z",
+  uploaded_at: "2026-09-20T10:15:00.000Z",
+  files: [
+    { name: "transactions", rows: 12_480, bytes: 2_621_440 },
+    { name: "balances", rows: 1286, bytes: 40_960 },
+  ],
+};
+
+export const uploads: Uploads = {
+  batches: [uploadBatch],
+  scored_at: "2026-09-19T13:04:05+00:00",
+  pending: true,
+};
+
 export function graphNode(
   companyId: string,
   groupId: string | null,
@@ -538,6 +555,7 @@ const routes: Route[] = [
   },
   { pattern: /^\/api\/groups\/(\w+)$/, body: () => group },
   { pattern: /^\/api\/graph$/, body: (_match, url) => filterGraph(url) },
+  { pattern: /^\/api\/uploads$/, body: () => uploads },
   {
     pattern: /^\/api\/compare$/,
     body: (_match, url) => {

@@ -9,13 +9,14 @@ import type {
   Report,
   Role,
 } from "@hackspain/shared";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "./api.ts";
 import AppSidebar from "./components/AppSidebar.vue";
 import ChatPopover from "./components/ChatPopover.vue";
 import CompanySelector from "./components/CompanySelector.vue";
 import Radiography from "./components/Radiography.vue";
 import RelationGraph from "./components/RelationGraph.vue";
+import UploadPanel from "./components/UploadPanel.vue";
 import { Separator } from "./components/ui/separator";
 import {
   SidebarInset,
@@ -23,12 +24,13 @@ import {
   SidebarTrigger,
 } from "./components/ui/sidebar";
 
-type View = "radiography" | "graph";
+type View = "radiography" | "graph" | "uploads";
 
 const props = defineProps<{ initialRole?: Role }>();
 
 const DEFAULT_COMPANY = "COMP_0471";
 const GRAPH_ROUTE = "graph";
+const UPLOADS_ROUTE = "uploads";
 const MAX_COMPARED = 3;
 const CHAT_SEEN_KEY = "xray.chat.seen";
 const role = ref<Role>(props.initialRole ?? "financiero");
@@ -36,10 +38,14 @@ const meta = ref<Meta | null>(null);
 const alerts = ref<Alert[]>([]);
 const companies = ref<CompanySummary[]>([]);
 const onGraph = ref(window.location.hash === `#${GRAPH_ROUTE}`);
-const selected = ref(onGraph.value ? "" : window.location.hash.slice(1));
+const onUploads = ref(window.location.hash === `#${UPLOADS_ROUTE}`);
+const selected = ref(
+  onGraph.value || onUploads.value ? "" : window.location.hash.slice(1),
+);
 const compareIds = ref<string[]>([]);
 if (role.value === "tesorero") {
   onGraph.value = false;
+  onUploads.value = false;
   selected.value = DEFAULT_COMPANY;
   compareIds.value = [DEFAULT_COMPANY];
 }
@@ -50,6 +56,17 @@ const group = ref<GroupMap | null>(null);
 const error = ref("");
 const chatOpen = ref(false);
 const chatSeen = ref(false);
+const VIEW_TITLES: Record<View, string> = {
+  radiography: "Radiografía",
+  graph: "Grafo",
+  uploads: "Cargar datos",
+};
+const view = computed<View>(() => {
+  if (onGraph.value) {
+    return "graph";
+  }
+  return onUploads.value ? "uploads" : "radiography";
+});
 let compareRequest = 0;
 let companyRequest = 0;
 
@@ -67,7 +84,7 @@ function toggleChat() {
 }
 
 watch(role, (nextRole) => {
-  if (nextRole === "tesorero" && onGraph.value) {
+  if (nextRole === "tesorero" && (onGraph.value || onUploads.value)) {
     openRadiography();
   }
 });
@@ -92,7 +109,7 @@ async function load(companyId: string) {
 }
 
 function select(companyId: string) {
-  if (companyId === GRAPH_ROUTE) {
+  if (companyId === GRAPH_ROUTE || companyId === UPLOADS_ROUTE) {
     return;
   }
   if (role.value === "tesorero") {
@@ -117,7 +134,18 @@ function openGraph() {
     return;
   }
   onGraph.value = true;
+  onUploads.value = false;
   window.location.hash = GRAPH_ROUTE;
+}
+
+function openUploads() {
+  if (role.value === "tesorero") {
+    openRadiography();
+    return;
+  }
+  onUploads.value = true;
+  onGraph.value = false;
+  window.location.hash = UPLOADS_ROUTE;
 }
 
 function analyzeFromGraph(companyId: string) {
@@ -127,6 +155,7 @@ function analyzeFromGraph(companyId: string) {
 
 function openRadiography() {
   onGraph.value = false;
+  onUploads.value = false;
   select(selected.value || defaultCompany());
   window.location.hash = selected.value;
 }
@@ -134,6 +163,10 @@ function openRadiography() {
 function selectView(view: View) {
   if (view === "graph") {
     openGraph();
+    return;
+  }
+  if (view === "uploads") {
+    openUploads();
     return;
   }
   openRadiography();
@@ -182,12 +215,14 @@ function openReport(
 
 function syncHash() {
   const hash = window.location.hash.slice(1);
-  if (hash === GRAPH_ROUTE && role.value === "tesorero") {
+  const onRoute = hash === GRAPH_ROUTE || hash === UPLOADS_ROUTE;
+  if (onRoute && role.value === "tesorero") {
     openRadiography();
     return;
   }
   onGraph.value = hash === GRAPH_ROUTE;
-  if (!onGraph.value) {
+  onUploads.value = hash === UPLOADS_ROUTE;
+  if (!onRoute) {
     select(hash);
   }
 }
@@ -196,7 +231,9 @@ watch(
   selected,
   (companyId) => {
     if (companyId) {
-      window.location.hash = companyId;
+      if (!onUploads.value) {
+        window.location.hash = companyId;
+      }
       addComparison(companyId);
       load(companyId);
     }
@@ -252,7 +289,7 @@ onUnmounted(() => {
 <template>
   <SidebarProvider>
     <AppSidebar
-      :view="onGraph ? 'graph' : 'radiography'"
+      :view="view"
       :role="role"
       :chat-open="chatOpen"
       :chat-unread="!chatSeen"
@@ -264,9 +301,9 @@ onUnmounted(() => {
       <header class="topbar">
         <SidebarTrigger />
         <Separator orientation="vertical" class="h-4" />
-        <h2 class="view-title">{{ onGraph ? "Grafo" : "Radiografía" }}</h2>
+        <h2 class="view-title">{{ VIEW_TITLES[view] }}</h2>
         <CompanySelector
-          v-if="role !== 'tesorero'"
+          v-if="role !== 'tesorero' && !onUploads"
           :alerts="alerts"
           :companies="companies"
           :company="company"
@@ -278,6 +315,11 @@ onUnmounted(() => {
       </header>
       <div v-if="onGraph" class="graph-layout">
         <RelationGraph @analyze="analyzeFromGraph" />
+      </div>
+      <div v-else-if="onUploads" class="layout">
+        <div class="center">
+          <UploadPanel />
+        </div>
       </div>
       <div v-else class="layout">
         <div class="center">

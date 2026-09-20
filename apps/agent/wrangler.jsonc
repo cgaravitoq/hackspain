@@ -19,6 +19,7 @@
       "migrations_dir": "migrations"
     }
   ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "hackspain-uploads" }],
   "ai": { "binding": "AI", "remote": true },
   "browser": { "binding": "BROWSER", "remote": true },
   // Bindings and vars are not inherited by named environments, so staging
@@ -34,6 +35,9 @@
           "database_id": "d0a5967c-6403-4e5b-a1c6-5c79414cb597",
           "migrations_dir": "migrations"
         }
+      ],
+      "r2_buckets": [
+        { "binding": "BUCKET", "bucket_name": "hackspain-uploads-staging" }
       ],
       "ai": { "binding": "AI", "remote": true },
       "browser": { "binding": "BROWSER", "remote": true }
