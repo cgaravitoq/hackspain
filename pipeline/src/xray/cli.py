@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
+from xray.evaluate import add_parser as add_evaluate_parser
+from xray.evaluate import run_command as run_evaluate
 from xray.export import build
 from xray.load import read
 from xray.relations import build as build_relations
@@ -17,7 +19,11 @@ def main() -> None:
     relations = commands.add_parser("relations", help="detect inter-company relations and write relations.json")
     relations.add_argument("--data", type=Path, required=True, help="folder with the Embat CSV files")
     relations.add_argument("--out", type=Path, required=True, help="folder that receives relations.json")
+    add_evaluate_parser(commands)
     args = parser.parse_args()
+    if args.command == "evaluate":
+        print(run_evaluate(args))
+        return
     if args.command == "relations":
         summary = build_relations(args.data, args.out)
     else:
